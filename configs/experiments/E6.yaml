@@ -1,0 +1,90 @@
+# E6: Early warning system with forecasting
+# Focus: Multi-task learning with risk + forecast + time
+
+data:
+  n_samples: 500
+  output_path: data/E6_dataset.npz
+  dataset_path: data/E6_dataset.npz
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+  seed: 42
+
+physics:
+  system_type: single_qubit
+  observables: [sigma_x, sigma_y, sigma_z]
+  gamma_range: [0.1, 2.0]
+  omega_range: [0.5, 2.0]
+  time_dependent_gamma: true  # Time-dependent gamma for more complex dynamics
+  T_max: 10.0
+  dt: 0.1
+  decoherence_criterion: coherence
+  decoherence_threshold: 0.01
+  initial_state_type: random
+
+model:
+  type: multitask_transformer
+  
+  # Encoder config (larger for forecasting)
+  d_model: 512
+  n_layers: 6
+  n_heads: 8
+  d_ff: 2048
+  dropout_rate: 0.2
+  max_seq_len: 500
+  use_pos_encoding: true
+  pooling: attention
+  
+  # Task config - all enabled
+  enable_risk: true
+  enable_forecast: true
+  enable_time: true
+  
+  # Head config
+  n_deltas: 3
+  forecast_horizon: 20
+  forecast_n_features: 5  # sigma_x, sigma_y, sigma_z, purity, coherence
+  head_hidden_dims: [512, 256, 128]
+
+training:
+  # Sliding window config
+  window_length: 50
+  samples_per_trajectory: 5
+  stratified_sampling: true
+  forecast_horizon: 20  # Must match model.forecast_horizon
+  
+  # Horizons for risk prediction
+  deltas: [0.5, 1.0, 2.0]
+  
+  # Training params
+  batch_size: 32  # Smaller batch for memory
+  n_epochs: 250
+  learning_rate: 0.0001
+  optimizer: adamw
+  weight_decay: 0.0001
+  
+  # Loss weights
+  lambda_risk: 1.0
+  lambda_forecast: 0.8
+  lambda_time: 0.5
+  
+  # Risk loss config
+  use_focal_loss: false
+  pos_weight: null
+  
+  # Forecast loss config
+  forecast_loss_type: mae
+  forecast_smoothness_weight: 0.01
+  
+  # Learning rate schedule
+  lr_schedule: warmup_cosine
+  warmup_steps: 1500
+  
+  # Directories
+  checkpoint_dir: checkpoints/E6
+  history_dir: runs/E6
+
+evaluation:
+  output_dir: figures/E6
+  risk_thresholds: [0.3, 0.5, 0.7]
+  max_fpr: 0.05

@@ -1,0 +1,115 @@
+# E7: Control baseline experiment
+# Focus: Demonstrate triggered control based on early warning
+
+data:
+  n_samples: 200  # Fewer samples, focus on control demonstration
+  output_path: data/E7_dataset.npz
+  dataset_path: data/E7_dataset.npz
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+  seed: 42
+
+physics:
+  system_type: single_qubit
+  observables: [sigma_x, sigma_y, sigma_z]
+  gamma_range: [0.5, 1.5]  # Narrower range for consistent control
+  omega_range: [0.8, 1.2]
+  time_dependent_gamma: false
+  T_max: 10.0
+  dt: 0.05  # Finer timestep for control
+  decoherence_criterion: coherence
+  decoherence_threshold: 0.01
+  initial_state_type: random
+
+model:
+  type: multitask_transformer
+  
+  # Encoder config
+  d_model: 256
+  n_layers: 4
+  n_heads: 8
+  d_ff: 1024
+  dropout_rate: 0.2
+  max_seq_len: 500
+  use_pos_encoding: true
+  pooling: attention
+  
+  # Task config - focus on risk
+  enable_risk: true
+  enable_forecast: false
+  enable_time: true
+  
+  # Head config
+  n_deltas: 3
+  head_hidden_dims: [256, 128, 64]
+
+training:
+  # Sliding window config
+  window_length: 50
+  samples_per_trajectory: 5
+  stratified_sampling: true
+  
+  # Horizons for risk prediction
+  deltas: [0.5, 1.0, 2.0]
+  
+  # Training params
+  batch_size: 64
+  n_epochs: 200
+  learning_rate: 0.0001
+  optimizer: adamw
+  weight_decay: 0.0001
+  
+  # Loss weights
+  lambda_risk: 1.0
+  lambda_time: 0.5
+  
+  # Risk loss config
+  use_focal_loss: false
+  pos_weight: null
+  
+  # Learning rate schedule
+  lr_schedule: warmup_cosine
+  warmup_steps: 1000
+  
+  # Directories
+  checkpoint_dir: checkpoints/E7
+  history_dir: runs/E7
+
+control:
+  # Control configuration for E7
+  enabled: true
+  
+  # Control type: 'pulse', 'parameter_mod', 'hamiltonian'
+  control_type: pulse
+  
+  # Pulse control config
+  pulse_operator: sigma_x  # Apply X rotation
+  pulse_strength: 0.2  # Pi rotation strength
+  
+  # Parameter modification config (alternative)
+  param_name: gamma_const
+  modification_factor: 0.5  # Reduce gamma by half
+  modification_duration: 0.5
+  
+  # Hamiltonian control config (alternative)
+  control_hamiltonian: sigma_y
+  control_strength: 1.0
+  control_duration: 0.3
+  
+  # Trigger config
+  risk_threshold: 0.6  # Threshold for triggering control
+  check_interval: 5  # Check every 5 timesteps
+  
+  # Evaluation
+  n_comparison_trials: 20  # Number of trials for with/without comparison
+
+evaluation:
+  output_dir: figures/E7
+  risk_thresholds: [0.5, 0.6, 0.7]
+  max_fpr: 0.05
+  
+  # Control evaluation
+  compare_control: true
+  plot_trajectories: true
+  n_example_trajectories: 5
