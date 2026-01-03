@@ -1,0 +1,50 @@
+# Base configuration
+
+data:
+  n_samples: 200  # Reduced for quick testing
+  train_ratio: 0.8
+  val_ratio: 0.1
+  test_ratio: 0.1
+  seed: 42
+  noise_std: 0.01
+  dataset_path: data/dataset.npz
+
+physics:
+  T_max: 10.0
+  dt: 0.1
+  decoherence_criterion: coherence  # 'coherence' or 'purity'
+  decoherence_threshold: 0.01
+  initial_state_type: random  # 'random' or 'zero'
+
+model:
+  type: transformer  # 'mlp', 'gru', 'lstm', 'transformer', 'two_stage'
+  hidden_dims: [512, 256, 128, 64]  # For MLP
+  hidden_dim: 256  # For RNN
+  n_layers: 4  # More layers for better capacity
+  n_heads: 8  # More heads for transformer
+  d_model: 256  # Larger model dimension
+  d_ff: 1024  # Larger feed-forward dimension
+  dropout_rate: 0.2  # More dropout for regularization
+  max_seq_len: 500
+  head_hidden_dims: [256, 128, 64]  # Deeper head
+  n_coeffs: 3
+  bernstein_degree: 2
+
+training:
+  seq_length: 100
+  batch_size: 32
+  n_epochs: 200  # More epochs for better convergence
+  learning_rate: 0.0001
+  optimizer: adamw  # AdamW is better
+  weight_decay: 0.0001  # Weight decay for regularization
+  loss_type: mae  # 'mae', 'mse', 'huber'
+  constraint_weight: 0.0
+  huber_delta: 1.0
+  predict_remaining: true
+  checkpoint_dir: checkpoints
+  history_dir: runs
+  lr_schedule: warmup_cosine  # Learning rate scheduling
+  warmup_steps: 1000
+
+evaluation:
+  output_dir: figures
