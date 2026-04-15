@@ -1,37 +1,24 @@
 """Physics simulation modules for quantum systems."""
-from .lindblad_systems import SingleQubitSystem, TwoQubitSystem
+from .lindblad_systems import SingleQubitSystem, TwoQubitSystem, sample_random_pure_state
 from .simulate_qutip import simulate_trajectory, simulate_single_qubit, simulate_two_qubit
 from .decoherence_time import (
     calculate_decoherence_time,
     coherence_l1,
     purity,
     compute_observables_single_qubit,
-    compute_observables_two_qubit
-)
-from .control import (
-    ControlAction,
-    PulseControl,
-    ParameterModification,
-    ContinuousHamiltonianControl,
-    simulate_with_trigger_control,
-    compare_with_without_control
+    compute_observables_two_qubit,
 )
 
 __all__ = [
-    'SingleQubitSystem',
-    'TwoQubitSystem',
-    'simulate_trajectory',
-    'simulate_single_qubit',
-    'simulate_two_qubit',
-    'calculate_decoherence_time',
-    'coherence_l1',
-    'purity',
-    'compute_observables_single_qubit',
-    'compute_observables_two_qubit',
-    'ControlAction',
-    'PulseControl',
-    'ParameterModification',
-    'ContinuousHamiltonianControl',
-    'simulate_with_trigger_control',
-    'compare_with_without_control'
+    "SingleQubitSystem",
+    "TwoQubitSystem",
+    "sample_random_pure_state",
+    "simulate_trajectory",
+    "simulate_single_qubit",
+    "simulate_two_qubit",
+    "calculate_decoherence_time",
+    "coherence_l1",
+    "purity",
+    "compute_observables_single_qubit",
+    "compute_observables_two_qubit",
 ]
