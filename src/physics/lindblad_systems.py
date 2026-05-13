@@ -46,7 +46,7 @@ class SingleQubitSystem:
         omega: float = 1.0,
         gamma_const: Optional[float] = None,
         gamma_coeffs: Optional[np.ndarray] = None,
-        jump_operators: List[str] = ['sigma_minus'],  # 'sigma_minus' or 'sigma_z'
+        jump_operators: Optional[List[str]] = None,  # 'sigma_minus' or 'sigma_z'
         gamma_t_max: float = 10.0
     ):
         """Initialize single qubit system.
@@ -68,10 +68,13 @@ class SingleQubitSystem:
         self.H = omega * qt.sigmaz()
         
         # Build jump operators
+        if self.jump_operators is None:
+            self.jump_operators = ['sigma_minus']
+
         self.L_list = []
-        for op_type in jump_operators:
+        for op_type in self.jump_operators:
             if op_type == 'sigma_minus':
-                self.L_list.append(qt.destroy(2))  # sigma_-
+                self.L_list.append(qt.sigmam())
             elif op_type == 'sigma_z':
                 self.L_list.append(qt.sigmaz())
             else:
@@ -108,39 +111,41 @@ class SingleQubitSystem:
 
 class TwoQubitSystem:
     """Two-qubit system with interaction and dissipation."""
-    
+
     def __init__(
         self,
         J: float = 0.5,  # Interaction strength
         interaction_type: str = 'XXZ',  # 'XXZ' or 'TFIM'
         gamma_const: Optional[float] = None,
         gamma_coeffs: Optional[np.ndarray] = None,
-        gamma_t_max: float = 10.0
+        gamma_t_max: float = 10.0,
+        jump_operators: Optional[List[str]] = None,  # 'sigma_minus' or 'sigma_z'
     ):
         """Initialize two-qubit system.
-        
+
         Args:
             J: Interaction strength
             interaction_type: Type of interaction ('XXZ' or 'TFIM')
             gamma_const: Constant dissipation rate per qubit
             gamma_coeffs: Bernstein coefficients for time-dependent gamma(t)
             gamma_t_max: Maximum time for gamma(t) normalization
+            jump_operators: List of jump operator types per qubit (default: sigma_minus on both)
         """
         self.J = J
         self.interaction_type = interaction_type
         self.gamma_const = gamma_const
         self.gamma_coeffs = gamma_coeffs
         self.gamma_t_max = gamma_t_max
-        
+
         # Pauli operators for two qubits
         sx1 = qt.tensor(qt.sigmax(), qt.qeye(2))
         sy1 = qt.tensor(qt.sigmay(), qt.qeye(2))
         sz1 = qt.tensor(qt.sigmaz(), qt.qeye(2))
-        
+
         sx2 = qt.tensor(qt.qeye(2), qt.sigmax())
         sy2 = qt.tensor(qt.qeye(2), qt.sigmay())
         sz2 = qt.tensor(qt.qeye(2), qt.sigmaz())
-        
+
         # Build Hamiltonian
         if interaction_type == 'XXZ':
             # H = J * (sx1*sx2 + sy1*sy2 + delta*sz1*sz2), delta=1 for simplicity
@@ -151,12 +156,30 @@ class TwoQubitSystem:
             self.H = J * sx1 * sx2 + h_field * (sz1 + sz2)
         else:
             raise ValueError(f"Unknown interaction type: {interaction_type}")
-        
-        # Jump operators: sigma_- on each qubit
-        self.L_list = [
-            qt.tensor(qt.destroy(2), qt.qeye(2)),  # sigma_- on qubit 1
-            qt.tensor(qt.qeye(2), qt.destroy(2))   # sigma_- on qubit 2
-        ]
+
+        # Build jump operators: one per qubit, same type on both qubits.
+        # Default: sigma_- (amplitude damping) on each qubit.
+        if jump_operators is None:
+            jump_operators = ['sigma_minus']
+
+        def _op_for_qubit(op_type: str, qubit: int) -> qt.Qobj:
+            """Build the 2-qubit tensor for a single-qubit jump operator."""
+            eye = qt.qeye(2)
+            if op_type == 'sigma_minus':
+                local_op = qt.destroy(2)
+            elif op_type == 'sigma_z':
+                local_op = qt.sigmaz()
+            else:
+                raise ValueError(f"Unknown jump operator type: {op_type}")
+            if qubit == 0:
+                return qt.tensor(local_op, eye)
+            else:
+                return qt.tensor(eye, local_op)
+
+        self.L_list = []
+        for op_type in jump_operators:
+            self.L_list.append(_op_for_qubit(op_type, 0))  # qubit 1
+            self.L_list.append(_op_for_qubit(op_type, 1))  # qubit 2
     
     def get_gamma(self, t: float) -> float:
         """Get dissipation rate at time t.
@@ -198,12 +221,13 @@ def sample_random_pure_state(n_qubits: int = 1, seed: Optional[int] = None) -> q
         Random pure state density matrix
     """
     if seed is not None:
-        np.random.seed(seed)
-    
-    dim = 2 ** n_qubits
-    
-    # Generate random complex vector
-    vec = np.random.randn(dim) + 1j * np.random.randn(dim)
+        rng = np.random.default_rng(seed)
+        dim = 2 ** n_qubits
+        vec = rng.standard_normal(dim) + 1j * rng.standard_normal(dim)
+    else:
+        dim = 2 ** n_qubits
+        vec = np.random.randn(dim) + 1j * np.random.randn(dim)
+
     vec = vec / np.linalg.norm(vec)
     
     # Create density matrix: |psi><psi|
