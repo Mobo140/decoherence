@@ -1,0 +1,3 @@
+name,variant,scenario,include_censored,loss,mae,rmse,r2,mape,auroc,n_samples,n_censored_traj,n_censored_windows,n_train
+drop,physics_lstm,E,False,huber,1.2323871012991487,1.5778107879139662,0.15962180725302888,21.88497197635488,0.8125,30,0,0,212
+surv,physics_lstm,E,True,surv_huber,1.175867951033572,1.5246608842367968,0.11547765816788125,18.388623023981506,0.6388888888888888,33,1,5,201
