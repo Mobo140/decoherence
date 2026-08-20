@@ -42,14 +42,8 @@ def test_decoherence_time():
 
 def test_stability():
     """Test stability: same seed → same output."""
-    from src.utils.seed import set_seed
-    import qutip as qt
-    
-    set_seed(42)
     from src.physics.lindblad_systems import sample_random_pure_state
     state1 = sample_random_pure_state(n_qubits=1, seed=42)
-    
-    set_seed(42)
     state2 = sample_random_pure_state(n_qubits=1, seed=42)
     
     # States should be identical
