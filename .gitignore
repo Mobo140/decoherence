@@ -20,6 +20,7 @@ wheels/
 *.egg
 
 # Virtual environments
+.venv/
 venv/
 env/
 ENV/
@@ -34,7 +35,7 @@ ENV/
 data/
 checkpoints/
 runs/
-figures/
+/figures/
 *.npz
 *.hdf5
 *.parquet
@@ -42,6 +43,15 @@ figures/
 # Logs
 *.log
 wandb/
+experiments/logs_*.txt
+
+# LaTeX build (sources + PDF живут в paper/paper_1 и paper/paper_2)
+*.aux
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+*.out
+*.toc
 
 # OS
 .DS_Store

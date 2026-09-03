@@ -1,0 +1,154 @@
+"""Catalog of paper experiments and helpers to read their CSV results."""
+from __future__ import annotations
+
+import csv
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List
+
+
+RESULTS_DIR = Path(__file__).resolve().parents[2] / "experiments" / "results"
+
+
+@dataclass(frozen=True)
+class ExperimentEntry:
+    id: str
+    title: str
+    module: str
+    paper: str
+    claim: str
+    scenarios: str
+    csv_globs: tuple
+    supports_fast: bool = True
+
+
+CATALOG: List[ExperimentEntry] = [
+    ExperimentEntry("E1", "Ablation", "experiments.e1_ablation", "1", "C1, C2", "A–E",
+                    ("e1_ablation_p1.csv", "e1_ablation_p2.csv")),
+    ExperimentEntry("E2", "Window sweep", "experiments.e2_window_sweep", "1", "C3", "B/C",
+                    ("e2_window_sweep_p1.csv",)),
+    ExperimentEntry("E3", "Noise sweep", "experiments.e3_noise_sweep", "1", "C4", "B–E",
+                    ("e3_noise_sweep_p1.csv", "e3_noise_sweep_p2.csv")),
+    ExperimentEntry("E4", "Cross-system", "experiments.e4_cross_system", "1+2", "C5", "A–E",
+                    ("e4_cross_system_p1.csv", "e4_cross_system_p2.csv")),
+    ExperimentEntry("E5", "Inverse baseline", "experiments.e5_inverse_baseline", "1", "C3", "B",
+                    ("e5_inverse_baseline.csv",)),
+    ExperimentEntry("E6", "2q improved", "experiments.e6_2qubit_improved", "2", "C2", "D, E",
+                    ("e6_ablation_improved.csv", "e6_cross_system_improved.csv")),
+    ExperimentEntry("E7", "Transformer / τ / J", "experiments.e7_paper2_extended", "2", "C2, C5", "D, E",
+                    ("e7a_transformer_cross.csv", "e7b_tau_sweep.csv", "e7c_J_sweep.csv")),
+    ExperimentEntry("E8", "Improved 2q training", "experiments.e8_improved_2qubit", "2", "C4, C5", "D, E",
+                    ("e8a_ablation.csv", "e8b_noise_sweep.csv", "e8c_cross_system.csv")),
+    ExperimentEntry("E9", "Context codes", "experiments.e9_context_injection", "2", "C5", "D, E",
+                    ("e9a_cross_system.csv", "e9b_ablation.csv")),
+    ExperimentEntry("E10a", "Fixed context", "experiments.e10_fixed_context", "2", "C5", "D, E",
+                    ("e10a_cross_system.csv", "e10b_cross_system.csv")),
+    ExperimentEntry("E10b", "TFIM specialized", "experiments.e10_tfim_specialized", "2", "C2", "E",
+                    ("e10_tfim_c.csv",)),
+    ExperimentEntry("E11", "Scaling", "experiments.e11_scaling", "2", "C5", "D, E",
+                    ("e11a_cross_system.csv", "e11b_cross_system.csv")),
+    ExperimentEntry("E12", "Stretched-exp baseline", "experiments.e12_baseline_comparison", "1+2", "C2", "B–E",
+                    ("e12_baseline_comparison.csv",)),
+    ExperimentEntry("E13", "Survival TFIM", "experiments.e13_survival_tfim", "2", "C2", "E",
+                    ("e13_survival_tfim.csv",)),
+    ExperimentEntry("E14", "Inject J", "experiments.e14_inject_J", "2", "C2, C5", "D, E",
+                    ("e14_inject_J.csv",)),
+]
+
+
+# Paper-cited champions (PROJECT_PLAN / CURRENT_STATUS). Dashboard uses these
+# so the UI does not silently pick a weak row from a mixed CSV.
+CHAMPIONS = [
+    {"scenario": "A", "label": "1q σ₋ const", "r2": 0.9998, "model": "physics_only", "run": "E1", "auroc": 1.000, "goal": 0.999},
+    {"scenario": "B", "label": "1q σ₋ γ(t)", "r2": 0.945, "model": "physics_lstm", "run": "E1", "auroc": 0.965, "goal": 0.97},
+    {"scenario": "C", "label": "1q σz γ(t)", "r2": 0.981, "model": "physics_lstm", "run": "E1", "auroc": 0.891, "goal": 0.97},
+    {"scenario": "D", "label": "2q XXZ", "r2": 0.817, "model": "transformer w20", "run": "E11a", "auroc": 0.937, "goal": 0.80},
+    {"scenario": "E", "label": "2q TFIM", "r2": 0.575, "model": "physics_lstm", "run": "E8c", "auroc": 0.759, "goal": 0.70},
+]
+
+
+def by_id(exp_id: str) -> ExperimentEntry:
+    for e in CATALOG:
+        if e.id == exp_id:
+            return e
+    raise KeyError(exp_id)
+
+
+def list_csv_paths(entry: ExperimentEntry) -> List[Path]:
+    found = []
+    for name in entry.csv_globs:
+        p = RESULTS_DIR / name
+        if p.exists():
+            found.append(p)
+    return found
+
+
+def read_csv_rows(path: Path, limit: int = 40) -> List[Dict[str, str]]:
+    with path.open(newline="") as f:
+        rows = list(csv.DictReader(f))
+    return rows[:limit]
+
+
+def summarize_r2(path: Path) -> str:
+    rows = read_csv_rows(path, limit=200)
+    if not rows:
+        return f"{path.name}: empty"
+    r2_key = next((k for k in ("r2", "R²", "R2") if k in rows[0]), None)
+    if r2_key is None:
+        return f"{path.name}: {len(rows)} rows"
+    parts = []
+    for row in rows:
+        label = row.get("scenario") or row.get("name") or row.get("arm") or row.get("variant") or "?"
+        extra = row.get("j_bin") or row.get("variant") or ""
+        try:
+            r2 = float(row[r2_key])
+            r2s = f"{r2:.3f}"
+        except (TypeError, ValueError):
+            r2s = str(row[r2_key])
+        tag = f"{label}" + (f"/{extra}" if extra and extra != label else "")
+        parts.append(f"{tag} {r2s}")
+    return f"{path.name}: " + "; ".join(parts[:8])
+
+
+def catalog_table() -> List[List[str]]:
+    table = []
+    for e in CATALOG:
+        csvs = list_csv_paths(e)
+        status = f"{len(csvs)} CSV" if csvs else "no CSV"
+        table.append([e.id, e.title, e.paper, e.claim, e.scenarios, status, e.module])
+    return table
+
+
+CLAIMS = [
+    {"id": "C1", "ok": True, "text": "physics baseline R²≥0.999 ✓"},
+    {"id": "C2", "ok": True, "text": "residual > ablations на B, C ✓"},
+    {"id": "C3", "ok": True, "text": "AUROC 0.947 @ f=0.15 ✓ (R² плато 0.73)"},
+    {"id": "C4", "ok": True, "text": "AUROC 0.942 @ σ=0.05 ✓"},
+    {"id": "C5", "ok": False, "text": "mixed слабее per-Hamiltonian"},
+]
+
+
+def cache_stats(root: Path | None = None) -> dict:
+    cache_root = root or (Path(__file__).resolve().parents[2] / "data" / "trajectories")
+    files = list(cache_root.glob("*.npz")) if cache_root.exists() else []
+    bytes_ = sum(p.stat().st_size for p in files)
+    return {
+        "n_files": len(files),
+        "bytes": bytes_,
+        "gb": round(bytes_ / (1024 ** 3), 3),
+        "n_csv": len(list(RESULTS_DIR.glob("*.csv"))),
+    }
+
+
+def compare_summaries(id_a: str, id_b: str) -> str:
+    lines = [f"Compare {id_a} vs {id_b}", ""]
+    for exp_id in (id_a, id_b):
+        e = by_id(exp_id)
+        lines.append(f"### {e.id} — {e.title} (claim {e.claim})")
+        paths = list_csv_paths(e)
+        if not paths:
+            lines.append("нет CSV")
+        for p in paths:
+            lines.append(summarize_r2(p))
+        lines.append("")
+    return "\n".join(lines)
