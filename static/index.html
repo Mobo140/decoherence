@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Декогеренция</title>
+  <link rel="stylesheet" href="/static/ds.css">
+  <link rel="stylesheet" href="/static/workbench-layout.css">
+</head>
+<body>
+  <nav class="nav">
+    <span class="nav-brand">Декогеренция</span>
+  </nav>
+  <div class="shell">
+    <aside class="sidebar">
+      <p class="sidebar-group">Обзор</p>
+      <button class="nav-item is-active" data-screen="dashboard"><span class="num">1</span>Дашборд</button>
+      <button class="nav-item" data-screen="runs"><span class="num">2</span>Прогоны</button>
+      <button class="nav-item" data-screen="models"><span class="num">3</span>Модели</button>
+      <p class="sidebar-group">Работа</p>
+      <button class="nav-item" data-screen="simulate"><span class="num">4</span>Симуляция</button>
+      <button class="nav-item" data-screen="train"><span class="num">5</span>Обучение</button>
+      <button class="nav-item" data-screen="predict"><span class="num">6</span>Прогноз</button>
+      <button class="nav-item" data-screen="backtest"><span class="num">7</span>Бэктест</button>
+      <div class="sidebar-foot" id="side-foot">
+        <p>csv · —</p>
+        <p>кэш · —</p>
+      </div>
+    </aside>
+
+    <main class="content">
+      <section class="screen is-on" id="screen-dashboard">
+        <h1>Результаты</h1>
+        <p class="lede">Лучшие модели по сценариям. Цифры из CSV статей, не из текущей сессии.</p>
+        <div class="grid-5" id="dash-cards"></div>
+        <div class="grid-2">
+          <div class="card">
+            <p class="card-kicker">R² по сценариям</p>
+            <div id="dash-bars"></div>
+            <p class="foot" id="dash-auroc"></p>
+          </div>
+          <div class="card">
+            <p class="card-kicker">Статус к статьям</p>
+            <div id="dash-claims"></div>
+            <p class="foot" id="dash-paper"></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-runs">
+        <h1>Прогоны</h1>
+        <p class="lede"><span class="mono">python -m experiments.eN</span> · --fast не блокирует UI · одна фоновая задача</p>
+        <div class="toolbar">
+          <span class="seg" id="paper-filter">
+            <label class="seg-opt"><input type="radio" name="paper" value="all" checked>Все</label>
+            <label class="seg-opt"><input type="radio" name="paper" value="1">Статья 1</label>
+            <label class="seg-opt"><input type="radio" name="paper" value="2">Статья 2</label>
+          </span>
+          <select class="input" id="run-exp" style="width:auto;min-width:120px"></select>
+          <span class="seg">
+            <label class="seg-opt"><input type="radio" name="mode" value="fast" checked>быстро</label>
+            <label class="seg-opt"><input type="radio" name="mode" value="full">полностью</label>
+          </span>
+          <button class="btn btn-primary" id="btn-replay">Запустить</button>
+          <button class="btn btn-ghost" id="btn-cancel">Отмена</button>
+          <button class="btn btn-secondary" id="btn-job-ref">Обновить лог</button>
+        </div>
+        <div class="table-wrap">
+          <table class="table" id="runs-table">
+            <thead><tr><th>id</th><th>название</th><th>статья</th><th>claim</th><th>сценарии</th><th>csv</th><th>модуль</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="grid-eq" style="margin-top:var(--space-6)">
+          <div class="card">
+            <p class="card-kicker">CSV</p>
+            <div class="table-wrap"><table class="table" id="csv-table"><thead></thead><tbody></tbody></table></div>
+          </div>
+          <div class="card">
+            <p class="card-kicker">Очередь</p>
+            <pre class="log" id="job-log">(нет задач)</pre>
+          </div>
+        </div>
+        <div class="card" style="margin-top:var(--space-4)">
+          <p class="card-kicker">Сравнение</p>
+          <div class="row">
+            <select class="input" id="cmp-a" style="width:auto"></select>
+            <select class="input" id="cmp-b" style="width:auto"></select>
+            <button class="btn btn-secondary" id="btn-cmp">Сравнить</button>
+          </div>
+          <pre class="log" id="cmp-out"></pre>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-models">
+        <h1>Модели</h1>
+        <p class="lede">Чемпион на каждый гамильтониан. «Открыть в прогнозе» выбирает сценарий.</p>
+        <div class="grid-eq" id="model-cards"></div>
+      </section>
+
+      <section class="screen" id="screen-simulate">
+        <h1>Симуляция</h1>
+        <div class="grid-sim">
+          <div class="card">
+            <p class="card-kicker">Система</p>
+            <div class="field"><label>Сценарий</label>
+              <span class="seg" id="sim-scen">
+                <label class="seg-opt"><input type="radio" name="sim-sc" value="A">A</label>
+                <label class="seg-opt"><input type="radio" name="sim-sc" value="B" checked>B</label>
+                <label class="seg-opt"><input type="radio" name="sim-sc" value="C">C</label>
+                <label class="seg-opt"><input type="radio" name="sim-sc" value="D">D</label>
+                <label class="seg-opt"><input type="radio" name="sim-sc" value="E">E</label>
+              </span>
+            </div>
+            <div class="field"><label>seed</label><input class="input" id="sim-seed" type="number" value="42"></div>
+            <button class="btn btn-primary btn-block" id="btn-sim">Симулировать</button>
+            <p class="muted mono" id="sim-meta"></p>
+          </div>
+          <div>
+            <div class="card">
+              <div style="display:flex;justify-content:space-between;align-items:baseline">
+                <p class="card-kicker">L1 и ⟨σx⟩</p>
+                <span class="metric" id="sim-t2" style="font-size:18px"></span>
+              </div>
+              <svg class="plot" id="sim-svg" viewBox="0 0 640 220"></svg>
+            </div>
+            <div class="btn-row">
+              <button class="btn btn-secondary" id="btn-to-pred">Прогноз на этой траектории</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-train">
+        <h1>Обучение</h1>
+        <p class="lede">Обучение статьи — это повтор eN в фоне. UI не блокируется.</p>
+        <div class="grid-eq">
+          <div class="card">
+            <p class="card-kicker">Эксперимент</p>
+            <div class="field"><label>Номер</label><select class="input" id="tr-exp"></select></div>
+            <span class="seg">
+              <label class="seg-opt"><input type="radio" name="tr-mode" value="fast" checked>быстро</label>
+              <label class="seg-opt"><input type="radio" name="tr-mode" value="full">полностью</label>
+            </span>
+            <div class="btn-row">
+              <button class="btn btn-primary" id="btn-tr">В очередь</button>
+              <button class="btn btn-ghost" id="btn-tr-ref">Обновить лог</button>
+            </div>
+          </div>
+          <div class="card">
+            <p class="card-kicker">Задача</p>
+            <pre class="log" id="tr-log">(нет задач)</pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-predict">
+        <h1>Прогноз</h1>
+        <p class="lede">Новая траектория из пресета и окно до T₂. Без чекпоинта — physics_only. Слайдер горизонта меняет риск: P(remaining ≤ Δt) из предсказанного remaining, для любой модели.</p>
+        <div id="pred-alarm" class="card alarm hidden">
+          <p id="pred-alarm-text"></p>
+        </div>
+        <div class="toolbar">
+          <span class="seg" id="pred-scen">
+            <label class="seg-opt"><input type="radio" name="pred-sc" value="A">A</label>
+            <label class="seg-opt"><input type="radio" name="pred-sc" value="B" checked>B</label>
+            <label class="seg-opt"><input type="radio" name="pred-sc" value="C">C</label>
+            <label class="seg-opt"><input type="radio" name="pred-sc" value="D">D</label>
+            <label class="seg-opt"><input type="radio" name="pred-sc" value="E">E</label>
+          </span>
+          <div class="field"><label>seed</label><input class="input" id="pred-seed" type="number" value="7" style="width:88px"></div>
+          <div class="field"><label>горизонт</label><input class="input" id="pred-hor" type="number" step="0.1" value="1" style="width:88px"></div>
+          <div class="field"><label>порог</label><input class="input" id="pred-alarm-thr" type="number" step="0.05" value="0.7" style="width:88px"></div>
+          <button class="btn btn-primary" id="btn-pred">Симулировать и предсказать</button>
+        </div>
+        <div class="grid-pred">
+          <div class="card">
+            <p class="card-kicker" id="pred-win-kicker">Окно наблюдения</p>
+            <svg class="plot" id="pred-svg" viewBox="0 0 640 200"></svg>
+          </div>
+          <div>
+            <div class="card">
+              <p class="card-kicker">Прогноз</p>
+              <p class="metric" id="pred-rem">T₂ − t = —</p>
+              <div class="foot mono" id="pred-break"></div>
+            </div>
+            <div class="card" style="margin-top:var(--space-4)">
+              <p class="card-kicker">Риск</p>
+              <div class="bar-track" style="height:10px;position:relative;margin:var(--space-3) 0">
+                <div class="bar-warn" id="pred-gauge" style="width:0"></div>
+                <div id="pred-thr-line" style="position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--color-accent-700);left:70%"></div>
+              </div>
+              <p class="muted" id="pred-risk-note"></p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-backtest">
+        <h1>Бэктест</h1>
+        <p class="lede">Замороженные числа статей. Тяжёлый перепрогон чемпионов из UI не запускается.</p>
+        <div class="grid-2">
+          <div class="card">
+            <p class="card-kicker">Чемпионы по сценариям</p>
+            <table class="table" id="bt-table">
+              <thead><tr><th>Сценарий</th><th>Модель</th><th>R²</th><th>AUROC</th><th>цель</th></tr></thead>
+              <tbody></tbody>
+            </table>
+            <p class="foot">Повтор = E8 --fast из Прогонов, не multi-seed eval-v1.</p>
+          </div>
+          <div class="card">
+            <p class="card-kicker">Как читать</p>
+            <p>A–C закрыты. D R² 0.817 (E11a). E 0.575 (E8c) — потолок смеси J у QPT.</p>
+            <p class="muted">Прогноз работает через physics_only, если в checkpoints нет чемпиона.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="/static/workbench.js"></script>
+</body>
+</html>

@@ -1,227 +1,347 @@
-# Quantum Decoherence Time Prediction
+# Physics-Informed Early Warning of Quantum Decoherence
 
-End-to-end baseline project for predicting quantum decoherence times from partial time series of observables using Transformer models.
+> *Given only a short partial trajectory of Pauli observables — without knowledge
+> of γ(t) — predict the remaining decoherence time T₂ and emit a calibrated risk
+> score, recovering the exact analytical formula when γ is constant and
+> outperforming pure-physics and pure-ML baselines when γ(t) is unknown.*
 
-## 🚨 NEW: Early Warning System
-
-**Версия 2.0** добавляет систему раннего предупреждения о классикализации с multi-task обучением и базовым контролем!
-
-👉 **См. [README_EARLY_WARNING.md](README_EARLY_WARNING.md)** для полного руководства по новой системе.
-
-**Основные возможности:**
-- 🔴 Risk Classification: Предсказание вероятности декогеренции в ближайшем окне
-- 🔮 Forecasting: Прогнозирование будущих наблюдаемых
-- ⏱️ Time Regression: Оценка оставшегося времени
-- 🎯 Control Baseline: Демонстрация практической пользы через triggered control
-
-**Быстрый старт:**
-```bash
-# Запустить полный pipeline для эксперимента E5
-bash run_early_warning_pipeline.sh E5
-```
+**Paper:** *Physics-Informed Early Warning of Quantum Decoherence Under Unknown
+Time-Dependent Dissipation* (in preparation, target: npj Quantum Information /
+Physical Review Applied)
 
 ---
 
-## Project Overview
+## Contents
 
-This project implements a machine learning pipeline to predict decoherence times of quantum systems from partial observations. The system generates quantum trajectories by solving the Lindblad master equation, then trains various models (MLP, RNN, Transformer) to predict when decoherence occurs.
+- [Physics background](#physics-background)
+- [Model architecture](#model-architecture)
+- [Project structure](#project-structure)
+- [Installation](#installation)
+- [Quick start](#quick-start)
+- [Running experiments](#running-experiments)
+- [Analysing results](#analysing-results)
+- [Interactive UI](#interactive-ui)
+- [Key parameters](#key-parameters)
+- [Scientific motivation](#scientific-motivation)
+
+---
+
+## Physics background
+
+A quantum system coupled to an environment evolves according to the **Lindblad
+master equation** (ℏ = 1):
+
+$$\dot{\rho} = -i[H,\rho] + \gamma(t)\sum_k \left(L_k\rho L_k^\dagger - \tfrac{1}{2}\{L_k^\dagger L_k,\rho\}\right)$$
+
+The **decoherence time T₂** is the time at which the L1 coherence
+(sum of |off-diagonal elements|) falls to 1/e of its initial value.
+
+### Supported systems
+
+| System | Hamiltonian | Jump operators |
+| --- | --- | --- |
+| 1-qubit | H = ω σ_z | σ₋ (amplitude damping), σ_z (pure dephasing) |
+| 2-qubit XXZ | H = J(σˣσˣ+σʸσʸ+σᶻσᶻ) | σ₋ per qubit |
+| 2-qubit TFIM | H = J σˣσˣ + h(σᶻ+σᶻ) | σ₋ per qubit |
+
+### Why γ(t) cannot be assumed known
+
+In every physical realisation the dissipation rate is **stochastic and non-stationary**:
+
+| Platform | Source of unknown γ(t) |
+| --- | --- |
+| Superconducting qubits | 1/f flux noise, TLS fluctuators |
+| Spin qubits | Hyperfine interaction with nuclear spin bath |
+| Trapped ions | Laser power drift, micromotion fluctuations |
+| Photonic systems | Cavity leakage rate drifts |
+
+Here γ(t) is parametrised via **degree-4 Bernstein polynomials** (guaranteed non-negative),
+enabling controlled generation of arbitrary smooth dissipation profiles.
+
+### Analytical baseline (constant γ, σ₋)
+
+For constant γ the coherence decays as C(t) = C₀ e^{−γt/2}, so:
+
+```
+slope = d(log C)/dt = −γ/2   →   T₂ = −1/slope
+```
+
+This OLS-slope formula achieves R² ≈ 0.999 and MAE ≈ 0.02 in this regime.
+The LSTM residual corrector extends accuracy to all other regimes.
+
+---
+
+## Model architecture
+
+```
+Input observables  (batch, W, F)
+      │                            F = 5 (1-qubit) or 8 (2-qubit) — Pauli + L1 + purity
+      │                                (+ log C, log purity appended inside the net)
+      │
+Physics prior ──────────────────────────────────────────────────────┐
+  OLS (or Hilbert envelope) of log(coherence_l1) → phys_rem         │
+  7 scalars: t_obs, slope, log C, phys_rem, OLS R²,                 │
+             interaction_code, dissipator_code  [+ J if enabled]    │
+                                                                      │
+BiLSTM  (hidden=64, bidirectional, 1 layer)                          │
+  → mean pool over W → (batch, 128)                                  │
+  → concat scalars → (batch, 135)   old Paper-1 ckpt: 4 scalars/132  │
+      │                                                               │
+      ├── Regression head → residual δT                              │
+      │   remaining = phys_rem + δT  ←──────────────────────────────┘
+      │
+      └── Risk head → logit (train auxiliary at dataset Δt)
+              At predict(): risk = σ(−k · (remaining − horizon)), k=5
+              Same mapping as physics_only; the UI slider moves risk.
+```
+
+When `use_physics_prior=False` (lstm_only ablation) the physics scalars are zeroed
+and the network predicts T₂ directly from sequences.
+
+---
+
+## Project structure
+
+```
+.
+├── app.py                              # FastAPI workbench: 7 screens
+├── static/workbench.css
+├── experiments/
+│   ├── _config.py                      # SystemConfig factory, scenarios A–E
+│   ├── e1_ablation.py … e14_inject_J.py
+│   ├── run_all.py                      # Paper 1 suite (E1–E5)
+│   └── results/                        # CSV from completed runs
+├── src/
+│   ├── domain/                         # value objects, ports — no torch/qutip
+│   ├── application/                    # use-cases + experiment_catalog / job_queue
+│   ├── infrastructure/                 # QuTiP, LSTM, Transformer, registries
+│   └── physics/                        # Lindblad systems, T₂
+├── paper/paper_1/  paper/paper_2/
+├── docks/                              # plan, architecture, task log
+├── tests/
+├── checkpoints/
+└── requirements.txt
+```
+
+Full layer map: `docks/main/ARCHITECTURE.md`. Status: `docks/current/CURRENT_STATUS.md`.
+
+---
 
 ## Installation
 
 ```bash
+python -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Or install as a package:
+Key dependencies: `qutip`, `torch`, `fastapi`, `numpy`, `scipy`, `scikit-learn`
+
+---
+
+## Quick start
+
+### 1. Interactive UI
 
 ```bash
-pip install -e .
+source .venv/bin/activate
+python app.py
+# http://localhost:7860
 ```
 
-## Quick Start
+| Screen | What it does |
+| --- | --- |
+| **01 Dashboard** | Champion R² A–E (Paper 1 done, TFIM 0.575 / цель 0.70) |
+| **02 Runs** | Каталог E1–E14, CSV, Compare, Replay `--fast` / full |
+| **03 Models** | `HamiltonianModelRegistry` (best_XXZ / best_TFIM / 1q) |
+| **04 Simulate** | Пресет сценария A–E (тот же `build_configs`) |
+| **05 Train** | Очередь eN в фоне, UI не блокируется |
+| **06 Predict** | Окно до T₂ + risk alarm (fallback: physics_only) |
+| **07 Backtest** | Таблица чемпионов из CSV статей |
 
-1. **Generate dataset for experiment E1**:
-   ```bash
-   python3 -m src.data.generate_dataset --config configs/experiments/E1.yaml
-   ```
-   This will create a dataset with train/val/test splits and save split indices to `data/splits/`.
+Интерфейс — макет аудита (сайдбар + blueprint), не Gradio. Перезапусти `python app.py`.
 
-2. **Train and compare multiple models with cross-validation**:
-   ```bash
-   python3 -m src.train.run_suite --config configs/experiments/E1.yaml \
-       --models mlp gru lstm transformer --method cv --n-folds 5
-   ```
-   Результаты сохраняются в `experiments/`.
+### 2. Programmatic API
 
-3. **Generate comparison report**:
-   ```bash
-   # Для новой структуры (experiments/exp_*/):
-   python3 -m src.reports.make_report --run-dir experiments/exp_YYYYMMDD_HHMMSS \
-       --output-dir reports
-   
-   # Или для старой структуры (experiments/ напрямую):
-   python3 -m src.reports.make_report --run-dir experiments \
-       --output-dir reports
-   ```
+```python
+from src.domain.value_objects import DissipatorConfig, QubitCount, SystemConfig
+from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.infrastructure.ml.lstm_predictor import LSTMPredictor
+from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
+from src.application.train_model import TrainModelCommand, TrainModelUseCase
+from src.application.backtest import BacktestCommand, BacktestUseCase
 
-4. **Train a single model (hold-out validation)**:
-   ```bash
-   python3 -m src.train.train --config configs/experiments/E1.yaml --model transformer
-   ```
+# 1. Define system with unknown time-dependent γ(t)
+config = SystemConfig(
+    n_qubits=QubitCount.ONE,
+    omega=1.0,
+    dissipator=DissipatorConfig.time_dependent(
+        coeffs=(0.2, 0.8, 1.2, 0.4, 0.1),   # Bernstein coefficients
+    ),
+)
 
-5. **Evaluate the trained model**:
-   ```bash
-   python3 -m src.train.eval --config configs/experiments/E1.yaml --checkpoint checkpoints/transformer/checkpoint_XX
-   ```
+# 2. Generate dataset
+simulator = QuTipSimulator()
+dataset = GenerateDatasetUseCase(simulator).execute(
+    GenerateDatasetCommand(configs=[config] * 200, window_length=50)
+)
 
-## Usage
+# 3. Train physics+LSTM predictor
+predictor = LSTMPredictor(use_physics_prior=True)
+TrainModelUseCase(predictor).execute(
+    TrainModelCommand(dataset=dataset, n_epochs=100)
+)
 
-### 1. Generate Dataset
+# 4. Evaluate
+metrics = BacktestUseCase(predictor).execute(BacktestCommand(dataset=dataset))
+print(metrics.summary())
+# → BacktestMetrics(n=... MAE=... RMSE=... R²=... AUROC=...)
+```
 
-Generate a dataset for a specific experiment:
+### 3. Single inference
+
+```python
+import numpy as np
+from src.application.predict_decoherence import PredictDecoherenceCommand, PredictDecoherenceUseCase
+
+window = ...  # (window_length, n_features) float32 array of recent observables
+result, events = PredictDecoherenceUseCase(predictor).execute(
+    PredictDecoherenceCommand(window=window, t_obs=3.0, horizon=1.0)
+)
+print(f"Predicted T₂: {result.t_decoh_predicted:.3f}")
+print(f"Risk score:   {result.risk_score:.3f}")
+if events:
+    print("⚠ Decoherence alarm triggered!")
+```
+
+---
+
+## Running experiments
+
+Paper 1 = E1–E5. Paper 2 = E6–E14. Replay from the UI (**02 Runs**) or:
 
 ```bash
-python3 -m src.data.generate_dataset --config configs/experiments/E1.yaml
+python experiments/run_all.py --fast          # Paper 1 smoke
+python -m experiments.e8_improved_2qubit --fast
+python -m experiments.e14_inject_J --fast
 ```
 
-This will:
-- Generate trajectories with train/val/test split (default: 80/10/10)
-- Save dataset to `data/dataset.npz` (or path specified in config)
-- Save split indices to `data/splits/dataset_splits.json`
-- Include dataset version and metadata
+CSV → `experiments/results/`. Catalog and champions: `src/application/experiment_catalog.py`.
 
-Available experiments:
-- **E1**: Single-qubit, constant γ, σz only
-- **E2**: Single-qubit, constant γ, σx,y,z
-- **E3**: Single-qubit, time-dependent γ(t), σx,y,z
-- **E4**: Two-qubit, simple interaction, multiple channels
+- **E1** C1, C2 — physics_only / lstm_only / physics_lstm / transformer × A–E
+- **E2** C3 — window fraction sweep
+- **E3** C4 — measurement noise σ
+- **E4** C5 — train on mixture, eval per scenario
+- **E5** — direct T₂ vs inverse γ-reconstruction
+- **E6–E8** — 2-qubit scale-up; E8c is TFIM R² champion (0.575)
+- **E9–E11** — context codes, Transformer AUROC, scaling (E11a XXZ R²=0.817)
+- **E12–E14** — stretched-exp baseline, survival loss, inject J
 
-### 2. Train Model
+### Scenario taxonomy
 
-Train a model on the generated dataset:
+| Label | System | γ(t) | Notes |
+| --- | --- | --- | --- |
+| A | 1-qubit, σ₋ | constant | Physics formula exact — LSTM residual ≈ 0 |
+| B | 1-qubit, σ₋ | time-dependent | Core difficult case |
+| C | 1-qubit, σ_z | time-dependent | Pure dephasing, different decay form |
+| D | 2-qubit XXZ | time-dependent | Entanglement + decoherence |
+| E | 2-qubit TFIM | time-dependent | Different interaction structure |
+
+---
+
+## Analysing results
 
 ```bash
-python3 -m src.train.train --config configs/experiments/E1.yaml --model lstm
+jupyter notebook notebooks/figures.ipynb
 ```
 
-Available models: `mlp`, `gru`, `lstm`, `transformer`, `two_stage`
+The notebook generates:
 
-The training script will:
-- Load the dataset
-- Train the model for the specified number of epochs
-- Save checkpoints when validation loss improves
-- Log training metrics
+| Figure | Content |
+| --- | --- |
+| Fig 1 | E1 ablation bar charts (R², MAE, AUROC by variant and scenario) |
+| Fig 2 | E2 window sweep: R² and AUROC vs. observation fraction |
+| Fig 3 | E3 noise sweep: MAE and AUROC vs. noise σ |
+| Fig 4 | E4 cross-system bar chart |
+| Fig 5 | E5 direct vs. inverse comparison |
+| Fig 6 | Live demo: fresh trajectory with online predictions |
+| Validation | Physics-only R²≥0.999 check on constant-γ trajectories |
 
-### 3. Model Comparison Suite
+All figures are saved as PDF to `notebooks/figs/`.
 
-Run comparison of multiple models with cross-validation:
+---
+
+## Plugging in a custom loss
+
+```python
+from src.domain.ports import ILossFunction
+from src.infrastructure.ml.loss_functions import get_loss
+
+# Built-in losses
+loss = get_loss("huber")          # HuberLoss(delta=1.0)
+loss = get_loss("mae")            # L1
+loss = get_loss("quantile_0.9")   # Pinball loss at q=0.9
+
+# Custom loss — implement ILossFunction
+class MyLoss(ILossFunction):
+    @property
+    def name(self): return "my_loss"
+    def __call__(self, preds, targets): ...
+    def as_torch(self): return MyTorchModule()
+
+# Use it in training
+TrainModelUseCase(predictor).execute(
+    TrainModelCommand(dataset=ds, regression_loss="huber")
+)
+```
+
+---
+
+## Key parameters
+
+| Parameter | Symbol | Default | Meaning |
+| --- | --- | --- | --- |
+| `omega` | ω | 1.0 | Qubit transition frequency |
+| `gamma_const` | γ | — | Constant dissipation rate (mutually exclusive with `gamma_coeffs`) |
+| `gamma_coeffs` | — | — | Bernstein coefficients for time-dependent γ(t) ≥ 0 |
+| `dissipator` | L | σ₋ | Jump operator: `sigma_minus` or `sigma_z` |
+| `t_max` | T | 10.0 | Simulation end time |
+| `dt` | dt | 0.1 | Simulation time step |
+| `decoherence_threshold` | θ | 1/e | Relative coherence threshold for T₂ definition |
+| `window_length` | W | 50 | Timesteps in the observation window |
+| `horizon` | Δt | 1.0 | Time window for binary risk label |
+| `use_physics_prior` | — | True | Embed OLS-slope estimate as physics prior (False → lstm_only) |
+| `noise.sigma` | σ | 0.0 | Gaussian measurement noise standard deviation |
+
+---
+
+## Tests
 
 ```bash
-python3 -m src.train.run_suite --config configs/experiments/E1.yaml \
-    --models mlp gru lstm transformer \
-    --method cv --n-folds 5 \
-    --output-dir experiments
+python -m pytest tests/
 ```
 
-Options:
-- `--method`: `holdout`, `cv`, or `both`
-- `--n-folds`: Number of CV folds (default: 5)
-- `--models`: List of models to compare
+Covers physics (T₂, Lindblad, censoring), predictors, Hamiltonian registry,
+survival backtest, inject-J, and the experiment catalog / dashboard HTML.
 
-This will:
-- Train each model using K-fold cross-validation
-- Save results for each fold
-- Aggregate metrics across folds (mean ± std)
-- Save experiment config and summary
+---
 
-### 4. Generate Comparison Report
+## Scientific motivation (extended)
 
-Generate final report with comparison table:
+The closest related work is **arXiv 2505.06928** (*Unraveling Quantum Environments:
+Transformer-Assisted Learning in Lindblad Dynamics*, Phys. Rev. A 2025), which solves
+the **inverse problem** — reconstructing γ(t) from a full trajectory. Our work is
+complementary and distinct:
 
-```bash
-# Для новой структуры (experiments/exp_*/):
-python3 -m src.reports.make_report --run-dir experiments/exp_YYYYMMDD_HHMMSS \
-    --output-dir reports --primary-metric mae
+| Aspect | arXiv 2505.06928 | This work |
+| --- | --- | --- |
+| Goal | Reconstruct γ(t) | Predict remaining T₂ |
+| Task type | Inverse problem (offline) | Early warning (online) |
+| Input | Full trajectory required | **Partial early window only** |
+| Output | γ(t) Bernstein coefficients | T₂ + risk score |
+| Physics prior | None (pure Transformer) | OLS slope = −γ/2 embedded |
+| Analytical limit | No — pure ML | Yes — recovers exact formula when γ = const |
 
-# Или для старой структуры (experiments/ напрямую):
-python3 -m src.reports.make_report --run-dir experiments \
-    --output-dir reports --primary-metric mae
-```
-
-This will generate:
-- `metrics_summary.csv`: CSV table with all metrics
-- `metrics_summary.tex`: LaTeX table ready for paper
-- `report.md`: Markdown report with summary
-
-### 5. Evaluate Model
-
-Evaluate a trained model (for final test evaluation):
-
-```bash
-python3 -m src.train.eval --config configs/experiments/E1.yaml --checkpoint checkpoints/transformer/checkpoint_19
-```
-
-This will:
-- Compute metrics on test set (MAE, RMSE, MAPE, R², coverage)
-- Generate visualization plots (scatter, error histogram, error vs gamma)
-- Save metrics and plots to `figures/`
-
-## Running Tests
-
-```bash
-python3 tests/test_decoherence_time.py
-```
-
-## Interpreting Metrics
-
-- **MAE**: Mean Absolute Error (lower is better)
-- **RMSE**: Root Mean Squared Error (penalizes large errors more)
-- **MAPE**: Mean Absolute Percentage Error (%)
-- **R²**: Coefficient of determination (1.0 = perfect, 0.0 = no better than mean)
-- **Coverage**: Fraction of predictions within 5% of T_max from true value
-
-## Project Structure
-
-```
-src/
-  physics/         # Quantum simulation modules
-  data/            # Dataset generation, splits, transforms
-  models/          # ML model architectures
-  train/           # Training, evaluation, cross-validation
-  reports/         # Report generation (tables, summaries)
-  utils/           # Utilities (config, logging, plotting)
-configs/           # Configuration files
-data/              # Generated datasets
-  splits/          # Saved split indices
-runs/              # Training runs and experiments
-  experiments/     # Model comparison experiments
-  <model>/         # Model-specific runs
-figures/           # Evaluation plots
-reports/           # Generated comparison reports
-```
-
-## Key Features
-
-- **Physical Systems**: Single-qubit and two-qubit systems with Lindblad dissipation
-- **Models**: MLP, GRU/LSTM, Transformer, Two-stage Transformer
-- **Decoherence Criteria**: L1 coherence and purity-based thresholds
-- **Reproducibility**: Seed control, saved splits, and configurable experiments
-- **Validation**: Hold-out validation and K-fold cross-validation
-- **Model Comparison**: Unified interface for comparing multiple models
-- **Reporting**: Automatic generation of comparison tables (CSV + LaTeX)
-
-## Validation Protocol
-
-The system follows a strict validation protocol:
-
-1. **Train/Val/Test Split**: Fixed split with saved indices (default: 80/10/10)
-2. **Cross-Validation**: K-fold CV for model selection (metrics computed on validation folds)
-3. **Test Set**: Used only once for final evaluation of the selected model
-4. **No Data Leakage**: Normalization fitted only on training data within each fold/split
-
-## Reproducibility
-
-- All splits are saved with seed and metadata
-- Config files are saved with each experiment
-- Checkpoints include model state and training history
-- Results are aggregated and saved in JSON format
+The key practical advantage: our approach is **online** (works from f ≈ 0.15 of
+the total trajectory) and **directly actionable** (outputs T₂ remaining and a
+calibrated alarm probability) without requiring a full simulation forward pass.
