@@ -1,5 +1,14 @@
 # Current Status — Quantum Decoherence Predictor
 
+## В работе (2026-09-03)
+
+Очередь пуста. Задача 12 закрыла хвосты аудита:
+- `_force_all_test` снова на `CrossSystemUseCase` (E4/E7a больше не AttributeError)
+- Transformer грузится по `_kind.json` и по байтам без sidecar
+- C3 в E2/PROJECT_PLAN: AUROC≥0.92 при f=0.15, не R²≥0.95
+
+Не запускать E6/E8 full из UI — перезапишут чемпионские CSV.
+
 ## Проект готов (2026-08-20)
 
 Очередь `docks/tasks/actual/` пуста — бэклог 01–12 в архиве. Дубликаты 01–08 из actual убраны.
@@ -29,4 +38,3 @@ UI = согласованный макет аудита (сайдбар 01–07)
 - Multi-seed ×5 / eval-v1 перепрогон (часы CPU)
 - Новые E12–E16 из аудита (entanglement-фичи, 1/f, плотный J-sweep, ECE)
 - Lineage чемпионов / pydantic-схема CSV
-
