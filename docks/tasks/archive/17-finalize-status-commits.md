@@ -21,11 +21,15 @@
 
 ## Acceptance Criteria
 
-- [ ] `CURRENT_STATUS.md` описывает фактическое состояние, без «Paper 1 сдан»
-- [ ] Задачи 13–16 в `archive/`, `EXECUTION_PLAN.md` показывает их как done с итогом
-- [ ] `git status` чист (нет `.venv`, нет случайных артефактов)
-- [ ] Коммиты логически раздельные, сообщения с `Co-Authored-By` футером
-- [ ] `pytest tests/` зелёный; `make pdf` собирает обе статьи
+- [x] `CURRENT_STATUS.md` описывает фактическое состояние, без «Paper 1 сдан»
+  (заменено на честное «не проверено человеком перед реальной подачей»)
+- [x] Задачи 13–16 в `archive/`, `EXECUTION_PLAN.md` показывает их как done с итогом
+  (сделано инкрементально по ходу задач 13–16, не в конце)
+- [x] `git status` чист (нет `.venv`, нет случайных артефактов) — `git ls-files
+  | grep '^\.venv/'` → 0
+- [x] Коммиты логически раздельные, сообщения с `Co-Authored-By` футером — 9 коммитов
+  за цикл (снимок / qutip / paper1-figs / paper1-bib / paper2-theory / 4× archive-sync)
+- [x] `pytest tests/` зелёный (92); `make pdf` собирает обе статьи
 
 ## Invariants
 
@@ -42,7 +46,14 @@ pytest tests/ -q && make pdf
 
 ## Status
 
-`planned`
+`done`
+
+Большая часть (раздельные коммиты, архивация 13–16) делалась инкрементально по
+ходу самих задач — здесь оставалось только `CURRENT_STATUS.md` (снят over-claim
+«Paper 1 сдан» / «проект готов», добавлены честные open items: аффилиация,
+устаревший `description_ru.tex`, `lstm_predictor.py` не разбит, мелкий overfull
+hbox не тронут), `archive/README.md` (01–12 → 01–17) и финальная сверка
+(`pytest` 92 passed, `make pdf` — обе статьи, `git status` чист).
 
 ## Priority
 
