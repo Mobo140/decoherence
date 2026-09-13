@@ -12,19 +12,24 @@
 | 13 | Уборка: `.venv` из git + qutip API | P1 | **done** → archive |
 | 14 | Paper 1 — publication-рисунки (сейчас 0) | P1 | **done** → archive |
 | 15 | Paper 1 — библиография, авторы, факт-чек | P1 | **done** → archive |
-| 16 | Paper 2 — теория потолка TFIM у QPT | P2 | planned |
+| 16 | Paper 2 — теория потолка TFIM у QPT | P2 | **done** → archive |
 | 17 | Финализация — статус + коммиты | P2 | planned |
 
 **Paper 1 полностью вылизана** (задачи 14+15) — рисунки, библиография (12 ссылок,
-все верифицированы), авторы, факт-чек, явные claims C1–C5. Осталась реальная
-аффилиация автора (сейчас placeholder «Independent Researcher»).
+все верифицированы), авторы, факт-чек, явные claims C1–C5.
 
-**Нужно от пользователя:** глубина теории Paper 2 (задача 16).
+**Paper 2 получила теорию TFIM-потолка** (задача 16) — точная диагонализация N=2
+гамильтониана + попутно тот же класс правок, что в Paper 1 (авторы, библиография,
+overfull hbox).
+
+Обе статьи: реальная аффилиация автора остаётся open item (сейчас placeholder
+«Independent Researcher»).
 
 ## Закрытый бэклог
 
 | # | Задача | Итог |
 |---|--------|------|
+| 16 | Paper 2 — теория потолка TFIM у QPT | done — точная диагонализация N=2 (Pfeuty1970), авторы+библио+overfull fix, commit `b0acc1b` |
 | 15 | Paper 1 — библиография, авторы, факт-чек | done — 12 ссылок (веб-верифицированы), авторы, `>15×`→`3–9×` факт-чек, явные C1–C5, commit `b789695` |
 | 14 | Paper 1 — publication-рисунки | done — 6 рисунков (E1–E5 + physics_validation), overfull hbox в Table 4 попутно починен, commit `6b46596` |
 | 13 | Уборка: `.venv` из git + qutip API | done — репо не коммитился 9 мес (снимок commit `39e4c64`), qutip fix commit `7a88624`, 92 passed 0 warnings |
