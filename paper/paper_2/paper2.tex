@@ -15,7 +15,8 @@
 \title{\textbf{Physics-Informed Early Warning of Entanglement Decoherence
 in Two-Qubit Systems}}
 
-\author[1]{}
+\author[1]{Nikita Brusnikin}
+\affil[1]{Independent Researcher}
 \date{}
 % --------------------------------------------------------------------------
 
@@ -104,6 +105,9 @@ E & TFIM: $J\sigma_z\sigma_z + h(\sigma_x \otimes I + I \otimes \sigma_x)$ & [0.
 \end{tabular}
 \end{table}
 
+Trajectories are solved via the Lindblad master equation solver in
+\textsc{QuTiP}~\cite{qutip}.
+
 % --------------------------------------------------------------------------
 \section{Method}
 
@@ -147,7 +151,10 @@ model learns under the same signal it will receive at deployment.
 \texttt{physics\_only}: OLS formula with adaptive gate (Eq.~\ref{eq:adaptive}).
 \texttt{lstm\_only}: BiLSTM without any physics prior.
 \texttt{physics\_lstm}: full residual model with adaptive prior (ours).
-\texttt{transformer}: pure Transformer encoder (same as \cite{Paper1Brusnikin}).
+\texttt{transformer}: pure Transformer encoder (same as
+\cite{Paper1Brusnikin}, architecturally analogous to the Transformer
+used in \cite{TransformerLindblad2025} for the related inverse
+$\gamma(t)$-reconstruction task).
 
 % --------------------------------------------------------------------------
 \section{Experiments}
@@ -361,11 +368,13 @@ Table~\ref{tab:e11a} reports the final cross-system results.
 \centering
 \caption{E11a: Transformer cross-system, window $L=20$, min-gap $=10$,
   500 trajs/scenario ($N_\mathrm{D}=1116$, $N_\mathrm{E}=1149$).
+  $\Delta R^2$ is relative to E7a.
   \label{tab:e11a}}
-\small
+\footnotesize
+\setlength{\tabcolsep}{3pt}
 \begin{tabular}{llrrrr}
 \toprule
-Scen. & Hamiltonian & $R^2$ & MAE & AUROC & $\Delta R^2$ (vs E7a) \\
+Scen. & Ham. & $R^2$ & MAE & AUROC & $\Delta R^2$ \\
 \midrule
 D & XXZ  & \textbf{0.817} & 0.616 & \textbf{0.937} & $+0.059$ \\
 E & TFIM & 0.566 & 0.900 & \textbf{0.888} & $-0.033$ \\
@@ -515,6 +524,12 @@ The reason is that 2-qubit coherence---even for XXZ---is not well
 approximated by a simple exponential, so the OLS prior provides a
 biased starting point that the LSTM residual must overcome rather than
 simply correct.
+Unlike standard PINNs~\cite{Raissi2019}, where a physics term enters as
+a soft loss penalty the network can learn to down-weight, our residual
+prior is a hard architectural constraint (Eq.~\ref{eq:residual}): when
+it is structurally wrong, as it is for oscillatory 2-qubit coherence,
+the network cannot simply ignore it, and can only partially compensate
+through $\delta T_\mathrm{LSTM}$.
 For 2-qubit systems, \emph{the pure Transformer is the recommended
 architecture}.
 
@@ -562,13 +577,76 @@ accuracy exhibits a \emph{dip} near the TFIM quantum phase transition
 Far from the transition---in either the paramagnetic ($J \ll h$) or
 deep ferromagnetic ($J \gg h$) phase---performance recovers
 substantially.
-This result is physically interpretable: near criticality, long-range
-quantum fluctuations produce irregular, hard-to-predict decoherence
-trajectories, whereas away from the transition the dynamics are more
-regular.
 This has direct practical implications: hardware operating near a
 TFIM-like phase transition (e.g., certain flux-qubit designs) will have
-the least reliable early-warning predictions.
+the least reliable early-warning predictions, which should be factored
+into error-correction scheduling policies~\cite{Lidar2013}.
+
+\paragraph{Why does predictability dip near the transition? A
+finite-size analysis.}
+In the thermodynamic limit ($N\to\infty$) the 1D transverse-field
+Ising chain has a genuine quantum critical point at $J=h$, where the
+excitation gap closes as $\Delta\sim|J-h|^{z\nu}$ ($z=\nu=1$) and the
+correlation length diverges~\cite{Pfeuty1970}.
+Our system is the $N=2$ instance of this Hamiltonian, so no true
+non-analyticity can occur---finite systems never exhibit sharp phase
+transitions, only smooth crossovers that sharpen into the transition
+as $N\to\infty$.
+We can nonetheless identify the finite-size precursor of the
+transition \emph{exactly}, since $H_{\mathrm{TFIM}} = J\sigma_z\sigma_z
++ h(\sigma_x\otimes I + I\otimes\sigma_x)$ block-diagonalises under the
+global-flip parity $P=\sigma_x\otimes\sigma_x$ (which commutes with
+$H_{\mathrm{TFIM}}$) into two exactly solvable $2\times2$ sectors:
+\begin{equation}
+  E_{P=+1} = \pm\sqrt{J^2+4h^2}, \qquad
+  E_{P=-1} = \pm J.
+  \label{eq:tfim-spectrum}
+\end{equation}
+Both branches are smooth (analytic) functions of $J$ for all $J>0$---
+confirming explicitly, for this exact model, that finite $N$ washes out
+the non-analyticity, as finite-size scaling theory predicts.
+What \emph{does} change qualitatively with $J$ is the ratio of the two
+sectors' level splittings,
+\begin{equation}
+  r(J) \;=\; \frac{2J}{2\sqrt{J^2+4h^2}} \;=\; \frac{J}{\sqrt{J^2+4h^2}},
+  \label{eq:ratio}
+\end{equation}
+which grows monotonically from $r\to0$ (deep paramagnetic, $J\ll h$:
+the $P{=}{+}1$ sector's splitting dominates, so coherent dynamics is
+governed by essentially one frequency) through $r(h)=1/\sqrt5\approx
+0.447$ at the nominal transition to $r\to1$ (deep ferromagnetic,
+$J\gg h$: both splittings again scale together, $\propto2J$).
+Crucially, the amplitude-damping dissipator used here does \emph{not}
+commute with $P$ ($\sigma_x\sigma_-\sigma_x=\sigma_+$), so dissipation
+actively couples the two parity sectors rather than respecting the
+closed-system symmetry.
+This coupling is least consequential where one sector's timescale
+dominates the other ($r\approx0$ or $r\to1$, i.e.\ deep in either
+phase, matching the empirically strong $R^2=0.876$ at $J=0.2$ and
+$R^2=0.836$ at $J=1.5$), and most consequential in the crossover band
+$J\in[0.8,1.5]$ where $r(J)\in[0.37,0.60]$ and neither sector's
+frequency dominates: a generic (non-$P$-eigenstate) initial state then
+produces an $\ell_1$-coherence trajectory with two comparably-weighted,
+comparably-fast oscillation/decay channels rather than one, which is
+precisely the regime in which a short early window is least able to
+extrapolate to the eventual $T_2$---the same short-window information
+limit as the single-exponential case in \cite{Paper1Brusnikin}, but now
+with two competing modes instead of one.
+Because $r(J)$ increases \emph{monotonically} rather than peaking
+symmetrically at $J=h$, this mechanism also explains the observed
+asymmetry of the dip (worst at $J=1.2$, just past the nominal
+transition, rather than exactly at $J=1.0$): the crossover band in
+$r(J)$ is not centred on $J=h$.
+We leave a precise, quantitative account of the recovery at $J=1.5$
+(where $r=0.6$ is not yet close to $1$) as an open question---it likely
+involves the interplay between the growing overall energy scale
+$\propto\sqrt{J^2+4h^2}$ and the dissipation rate $\gamma(t)$, which
+this closed-system spectral argument does not capture.
+In short, the $R^2$ ceiling near $J\approx h$ is not a training
+artefact but a structural consequence of dissipator-induced mode
+mixing between the two symmetry sectors of the Hamiltonian, at its
+strongest precisely where their timescales are of comparable
+magnitude.
 
 \paragraph{Remaining open questions.}
 \begin{enumerate}
@@ -615,14 +693,21 @@ Key findings are:
     the TFIM quantum phase transition}: $R^2 = 0.32$--$0.50$ for
     $J \in [0.8, 1.2]$ vs.\ $R^2 = 0.84$--$0.88$ far from criticality
     (E7c).
-    This is a novel phase-diagram view of early-warning reliability.
+    This is a novel phase-diagram view of early-warning reliability,
+    and---since the $N=2$ system studied here cannot host a true
+    non-analytic transition---we ground it in an exact finite-size
+    analysis (Eq.~\ref{eq:tfim-spectrum}--\ref{eq:ratio}): the dip
+    coincides with the band where the Hamiltonian's two parity sectors
+    have comparable timescales and the (parity-breaking) dissipator
+    couples them most strongly, so the $R^2$ ceiling is a structural
+    property of the model, not a training artefact.
   \item Noise robustness is exceptional: $R^2$ varies by only $\pm 0.007$
     across $\sigma = 0$--$0.10$, stronger than the single-qubit case.
 \end{enumerate}
 
 % --------------------------------------------------------------------------
 \bibliographystyle{unsrt}
-\begin{thebibliography}{9}
+\begin{thebibliography}{6}
 
 \bibitem{Paper1Brusnikin}
 N.~Brusnikin,
@@ -630,17 +715,17 @@ N.~Brusnikin,
   Systems Under Unknown Time-Dependent Dissipation,''
 \textit{arXiv preprint} (2026). [companion paper]
 
-\bibitem{TransformerLindblad2025}
-[Author(s)],
-``Unraveling Quantum Environments: Transformer-Assisted Learning in
-  Lindblad Dynamics,''
-\textit{Phys.\ Rev.\ A} (2025); arXiv:2505.06928.
-
 \bibitem{qutip}
 J.~R.~Johansson, P.~D.~Nation, and F.~Nori,
 ``QuTiP: An open-source Python framework for the dynamics of open
   quantum systems,''
 \textit{Comput.\ Phys.\ Commun.}\ \textbf{183}, 1760--1772 (2012).
+
+\bibitem{TransformerLindblad2025}
+C.-S.~Chen and E.-J.~Kuo,
+``Unraveling quantum environments: Transformer-assisted learning in
+  Lindblad dynamics,''
+\textit{Phys.\ Rev.\ A}\ \textbf{112}, 042227 (2025); arXiv:2505.06928.
 
 \bibitem{Raissi2019}
 M.~Raissi, P.~Perdikaris, and G.~E.~Karniadakis,
@@ -653,6 +738,11 @@ M.~Raissi, P.~Perdikaris, and G.~E.~Karniadakis,
 D.~A.~Lidar and T.~A.~Brun (eds.),
 \textit{Quantum Error Correction},
 Cambridge University Press, 2013.
+
+\bibitem{Pfeuty1970}
+P.~Pfeuty,
+``The one-dimensional Ising model with a transverse field,''
+\textit{Ann.\ Phys.}\ \textbf{57}, 79--90 (1970).
 
 \end{thebibliography}
 
