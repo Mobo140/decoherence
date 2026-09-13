@@ -9,7 +9,7 @@
 
 | # | Задача | Приоритет | Статус |
 |---|--------|-----------|--------|
-| 13 | Уборка: `.venv` из git + qutip API | P1 | planned |
+| 13 | Уборка: `.venv` из git + qutip API | P1 | **done** → archive |
 | 14 | Paper 1 — publication-рисунки (сейчас 0) | P1 | planned |
 | 15 | Paper 1 — библиография, авторы, факт-чек | P1 | planned |
 | 16 | Paper 2 — теория потолка TFIM у QPT | P2 | planned |
@@ -21,6 +21,7 @@
 
 | # | Задача | Итог |
 |---|--------|------|
+| 13 | Уборка: `.venv` из git + qutip API | done — репо не коммитился 9 мес (снимок commit `39e4c64`), qutip fix commit `7a88624`, 92 passed 0 warnings |
 | 01 | E9 context injection | done, TFIM R²=0.452 |
 | 02 | Per-Hamiltonian registry | `best_XXZ.pt` / `best_TFIM.pt` |
 | 03 | Статьи `paper_1/` `paper_2/` | done |

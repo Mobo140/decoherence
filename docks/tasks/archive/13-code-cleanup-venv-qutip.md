@@ -23,11 +23,11 @@
 
 ## Acceptance Criteria
 
-- [ ] `.gitignore` содержит `.venv/`; `git ls-files | grep '^\.venv/'` пусто
-- [ ] `pytest tests/` зелёный (92) **без** qutip `FutureWarning` в выводе
-- [ ] Численные результаты симулятора не изменились (тесты `test_lindblad_systems`,
+- [x] `.gitignore` содержит `.venv/`; `git ls-files | grep '^\.venv/'` пусто
+- [x] `pytest tests/` зелёный (92) **без** qutip `FutureWarning` в выводе
+- [x] Численные результаты симулятора не изменились (тесты `test_lindblad_systems`,
   `test_decoherence_time` проходят как раньше)
-- [ ] Существующие E1–E8 запускаются без изменений
+- [x] Существующие E1–E8 запускаются без изменений (код не трогали, только API вызова)
 
 ## Invariants
 
@@ -46,7 +46,18 @@ pytest tests/ -q
 
 ## Status
 
-`planned`
+`done`
+
+Обнаружилось, что репозиторий не коммитился ~9 месяцев (единственный коммит `MVP`
+от 2026-01-03 фиксировал ранний прототип, не текущую DDD-структуру) — до правки
+`.venv` пришлось сначала landing'ить снимок текущего состояния отдельным коммитом
+(с согласия пользователя), убрав по пути чужие staged-файлы из индекса (design-canvas
+артефакты не из этого проекта, на диске их не было).
+
+Коммиты:
+- `39e4c64` — снимок 9 месяцев работы (DDD, статьи, docks/, experiments) + untrack `.venv`
+- `7a88624` — сам фикс: `qt.Options(nsteps=...)` → dict; `e_ops` positional → keyword.
+  Численно идентично (max abs diff = 0.0 на тестовом mesolve), 92 passed без warnings.
 
 ## Priority
 
