@@ -14,6 +14,9 @@
 \title{\textbf{Physics-Informed Early Warning of Quantum Decoherence\\
 in Single-Qubit Systems Under Unknown Time-Dependent Dissipation}}
 
+\author[1]{Nikita Brusnikin}
+\affil[1]{Independent Researcher}
+
 \date{}
 % --------------------------------------------------------------------------
 
@@ -39,16 +42,18 @@ the residual model achieves $R^2 = 0.94$--$0.98$, improving over the
 physics-only baseline by up to $\Delta R^2 = +0.19$.
 The risk alarm (binary: decoherence within horizon $\Delta t$) reaches
 AUROC $\geq 0.93$ using as little as $5\%$ of the trajectory, and the
-system outperforms a two-step inverse approach by a factor of
-$>15\times$ in MAE at short windows.
+system outperforms a two-step inverse approach by $3$--$9\times$ in MAE
+across all tested observation windows ($f=0.10$--$0.50$), the inverse
+baseline never achieving a positive $R^2$.
 \end{abstract}
 
 % --------------------------------------------------------------------------
 \section{Introduction}
 
-Decoherence is the central obstacle to scalable quantum computation.
+Decoherence is the central obstacle to scalable quantum
+computation~\cite{Zurek2003}.
 A quantum system coupled to a Markovian environment evolves under the
-Lindblad master equation ($\hbar = 1$):
+Lindblad master equation~\cite{Lindblad1976,Breuer2002} ($\hbar = 1$):
 \begin{equation}
   \dot{\rho} = -i[H,\rho]
   + \gamma(t)\!\left(L\rho L^\dagger
@@ -95,7 +100,7 @@ the diagonal.
 
 The problem becomes non-trivial when $\gamma(t)$ is \emph{unknown and
 time-varying}---the realistic case on every physical platform
-(Table~\ref{tab:platforms}).
+(Table~\ref{tab:platforms})~\cite{Paladino2014}.
 In this regime, the OLS slope captures only the instantaneous
 $\gamma(t)/2$, and the resulting $T_2$ estimate can be severely biased.
 
@@ -194,7 +199,8 @@ corrects only the residual---a much easier regression target than
 predicting $T_2$ from scratch.
 
 \paragraph{Network details.}
-A bidirectional LSTM (hidden size 64, 1 layer) processes $\mathbf{w}$
+A bidirectional LSTM~\cite{HochreiterSchmidhuber1997} (hidden size 64,
+1 layer) processes $\mathbf{w}$
 augmented with $\log C$ and $\log(\mathrm{purity})$.
 The mean-pooled output is concatenated with four physics scalars
 $(\text{slope},\log C_\text{obs},t_\text{obs},T_\text{physics})$,
@@ -205,8 +211,9 @@ yielding a 132-dimensional representation fed into two linear heads:
     \mathrm{Lin}(32) \xrightarrow{\mathrm{GELU}} \mathrm{Lin}(1)\bigr),
 \end{align}
 where $p_{\mathrm{risk}} = P(\mathrm{decoherence\ within\ }\Delta t)$.
-Training uses AdamW with Huber regression loss and BCE classification
-loss, with a patience-based early-stop scheduler.
+Training uses AdamW~\cite{LoshchilovHutter2019} with Huber regression
+loss and BCE classification loss, with a patience-based early-stop
+scheduler.
 
 \paragraph{Ablation variants.}
 \texttt{physics\_only}: OLS formula, no neural network.
@@ -221,8 +228,9 @@ arXiv:2505.06928 applied to the $T_2$ task.
 \subsection{E1 --- Ablation study}
 \label{sec:e1}
 
-Table~\ref{tab:e1} reports $R^2$, MAE, and risk AUROC for all four
-variants on the three single-qubit scenarios.
+Table~\ref{tab:e1} reports $R^2$, MAE, and risk
+AUROC~\cite{Fawcett2006} for all four variants on the three
+single-qubit scenarios.
 
 \begin{table}[h]
 \centering
@@ -336,6 +344,10 @@ $W = 20$ steps: mixing B with C reduces per-regime accuracy.
 Second, and more importantly, the risk alarm (AUROC) already exceeds
 $0.93$ at $f = 0.05$---meaning the binary decoherence warning is
 reliable when only $5\%$ of the trajectory has elapsed.
+\textbf{Claim C3 confirmed.} Risk AUROC $\geq 0.93$ is achievable using
+as little as $5\%$--$15\%$ of the trajectory ($0.933$--$0.947$); $R^2$
+plateaus near $0.70$--$0.74$ and should \emph{not} be claimed to reach
+$0.95$ in this window-sweep setting.
 
 \subsection{E3 --- Measurement noise robustness}
 \label{sec:e3}
@@ -378,6 +390,10 @@ the OLS slope is computed over a full window of $W = 20$ steps,
 averaging out i.i.d.\ noise by $\sim\!\sqrt{W}$.
 At $\sigma = 0.10$, AUROC drops to $0.865$; we consider this the
 effective noise-tolerance ceiling of the current architecture.
+\textbf{Claim C4 confirmed.} MAE degrades sub-linearly with
+$\sigma_\mathrm{noise}$ up to the realistic $\sigma=0.05$ level, and
+risk AUROC remains $\geq 0.90$ throughout this range ($0.942$ at
+$\sigma=0.05$).
 
 \subsection{E4 --- Cross-system generalisation (1-qubit)}
 \label{sec:e4}
@@ -421,6 +437,13 @@ For deployment, a lightweight regime classifier can select
 between \texttt{physics\_only} (constant $\gamma$) and
 \texttt{physics\_lstm} (time-dependent $\gamma$) based on the linearity
 of $\log C$ over the window.
+\textbf{Claim C5 partially confirmed.} A single model trained on the
+A+B+C mixture generalises well to \emph{both} time-dependent regimes
+(B: $R^2=0.867$; C: $R^2=0.936$; AUROC $\geq 0.98$ throughout) without
+per-regime retraining, but underperforms on the constant-$\gamma$
+regime (A: $R^2=0.490$), where the optimal correction is $\delta
+T \approx 0$ and the mixture-trained network fails to fully suppress
+it---motivating the regime-classifier fallback above.
 
 \subsection{E5 --- Direct prediction vs.\ inverse-problem baseline}
 \label{sec:e5}
@@ -485,7 +508,9 @@ structurally decomposed, so the network cannot override the physics
 entirely---it can only add a correction.
 The consequence is that the model \emph{degrades gracefully to the
 analytical solution} in the tractable limit (scenario~A), while
-remaining expressive for complex $\gamma(t)$ profiles.
+remaining expressive for complex $\gamma(t)$ profiles, in line with the
+broader trend of embedding physical structure into ML models of
+quantum systems~\cite{Carleo2017}.
 
 \paragraph{Risk score as a practical interface.}
 The AUROC values in Tables~\ref{tab:e1}--\ref{tab:e4} suggest that the
@@ -531,12 +556,55 @@ The key contributions are:
 
 % --------------------------------------------------------------------------
 \bibliographystyle{unsrt}
-\begin{thebibliography}{9}
+\begin{thebibliography}{12}
 
-\bibitem{TransformerLindblad2025},
-``Unraveling Quantum Environments: Transformer-Assisted Learning in
-  Lindblad Dynamics,''
-\textit{Phys.\ Rev.\ A} (2025); arXiv:2505.06928.
+\bibitem{Zurek2003}
+W.~H.~Zurek,
+``Decoherence, einselection, and the quantum origins of the
+  classical,''
+\textit{Rev.\ Mod.\ Phys.}\ \textbf{75}, 715--775 (2003).
+
+\bibitem{Lindblad1976}
+G.~Lindblad,
+``On the generators of quantum dynamical semigroups,''
+\textit{Commun.\ Math.\ Phys.}\ \textbf{48}, 119--130 (1976).
+
+\bibitem{Breuer2002}
+H.-P.~Breuer and F.~Petruccione,
+\textit{The Theory of Open Quantum Systems},
+Oxford University Press, 2002.
+
+\bibitem{Lidar2013}
+D.~A.~Lidar and T.~A.~Brun (eds.),
+\textit{Quantum Error Correction},
+Cambridge University Press, 2013.
+
+\bibitem{Paladino2014}
+E.~Paladino, Y.~M.~Galperin, G.~Falci, and B.~L.~Altshuler,
+``$1/f$ noise: Implications for solid-state quantum information,''
+\textit{Rev.\ Mod.\ Phys.}\ \textbf{86}, 361--418 (2014).
+
+\bibitem{TransformerLindblad2025}
+C.-S.~Chen and E.-J.~Kuo,
+``Unraveling quantum environments: Transformer-assisted learning in
+  Lindblad dynamics,''
+\textit{Phys.\ Rev.\ A}\ \textbf{112}, 042227 (2025); arXiv:2505.06928.
+
+\bibitem{HochreiterSchmidhuber1997}
+S.~Hochreiter and J.~Schmidhuber,
+``Long short-term memory,''
+\textit{Neural Computation}\ \textbf{9}(8), 1735--1780 (1997).
+
+\bibitem{LoshchilovHutter2019}
+I.~Loshchilov and F.~Hutter,
+``Decoupled weight decay regularization,''
+\textit{International Conference on Learning Representations (ICLR)}
+  (2019); arXiv:1711.05101.
+
+\bibitem{Fawcett2006}
+T.~Fawcett,
+``An introduction to ROC analysis,''
+\textit{Pattern Recognition Letters}\ \textbf{27}(8), 861--874 (2006).
 
 \bibitem{qutip}
 J.~R.~Johansson, P.~D.~Nation, and F.~Nori,
@@ -551,10 +619,11 @@ M.~Raissi, P.~Perdikaris, and G.~E.~Karniadakis,
   differential equations,''
 \textit{J.\ Comput.\ Phys.}\ \textbf{378}, 686--707 (2019).
 
-\bibitem{Lidar2013}
-D.~A.~Lidar and T.~A.~Brun (eds.),
-\textit{Quantum Error Correction},
-Cambridge University Press, 2013.
+\bibitem{Carleo2017}
+G.~Carleo and M.~Troyer,
+``Solving the quantum many-body problem with artificial neural
+  networks,''
+\textit{Science}\ \textbf{355}(6325), 602--606 (2017).
 
 \end{thebibliography}
 
