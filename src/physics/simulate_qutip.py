@@ -55,18 +55,18 @@ def simulate_single_qubit(
         initial_state,
         times,
         c_ops,
-        [],
-        options=qt.Options(nsteps=10000)
+        e_ops=[],
+        options={"nsteps": 10000},
     )
-    
+
     # Extract density matrices
     density_matrices = [state.full() for state in result.states]
-    
+
     # Compute observables
     obs_trajectories = {obs: [] for obs in observables}
     obs_trajectories['purity'] = []
     obs_trajectories['coherence_l1'] = []
-    
+
     for rho in density_matrices:
         obs_dict = compute_observables_single_qubit(rho)
         for key in observables:
@@ -125,18 +125,18 @@ def simulate_two_qubit(
         initial_state,
         times,
         c_ops,
-        [],
-        options=qt.Options(nsteps=10000)
+        e_ops=[],
+        options={"nsteps": 10000},
     )
-    
+
     # Extract density matrices
     density_matrices = [state.full() for state in result.states]
-    
+
     # Compute observables
     obs_trajectories = {obs: [] for obs in observables}
     obs_trajectories['purity'] = []
     obs_trajectories['coherence_l1'] = []
-    
+
     for rho in density_matrices:
         obs_dict = compute_observables_two_qubit(rho)
         for key in observables:
