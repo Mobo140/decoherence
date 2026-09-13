@@ -8,6 +8,7 @@
 \usepackage{microtype}
 \usepackage{authblk}
 \usepackage[hidelinks]{hyperref}
+\graphicspath{{figures/}}
 
 % --------------------------------------------------------------------------
 \title{\textbf{Physics-Informed Early Warning of Quantum Decoherence\\
@@ -77,6 +78,20 @@ decays as $C(t) = C_0\,e^{-\gamma t/2}$, so $\log C$ is linear:
 A simple OLS fit to $\log C(t)$ over any pre-decoherence window
 recovers $T_2$ with $R^2 = 0.9995$ (see Sec.~\ref{sec:e1}).
 Machine learning is \emph{unnecessary} in this regime.
+Figure~\ref{fig:physics-validation} illustrates this on 60 independent
+constant-$\gamma$ trajectories: predicted and true $T_2$ lie essentially on
+the diagonal.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\columnwidth]{fig_physics_validation}
+  \caption{Illustrative validation of the OLS-slope formula
+    (Eq.~\ref{eq:ols}) on 60 fresh constant-$\gamma$ trajectories,
+    independent of the E1 test set (scenario A, Table~\ref{tab:e1}
+    reports $R^2=0.9995$ on the held-out E1 split; this demonstration
+    set gives $R^2\approx1.0000$).}
+  \label{fig:physics-validation}
+\end{figure}
 
 The problem becomes non-trivial when $\gamma(t)$ is \emph{unknown and
 time-varying}---the realistic case on every physical platform
@@ -211,14 +226,14 @@ variants on the three single-qubit scenarios.
 
 \begin{table}[h]
 \centering
-\caption{E1 ablation: $R^2$ (MAE) per scenario and variant.
-  Best per scenario in \textbf{bold}.
+\caption{E1 ablation: $R^2$ (MAE) per scenario and variant; risk AUROC
+  (scenario B). Best per scenario in \textbf{bold}.
   $N=50$ test samples per cell.\label{tab:e1}}
-\small
-\setlength{\tabcolsep}{4pt}
+\footnotesize
+\setlength{\tabcolsep}{0.5pt}
 \begin{tabular}{lcccc}
 \toprule
-Variant & Scen.~A & Scen.~B & Scen.~C & AUROC (B) \\
+Variant & Scen.~A & Scen.~B & Scen.~C & AUROC \\
 \midrule
 \texttt{physics\_only}
   & \textbf{0.999} (0.056)
@@ -243,6 +258,16 @@ Variant & Scen.~A & Scen.~B & Scen.~C & AUROC (B) \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\columnwidth]{fig1_ablation}
+  \caption{E1 ablation: $R^2$, MAE, and risk AUROC for all four variants
+    across the three single-qubit scenarios. \texttt{physics\_lstm}
+    dominates on the time-dependent scenarios B and C; \texttt{lstm\_only}
+    fails on all three, confirming the physics prior is essential.}
+  \label{fig:e1}
+\end{figure}
 
 Key observations:
 \begin{itemize}
@@ -292,6 +317,15 @@ $f$ & $R^2$ & MAE & AUROC \\
 \end{tabular}
 \end{table}
 
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\columnwidth]{fig2_window_sweep}
+  \caption{E2 window sweep on scenarios B+C: $R^2$ (left) plateaus near
+    $0.70$--$0.74$ regardless of window length, while risk AUROC (right)
+    already exceeds $0.93$ at $f=0.05$.}
+  \label{fig:e2}
+\end{figure}
+
 Two observations deserve note.
 First, $R^2$ is approximately constant across all window lengths
 ($0.70$--$0.74$), indicating that the bottleneck is training capacity
@@ -327,6 +361,16 @@ $\sigma_\mathrm{noise}$ & $R^2$ & MAE & AUROC \\
 \end{tabular}
 \end{table}
 
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\columnwidth]{fig3_noise_sweep}
+  \caption{E3 noise robustness: MAE (left) and risk AUROC (right) as
+    Gaussian measurement noise $\sigma_\mathrm{noise}$ increases.
+    AUROC degrades gracefully, staying above $0.94$ up to
+    $\sigma=0.05$.}
+  \label{fig:e3}
+\end{figure}
+
 At $\sigma = 0.05$ (realistic hardware noise levels), $R^2 = 0.901$ and
 AUROC $= 0.942$---both above their respective publication targets.
 The graceful degradation is a direct consequence of the physics prior:
@@ -356,6 +400,16 @@ C & TD $\gamma$, $\sigma_z$      & \textbf{0.936} & \textbf{0.162} & \textbf{0.9
 \bottomrule
 \end{tabular}
 \end{table}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\columnwidth]{fig4_cross_system}
+  \caption{E4 cross-system: $R^2$ (left) and risk AUROC (right) for a
+    single \texttt{physics\_lstm} trained on the union of A, B, C and
+    evaluated on each scenario separately. AUROC stays $\geq 0.98$
+    even where $R^2$ is modest (scenario A).}
+  \label{fig:e4}
+\end{figure}
 
 Scenario~B and C achieve strong generalisation ($R^2 = 0.867$ and
 $0.936$, AUROC $\geq 0.98$).
@@ -401,6 +455,16 @@ Inverse (baseline)     & 0.50 & $-3.039$ & 1.493 \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\columnwidth]{fig5_inverse_comparison}
+  \caption{E5: $R^2$ (left) and MAE (right) of direct \texttt{physics\_lstm}
+    prediction vs.\ the two-step inverse $\gamma(t)$-reconstruction
+    baseline, at four observation-window fractions $f$. The inverse
+    approach is ill-conditioned ($R^2<0$) at every $f$.}
+  \label{fig:e5}
+\end{figure}
 
 The inverse baseline yields $R^2 < 0$ at \emph{every} window fraction,
 including $f = 0.50$.
