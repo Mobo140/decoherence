@@ -44,9 +44,9 @@ On the TFIM model (scenario~E), the \texttt{transformer} achieves
 $R^2 = 0.689$ (single-scenario) and $R^2 = 0.599$ (cross-system, $N =
 780$); the improved \texttt{physics\_lstm} reaches $R^2 = 0.575$
 cross-system (up from $R^2 = -0.381$ baseline, $\Delta = +0.96$).
-Measurement noise robustness is remarkably strong: $R^2$ varies by only
-$\pm 0.007$ across $\sigma = 0$--$0.10$ (vs.\ $\Delta R^2 = 0.23$ in
-\cite{Paper1Brusnikin}).
+Measurement noise robustness is remarkably strong: $R^2$ spans a total
+range of only $0.007$ across $\sigma = 0$--$0.10$ (vs.\ $\Delta R^2 =
+0.23$ in \cite{Paper1Brusnikin}).
 A phase-diagram sweep of the TFIM coupling constant $J$ reveals that
 predictability is lowest near the quantum phase transition ($J \approx
 h = 1.0$, $R^2 = 0.32$--$0.50$) and highest in the deep
@@ -83,6 +83,10 @@ This is a non-trivial extension for three reasons.
     Inter-qubit coupling ($J$ in both XXZ and TFIM) creates an
     additional decay channel that depends on the joint state and has no
     analogue in the single-qubit formula.
+    Two-qubit entanglement can moreover vanish in finite time under
+    purely local damping---the ``entanglement sudden death'' effect
+    \cite{YuEberly2009}---so the joint decay need not follow the
+    asymptotic exponential of either qubit alone.
 \end{enumerate}
 
 \subsection*{Scenarios}
@@ -105,7 +109,8 @@ E & TFIM: $J\sigma_z\sigma_z + h(\sigma_x \otimes I + I \otimes \sigma_x)$ & [0.
 \end{tabular}
 \end{table}
 
-Trajectories are solved via the Lindblad master equation solver in
+Trajectories are solved via the Lindblad master equation
+\cite{Lindblad1976,Breuer2002} using the solver in
 \textsc{QuTiP}~\cite{qutip}.
 
 % --------------------------------------------------------------------------
@@ -120,10 +125,12 @@ We use the same residual structure as \cite{Paper1Brusnikin}:
   + \delta T_{\mathrm{LSTM}}(\mathbf{w}),
   \label{eq:residual}
 \end{equation}
-with a BiLSTM (hidden size 128, 2 layers) processing the full two-qubit
-observable set: all 15 Pauli correlators, $\ell_1$-coherence, purity,
-and their $\log$ transforms.
+with a BiLSTM \cite{HochreiterSchmidhuber1997} (hidden size 128, 2
+layers) processing the full two-qubit observable set: all 15 Pauli
+correlators, $\ell_1$-coherence, purity, and their $\log$ transforms.
 The regression and risk heads are unchanged from \cite{Paper1Brusnikin}.
+Risk-head quality is reported throughout as the area under the ROC
+curve (AUROC) \cite{Fawcett2006}.
 
 \subsection{Adaptive prior}
 \label{sec:adaptive}
@@ -151,8 +158,8 @@ model learns under the same signal it will receive at deployment.
 \texttt{physics\_only}: OLS formula with adaptive gate (Eq.~\ref{eq:adaptive}).
 \texttt{lstm\_only}: BiLSTM without any physics prior.
 \texttt{physics\_lstm}: full residual model with adaptive prior (ours).
-\texttt{transformer}: pure Transformer encoder (same as
-\cite{Paper1Brusnikin}, architecturally analogous to the Transformer
+\texttt{transformer}: pure Transformer encoder \cite{Vaswani2017} (same
+as \cite{Paper1Brusnikin}, architecturally analogous to the Transformer
 used in \cite{TransformerLindblad2025} for the related inverse
 $\gamma(t)$-reconstruction task).
 
@@ -262,8 +269,9 @@ $\sigma_\mathrm{noise}$ & $R^2$ & MAE & AUROC \\
   \label{fig:e6b}
 \end{figure}
 
-Noise robustness is exceptional: $R^2$ varies by only $\pm 0.007$ and
-AUROC by $\pm 0.013$ across the full range $\sigma = 0$--$0.10$.
+Noise robustness is exceptional: over the full range
+$\sigma = 0$--$0.10$ the $R^2$ values span only $0.007$
+($0.537$--$0.544$) and AUROC only $0.013$ ($0.813$--$0.826$).
 The AUROC even \emph{increases} slightly with noise ($0.813 \to 0.826$
 at $\sigma = 0.05$), likely because small additive noise acts as
 implicit regularisation for the risk head.
@@ -318,9 +326,14 @@ E8c & E & TFIM & \textbf{0.575} & 1.055 & \textbf{0.759} \\
 
 E8c improves over E6c on both scenarios: XXZ $R^2 = 0.706 \to 0.740$
 ($+0.034$) and TFIM $R^2 = 0.533 \to 0.575$ ($+0.042$).
-The AUROC gains are larger still: XXZ $0.758 \to 0.789$ and TFIM
-$0.692 \to 0.759$ ($+0.067$), confirming that the weighted risk head
-and augmentation primarily benefit risk-score calibration.
+The AUROC gains follow the same direction---XXZ $0.758 \to 0.789$
+($+0.031$) and TFIM $0.692 \to 0.759$ ($+0.067$)---and are
+disproportionately large on TFIM, where the AUROC gain ($+0.067$)
+exceeds the $R^2$ gain ($+0.042$); on XXZ the two move together
+($+0.031$ vs.\ $+0.034$).
+This is consistent with the weighted risk head and augmentation
+benefiting risk-score calibration most where the regression target is
+hardest.
 
 Comparing with the 100-trajectory baseline:
 TFIM improves from $R^2 = -0.381 \to +0.575$ ($\Delta = +0.96$) and
@@ -383,7 +396,9 @@ E & TFIM & 0.566 & 0.900 & \textbf{0.888} & $-0.033$ \\
 \end{table}
 
 For XXZ, E11a achieves $R^2 = 0.817$ and AUROC $= 0.937$, the best
-results across all experiments.
+\emph{cross-system} results across all experiments (the single-scenario
+Transformer of E6a reaches a higher $R^2 = 0.897$, but from a model
+trained on XXZ alone; E11a's AUROC $=0.937$ exceeds even that).
 The improvement over E7a (window=20, no overlap control) is
 $\Delta R^2 = +0.059$ and $\Delta\mathrm{AUROC} = +0.074$, showing
 that the min-gap overlap control provides a consistent regularisation
@@ -394,11 +409,19 @@ The TFIM $R^2$ ceiling reflects the fundamental difficulty of predicting
 decoherence time from oscillatory two-qubit coherence windows;
 early-warning accuracy (AUROC) is unaffected by this limitation.
 
-\paragraph{Summary of cross-system improvements (E6c $\to$ E11a).}
-Starting from the 100-trajectory baseline (E6c: D $R^2=0.523$,
-E $R^2=0.473$), the combined improvements deliver:
+\paragraph{Summary of cross-system improvements.}
+Two different baselines are relevant here, and we state each explicitly
+to avoid conflating them.
+Relative to the \emph{100-trajectory pilot} (D $R^2 = 0.523$,
+E $R^2 = -0.381$), the combined improvements deliver
 XXZ $R^2: 0.523 \to 0.817$ ($\Delta = +0.294$) and
-TFIM AUROC: $0.758 \to 0.888$ ($\Delta = +0.130$).
+TFIM $R^2: -0.381 \to 0.566$ ($\Delta = +0.947$).
+Relative to the \emph{500-trajectory \texttt{physics\_lstm}
+cross-system run} (E6c, Table~\ref{tab:e4_2}), the AUROC gains of E11a
+are XXZ $0.758 \to 0.937$ ($\Delta = +0.179$) and TFIM
+$0.692 \to 0.888$ ($\Delta = +0.196$).
+AUROC is not reported for the pilot, so the AUROC deltas are quoted
+against E6c rather than the pilot.
 
 \paragraph{Note on E10b.}
 An intermediate experiment (E10b) used window $L=30$, which reduced
@@ -417,7 +440,10 @@ scenarios D and E (single-scenario, 500 trajs each, window=20 steps).
 \begin{table}[h]
 \centering
 \caption{E7b: $\tau$ sweep for \texttt{physics\_lstm} on each
-  scenario.\label{tab:e7b}}
+  scenario. \textbf{Bold} marks the row of the $R^2$-optimal $\tau$ per
+  scenario, not the per-column maximum: the AUROC optima fall at
+  different $\tau$ (D: $0.827$ at $\tau=0.3$; E: $0.868$ at
+  $\tau=0.5$).\label{tab:e7b}}
 \small
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{ccrrcrr}
@@ -448,14 +474,20 @@ Two clear findings emerge.
 \emph{For XXZ} (D), the optimal threshold is $\tau = 0.5$
 ($R^2 = 0.673$), significantly better than either $\tau = 0.0$ (no
 gate, $R^2 = 0.439$) or $\tau = 0.7$ (over-aggressive, $R^2 = 0.473$).
-\emph{For TFIM} (E), the optimal is $\tau = 0.0$: \emph{any positive
-threshold hurts}.
+\emph{For TFIM} (E), the optimal is $\tau = 0.0$ \emph{for regression}:
+every positive threshold lowers $R^2$ (from $0.334$ at $\tau=0$ to
+$0.148$--$0.236$).
 This makes physical sense: because TFIM coherence oscillates, all
 windows have low OLS $R^2$, so even a mild gate ($\tau = 0.3$) fires
 too late and corrupts training.
-The conclusion is that the physics prior should be disabled entirely for
-TFIM (\texttt{lstm\_only} mode) and tuned to $\tau \approx 0.5$ for
-XXZ.
+The risk head, however, moves the other way: AUROC is \emph{higher} at
+every positive threshold than at $\tau=0$ ($0.837$--$0.868$ vs.\
+$0.840$, best at $\tau=0.5$), so the choice of $\tau$ for TFIM is a
+regression-versus-early-warning trade-off rather than a strict
+preference for $\tau=0$.
+The conclusion is that the physics prior should be disabled for TFIM
+(\texttt{lstm\_only} mode) when regression accuracy is the target, and
+tuned to $\tau \approx 0.5$ for XXZ.
 
 \subsection{E7c --- TFIM $J$-coupling sweep near the phase transition}
 \label{sec:e7c}
@@ -514,6 +546,39 @@ with practical implications for qubit protection strategies.
 \section{Discussion}
 \label{sec:discussion}
 
+\paragraph{Status of the claims carried over from the single-qubit study.}
+The single-qubit work \cite{Paper1Brusnikin} advanced four claims that
+transfer to the two-qubit setting.
+We state their outcome here explicitly, including where they fail.
+\begin{itemize}
+  \item \textbf{Residual architecture (refuted for two qubits).}
+    In the single-qubit case the physics-informed residual dominated
+    both a pure-LSTM and a physics-only baseline.
+    Here it does not: on XXZ, \texttt{physics\_lstm} ($R^2 = 0.636$) is
+    beaten by \texttt{lstm\_only} ($0.673$) \emph{and} by the
+    Transformer ($0.897$); on TFIM it beats \texttt{lstm\_only}
+    ($0.455$ vs.\ $0.377$) but still loses to the Transformer
+    ($0.689$).
+    This is a negative result, and the reason---a structurally wrong
+    prior on non-exponential coherence---is analysed below.
+  \item \textbf{Early-window warning (holds for XXZ only).}
+    The target was risk AUROC $\geq 0.92$.
+    E11a reaches $0.937$ on XXZ but $0.888$ on TFIM, so the claim holds
+    for XXZ and falls short for TFIM.
+  \item \textbf{Noise robustness (stability yes, absolute level no).}
+    The \emph{stability} result is stronger than in the single-qubit
+    case (total $R^2$ range $0.007$ vs.\ $\Delta R^2 = 0.23$), but the
+    absolute AUROC of the D+E mixture model sits at $0.813$--$0.826$,
+    below the $\geq 0.90$ bar the single-qubit study met.
+    Robust, but not yet accurate enough.
+  \item \textbf{Cross-system generalisation (partially confirmed).}
+    A single E11a checkpoint does serve both Hamiltonians without
+    retraining, and XXZ reaches $R^2 = 0.817$; but TFIM stalls at
+    $R^2 = 0.566$, short of the $0.70$ target set for this work.
+    The finite-size analysis below argues this ceiling is structural
+    rather than a training deficiency.
+\end{itemize}
+
 \paragraph{When does the physics prior help vs.\ hurt in 2-qubit systems?}
 The E6a results reveal that for 2-qubit systems, the Transformer
 consistently outperforms \texttt{physics\_lstm} (D: $0.897$ vs.\ $0.636$;
@@ -559,8 +624,12 @@ and E7b ($\tau$ sweep) point to a clear deployment strategy:
     when accuracy is paramount ($R^2 = 0.897$ single-scenario,
     $0.758$ cross-system).
   \item \textit{For TFIM (E):} disable the physics prior entirely
-    ($\tau = 0.0$) or use a pure Transformer; any positive $\tau$ hurts
-    because TFIM windows are always low-$R^2_\mathrm{OLS}$.
+    ($\tau = 0.0$) or use a pure Transformer if regression accuracy is
+    the objective---every positive $\tau$ lowers $R^2$ because TFIM
+    windows are always low-$R^2_\mathrm{OLS}$.
+    If early warning matters more than $T_2$ accuracy, $\tau \approx
+    0.5$ is preferable instead (AUROC $0.868$ vs.\ $0.840$ at
+    $\tau=0$).
   \item \textit{Mixed deployment:} the Transformer trained on D+E
     with window $L=20$ and min-gap overlap control (E11a) achieves
     $R^2 = 0.817$ (XXZ) and AUROC $= 0.937$ (XXZ) / $0.888$ (TFIM)
@@ -587,7 +656,7 @@ finite-size analysis.}
 In the thermodynamic limit ($N\to\infty$) the 1D transverse-field
 Ising chain has a genuine quantum critical point at $J=h$, where the
 excitation gap closes as $\Delta\sim|J-h|^{z\nu}$ ($z=\nu=1$) and the
-correlation length diverges~\cite{Pfeuty1970}.
+correlation length diverges~\cite{Pfeuty1970,Sachdev2011}.
 Our system is the $N=2$ instance of this Hamiltonian, so no true
 non-analyticity can occur---finite systems never exhibit sharp phase
 transitions, only smooth crossovers that sharpen into the transition
@@ -651,9 +720,11 @@ magnitude.
 \paragraph{Remaining open questions.}
 \begin{enumerate}
   \item \textbf{Entanglement features.}
-    Adding concurrence or negativity as explicit features could
-    further improve the model by directly exposing inter-qubit
-    correlations.
+    Adding concurrence \cite{Wootters1998} or negativity as explicit
+    features could further improve the model by directly exposing
+    inter-qubit correlations---particularly relevant given that
+    entanglement can terminate in finite time \cite{YuEberly2009}
+    while single-qubit coherence decays only asymptotically.
   \item \textbf{Fine-grained J sweep near criticality.}
     A denser sweep around $J \in [0.9, 1.3]$ would better resolve the
     shape of the prediction-accuracy dip near the phase transition.
@@ -687,8 +758,10 @@ Key findings are:
     non-exponential.
   \item The \emph{optimal $\tau$ is Hamiltonian-dependent}: $\tau = 0.5$
     for XXZ and $\tau = 0.0$ (prior off) for TFIM (E7b).
-    For TFIM any positive threshold degrades performance because all
-    short windows have low OLS $R^2$.
+    For TFIM every positive threshold degrades \emph{regression} $R^2$,
+    because all short windows have low OLS $R^2$; the risk head behaves
+    oppositely (AUROC peaks at $\tau=0.5$), making the choice a
+    regression-versus-early-warning trade-off.
   \item Decoherence predictability exhibits a pronounced \emph{dip near
     the TFIM quantum phase transition}: $R^2 = 0.32$--$0.50$ for
     $J \in [0.8, 1.2]$ vs.\ $R^2 = 0.84$--$0.88$ far from criticality
@@ -701,19 +774,20 @@ Key findings are:
     have comparable timescales and the (parity-breaking) dissipator
     couples them most strongly, so the $R^2$ ceiling is a structural
     property of the model, not a training artefact.
-  \item Noise robustness is exceptional: $R^2$ varies by only $\pm 0.007$
-    across $\sigma = 0$--$0.10$, stronger than the single-qubit case.
+  \item Noise robustness is exceptional: $R^2$ spans a total range of
+    only $0.007$ across $\sigma = 0$--$0.10$, stronger than the
+    single-qubit case ($\Delta R^2 = 0.23$).
 \end{enumerate}
 
 % --------------------------------------------------------------------------
 \bibliographystyle{unsrt}
-\begin{thebibliography}{6}
+\begin{thebibliography}{13}
 
 \bibitem{Paper1Brusnikin}
 N.~Brusnikin,
 ``Physics-Informed Early Warning of Quantum Decoherence in Single-Qubit
   Systems Under Unknown Time-Dependent Dissipation,''
-\textit{arXiv preprint} (2026). [companion paper]
+manuscript in preparation (2026). [companion paper]
 
 \bibitem{qutip}
 J.~R.~Johansson, P.~D.~Nation, and F.~Nori,
@@ -743,6 +817,48 @@ Cambridge University Press, 2013.
 P.~Pfeuty,
 ``The one-dimensional Ising model with a transverse field,''
 \textit{Ann.\ Phys.}\ \textbf{57}, 79--90 (1970).
+
+\bibitem{Sachdev2011}
+S.~Sachdev,
+\textit{Quantum Phase Transitions},
+2nd ed., Cambridge University Press, 2011.
+
+\bibitem{Lindblad1976}
+G.~Lindblad,
+``On the generators of quantum dynamical semigroups,''
+\textit{Commun.\ Math.\ Phys.}\ \textbf{48}, 119--130 (1976).
+
+\bibitem{Breuer2002}
+H.-P.~Breuer and F.~Petruccione,
+\textit{The Theory of Open Quantum Systems},
+Oxford University Press, 2002.
+
+\bibitem{YuEberly2009}
+T.~Yu and J.~H.~Eberly,
+``Sudden death of entanglement,''
+\textit{Science}\ \textbf{323}(5914), 598--601 (2009).
+
+\bibitem{Wootters1998}
+W.~K.~Wootters,
+``Entanglement of formation of an arbitrary state of two qubits,''
+\textit{Phys.\ Rev.\ Lett.}\ \textbf{80}, 2245--2248 (1998).
+
+\bibitem{Vaswani2017}
+A.~Vaswani, N.~Shazeer, N.~Parmar, J.~Uszkoreit, L.~Jones,
+A.~N.~Gomez, {\L}.~Kaiser, and I.~Polosukhin,
+``Attention is all you need,''
+\textit{Advances in Neural Information Processing Systems (NeurIPS)}
+  \textbf{30} (2017); arXiv:1706.03762.
+
+\bibitem{HochreiterSchmidhuber1997}
+S.~Hochreiter and J.~Schmidhuber,
+``Long short-term memory,''
+\textit{Neural Computation}\ \textbf{9}(8), 1735--1780 (1997).
+
+\bibitem{Fawcett2006}
+T.~Fawcett,
+``An introduction to ROC analysis,''
+\textit{Pattern Recognition Letters}\ \textbf{27}(8), 861--874 (2006).
 
 \end{thebibliography}
 
