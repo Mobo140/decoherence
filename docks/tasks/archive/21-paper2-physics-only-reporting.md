@@ -57,11 +57,12 @@
 
 ## Acceptance Criteria
 
-- [ ] Описание `physics_only` в Method соответствует коду (без adaptive gate)
-- [ ] В таблице E6a есть MAE для всех четырёх вариантов, значения из CSV
-- [ ] Есть явная оговорка про `t_max`-зависимость R² у `physics_only`
-- [ ] Строка `physics_only` сохранена
-- [ ] `make pdf-2` — 0 undefined, 0 overfull
+- [x] Описание `physics_only` в Method соответствует коду (без adaptive gate)
+- [x] В таблице E6a есть MAE для всех четырёх вариантов, значения из CSV
+- [x] Есть явная оговорка про `t_max`-зависимость R² (абзац «How to read the
+      `physics_only` row»)
+- [x] Строка `physics_only` сохранена, с обоснованием почему
+- [x] `make pdf-2` — 0 undefined, 0 overfull
 
 ## Invariants
 
@@ -78,7 +79,18 @@ grep -c 'undefined' paper/paper_2/paper2.log   # -> 0
 
 ## Status
 
-`planned`
+`done`
+
+MAE оказалась решающей: она показывает, что `physics_only` хуже трансформера
+в ~3× (D) и ~3.8× (E) — пропорциональная картина вместо «бесконечно плохо»,
+которую рисует R². Числа взяты из `e6_ablation_improved.csv`, перепрогона не
+потребовалось.
+
+Отдельно проверил Paper 1 на ту же патологию — **чиста**: ноль насыщенных окон
+и ноль случаев `slope ≥ 0` на A/B/C (однокубитная когерентность убывает
+монотонно). Правок там не нужно.
+
+Коммит: `1c60ca3`.
 
 ## Priority
 
