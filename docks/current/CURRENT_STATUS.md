@@ -48,7 +48,8 @@ Replay эксперимента: вкладка **02 Runs** → E8 → fast. Н�
 
 ### Чемпионы (без изменений в этом цикле)
 
-- A physics_only E1 ≈ 0.9998
+- A physics_only E1 **0.9995** (было записано 0.9998 — расходилось с
+  `e1_ablation_p1.csv` (0.99949767) и со статьёй; исправлено в задаче 20)
 - B physics_lstm E1 0.945
 - C physics_lstm E1 0.981
 - D transformer E11a 0.817 / E8c 0.740
