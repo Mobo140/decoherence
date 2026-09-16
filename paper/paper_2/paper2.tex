@@ -155,7 +155,9 @@ The gate is applied identically at training and inference time, so the
 model learns under the same signal it will receive at deployment.
 
 \paragraph{Ablation variants.}
-\texttt{physics\_only}: OLS formula with adaptive gate (Eq.~\ref{eq:adaptive}).
+\texttt{physics\_only}: the bare OLS formula, \emph{without} the adaptive gate
+(the gate of Eq.~\ref{eq:adaptive} is a property of the residual model, not of
+the analytic baseline).
 \texttt{lstm\_only}: BiLSTM without any physics prior.
 \texttt{physics\_lstm}: full residual model with adaptive prior (ours).
 \texttt{transformer}: pure Transformer encoder \cite{Vaswani2017} (same
@@ -177,26 +179,29 @@ filtering---a $5\times$ improvement over the pilot experiment.
 \begin{table}[h]
 \centering
 \caption{E6a ablation for two-qubit scenarios (500 trajs each, adaptive
-  prior). Best per scenario in \textbf{bold}.\label{tab:e1_2}}
-\small
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{lcccc}
+  prior). Best per scenario in \textbf{bold}. MAE is reported alongside
+  $R^2$ because the two disagree sharply for \texttt{physics\_only}
+  (see the caveat below).\label{tab:e1_2}}
+\footnotesize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{lrrrrrr}
 \toprule
-Variant & \multicolumn{2}{c}{Scen.~D (XXZ)} & \multicolumn{2}{c}{Scen.~E (TFIM)} \\
-        & $R^2$ & AUROC & $R^2$ & AUROC \\
+Variant & \multicolumn{3}{c}{Scen.~D (XXZ)} & \multicolumn{3}{c}{Scen.~E (TFIM)} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+        & $R^2$ & MAE & AUROC & $R^2$ & MAE & AUROC \\
 \midrule
 \texttt{physics\_only}
-  & $-0.687$ & 0.843
-  & $-4.267$ & 0.727 \\
+  & $-0.687$ & 1.303 & 0.843
+  & $-4.267$ & 2.706 & 0.727 \\
 \texttt{lstm\_only}
-  & 0.673 & 0.847
-  & 0.377 & 0.743 \\
+  & 0.673 & 0.802 & 0.847
+  & 0.377 & 1.077 & 0.743 \\
 \texttt{physics\_lstm}
-  & 0.636 & 0.819
-  & 0.455 & 0.789 \\
+  & 0.636 & 0.897 & 0.819
+  & 0.455 & 1.049 & 0.789 \\
 \texttt{transformer}
-  & \textbf{0.897} & \textbf{0.929}
-  & \textbf{0.689} & \textbf{0.840} \\
+  & \textbf{0.897} & \textbf{0.444} & \textbf{0.929}
+  & \textbf{0.689} & \textbf{0.718} & \textbf{0.840} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -209,6 +214,28 @@ Variant & \multicolumn{2}{c}{Scen.~D (XXZ)} & \multicolumn{2}{c}{Scen.~E (TFIM)}
     The Transformer dominates both scenarios.}
   \label{fig:e6a}
 \end{figure}
+
+\paragraph{How to read the \texttt{physics\_only} row.}
+Its $R^2$ values ($-0.687$ on D, $-4.267$ on E) should be read as
+\emph{``the analytic formula does not apply here''} rather than as a
+calibrated measure of how bad it is, because their magnitude is governed
+by the clamp $t_\mathrm{max}$ rather than by the physics.
+The estimator $T_2 = -1/\hat{s}$ is a hyperbola: it diverges as the
+fitted slope $\hat{s} \to 0^-$, and the implementation returns
+$t_\mathrm{max}$ outright when $\hat{s} \geq 0$.
+Two-qubit coherence oscillates and plateaus, so near-zero slopes are
+common, and each such window contributes an error of order
+$t_\mathrm{max}$; since $R^2$ is a squared-error metric, a small minority
+of windows dominates it.
+In our diagnostics a handful of saturated windows accounted for the bulk
+of the degradation, and sweeping the clamp moved $R^2$ by more than an
+order of magnitude while leaving the median error unchanged.
+MAE, which is not dominated by this tail, tells the proportionate story:
+\texttt{physics\_only} is roughly $3\times$ (D) and $3.8\times$ (E) worse
+than the Transformer, not unboundedly so.
+We keep the row because it is the ablation that motivates the whole
+paper---the physics prior is structurally wrong for two qubits---but the
+$R^2$ magnitude itself should not be over-interpreted.
 
 \paragraph{Key findings.}
 With 500 trajectories and the adaptive prior, scenario~E (TFIM) becomes
