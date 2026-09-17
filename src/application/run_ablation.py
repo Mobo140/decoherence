@@ -109,6 +109,7 @@ class AblationStudyUseCase:
                     learning_rate=command.lr,
                     regression_loss=command.regression_loss,
                     verbose=command.verbose,
+                    seed=command.seed,
                 )
                 train_uc.execute(train_cmd)
 

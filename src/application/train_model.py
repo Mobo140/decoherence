@@ -32,6 +32,9 @@ class TrainModelCommand:
     model_name: str = "decoherence_lstm"
     verbose: bool = True
     regression_loss: str = "huber"   # "huber" | "mse" | "mae"
+    # Seeds the ML framework's RNG (weight init, dropout, batch shuffling).
+    # None = leave the global RNG alone (old, non-reproducible behaviour).
+    seed: Optional[int] = None
 
 
 class TrainModelUseCase:
@@ -57,6 +60,7 @@ class TrainModelUseCase:
             lr=command.learning_rate,
             verbose=command.verbose,
             regression_loss=command.regression_loss,
+            seed=command.seed,
         )
 
         if self._store is not None:

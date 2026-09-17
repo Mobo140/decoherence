@@ -202,6 +202,11 @@ class LSTMPredictor(IPredictor):
         lr              = kwargs.get("lr", 1e-3)
         verbose         = kwargs.get("verbose", True)
         regression_loss = kwargs.get("regression_loss", "huber")
+        seed            = kwargs.get("seed")
+        if seed is not None:
+            # Weight init, dropout and batch shuffling all draw from torch's
+            # global RNG; without this the same command gives different results.
+            torch.manual_seed(seed)
         train_hist, val_hist = self._fit(ds, n_epochs, batch_size, lr, verbose, regression_loss)
         return TrainModelResult(predictor=self, train_loss_history=train_hist, val_loss_history=val_hist)
 
