@@ -78,6 +78,7 @@ class NoiseSweepUseCase:
             learning_rate=command.lr,
             regression_loss=command.regression_loss,
             verbose=command.verbose,
+            seed=command.seed,
         ))
 
         results: List[AblationResult] = []

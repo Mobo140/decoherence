@@ -237,6 +237,26 @@ We keep the row because it is the ablation that motivates the whole
 paper---the physics prior is structurally wrong for two qubits---but the
 $R^2$ magnitude itself should not be over-interpreted.
 
+\paragraph{Run-to-run spread.}
+All numbers in this paper come from single runs. While preparing this
+version we found that the training path did not seed the ML framework's
+RNG, and that the simulator drew each trajectory's initial pure state
+from an unseeded global RNG, so weight initialisation and the initial
+quantum states both varied between otherwise identical runs; both are
+now seeded.
+To quantify what that cost, we replicated this ablation across three
+seeds at a reduced size ($100$~trajectories, $30$~epochs; levels are
+therefore not comparable to Table~\ref{tab:e1_2}, and the spread at
+this size is if anything an upper bound on the full configuration's).
+The seed-to-seed standard deviation of $R^2$ is $0.31$
+(\texttt{physics\_lstm}, XXZ) and $0.76$ (TFIM), against $0.19$ and
+$0.16$ for \texttt{lstm\_only} and $0.15$ and $0.16$ for the
+Transformer; \texttt{physics\_only} reaches $1.06$ and $4.09$,
+consistent with the clamp behaviour described above.
+The Transformer was best or tied-best in every seed on both scenarios
+and had the smallest variance, so the architecture conclusion below is
+robust; gaps of order $0.04$, however, are not.
+
 \paragraph{Key findings.}
 With 500 trajectories and the adaptive prior, scenario~E (TFIM) becomes
 learnable: \texttt{lstm\_only} reaches $R^2 = 0.377$ and
@@ -256,11 +276,12 @@ $0.377$ for \texttt{lstm\_only}) because the adaptive gate correctly
 discards the physics estimate on oscillatory windows (typically
 $R^2_\mathrm{OLS} < 0.3$ for TFIM), letting the LSTM residual operate
 as a pure predictor.
-On XXZ (D), the gate is less selective ($R^2_\mathrm{OLS}$ more
-variable), and the corrupted prior slightly hurts: $R^2 = 0.636 <
-0.673$ for \texttt{lstm\_only}.
-This suggests that for XXZ the optimal threshold $\tau$ is lower than
-$0.7$ (or the prior should be dropped entirely for 2-qubit).
+On XXZ (D) the gate is less selective ($R^2_\mathrm{OLS}$ more
+variable) and \texttt{physics\_lstm} sits slightly below
+\texttt{lstm\_only} ($0.636$ vs.\ $0.673$); this gap is well inside
+the seed-to-seed spread measured in Sec.~\ref{sec:e7b}, so we read it
+as ``no clear advantage either way'' rather than as evidence that the
+prior hurts on XXZ.
 
 \subsection{E6b --- Measurement noise robustness}
 \label{sec:e3}
@@ -467,10 +488,10 @@ scenarios D and E (single-scenario, 500 trajs each, window=20 steps).
 \begin{table}[h]
 \centering
 \caption{E7b: $\tau$ sweep for \texttt{physics\_lstm} on each
-  scenario. \textbf{Bold} marks the row of the $R^2$-optimal $\tau$ per
-  scenario, not the per-column maximum: the AUROC optima fall at
-  different $\tau$ (D: $0.827$ at $\tau=0.3$; E: $0.868$ at
-  $\tau=0.5$).\label{tab:e7b}}
+  scenario. \textbf{Bold} marks the highest-$R^2$ row of this single
+  sweep, not a resolved optimum (see below) and not the per-column
+  maximum: the AUROC maxima fall at different $\tau$ (D: $0.827$ at
+  $\tau=0.3$; E: $0.868$ at $\tau=0.5$).\label{tab:e7b}}
 \small
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{ccrrcrr}
@@ -497,24 +518,33 @@ $\tau$ & $R^2$ & MAE & AUROC & & $R^2$ & AUROC \\
   \label{fig:e7b}
 \end{figure}
 
-Two clear findings emerge.
-\emph{For XXZ} (D), the optimal threshold is $\tau = 0.5$
-($R^2 = 0.673$), significantly better than either $\tau = 0.0$ (no
-gate, $R^2 = 0.439$) or $\tau = 0.7$ (over-aggressive, $R^2 = 0.473$).
-\emph{For TFIM} (E), the optimal is $\tau = 0.0$ \emph{for regression}:
-every positive threshold lowers $R^2$ (from $0.334$ at $\tau=0$ to
-$0.148$--$0.236$).
-This makes physical sense: because TFIM coherence oscillates, all
-windows have low OLS $R^2$, so even a mild gate ($\tau = 0.3$) fires
-too late and corrupts training.
-The risk head, however, moves the other way: AUROC is \emph{higher} at
-every positive threshold than at $\tau=0$ ($0.837$--$0.868$ vs.\
-$0.840$, best at $\tau=0.5$), so the choice of $\tau$ for TFIM is a
-regression-versus-early-warning trade-off rather than a strict
-preference for $\tau=0$.
-The conclusion is that the physics prior should be disabled for TFIM
-(\texttt{lstm\_only} mode) when regression accuracy is the target, and
-tuned to $\tau \approx 0.5$ for XXZ.
+\paragraph{This sweep does not support a choice of $\tau$.}
+Read at face value the table suggests an optimum at $\tau=0.5$ for XXZ
+($R^2=0.673$ against $0.439$ at $\tau=0$) and at $\tau=0.0$ for TFIM.
+We do not draw that conclusion, for two reasons.
+
+First, the sweep is not a controlled comparison: E7b generates the
+dataset once per scenario and trains every $\tau$ on it, and the
+training path did not seed the ML framework's RNG, so consecutive
+$\tau$ points differ in weight initialisation as much as in $\tau$.
+Adjacent $\tau$ values here differ by up to $0.46$ in $R^2$, which is
+larger than the effect the sweep claims to measure.
+
+Second, replicating the sweep across three seeds (at a reduced
+$100$~trajectories / $30$~epochs, so levels are not comparable to this
+table) leaves no detectable $\tau$ effect: on XXZ the spread of means
+across $\tau$ ($0.448$--$0.647$) is smaller than the standard deviation
+of the individual points (up to $0.455$), and $\tau=0.5$ is not the
+best mean; on TFIM the ordering does not reproduce either, with the
+means increasing weakly towards large $\tau$ rather than favouring
+$\tau=0$.
+
+The honest statement is therefore that \emph{the gate threshold is not
+resolved by this experiment}. The one directional signal that is
+consistent across both the original sweep and the replication is that
+the risk head tolerates---and on TFIM mildly prefers---a positive
+$\tau$, while regression does not clearly care; establishing an optimum
+would need a multi-seed sweep at full size, which we have not run.
 
 \subsection{E7c --- TFIM $J$-coupling sweep near the phase transition}
 \label{sec:e7c}
@@ -581,13 +611,18 @@ We state their outcome here explicitly, including where they fail.
   \item \textbf{Residual architecture (refuted for two qubits).}
     In the single-qubit case the physics-informed residual dominated
     both a pure-LSTM and a physics-only baseline.
-    Here it does not: on XXZ, \texttt{physics\_lstm} ($R^2 = 0.636$) is
-    beaten by \texttt{lstm\_only} ($0.673$) \emph{and} by the
-    Transformer ($0.897$); on TFIM it beats \texttt{lstm\_only}
-    ($0.455$ vs.\ $0.377$) but still loses to the Transformer
-    ($0.689$).
-    This is a negative result, and the reason---a structurally wrong
-    prior on non-exponential coherence---is analysed below.
+    Here it does not: the Transformer beats \texttt{physics\_lstm} on
+    both scenarios, and by a wide margin ($0.897$ vs.\ $0.636$ on XXZ,
+    $0.689$ vs.\ $0.455$ on TFIM).
+    Its standing against \texttt{lstm\_only} is less clear-cut: the
+    tabulated gaps ($0.636$ vs.\ $0.673$ on XXZ, $0.455$ vs.\ $0.377$
+    on TFIM) are of order $0.04$--$0.08$, whereas a three-seed
+    replication puts the seed-to-seed standard deviation of
+    \texttt{physics\_lstm} at $0.31$ (XXZ) and $0.76$ (TFIM); we
+    therefore do not claim a difference in either direction there.
+    The negative result that does survive replication is against the
+    Transformer, and the reason---a structurally wrong prior on
+    non-exponential coherence---is analysed below.
   \item \textbf{Early-window warning (holds for XXZ only).}
     The target was risk AUROC $\geq 0.92$.
     E11a reaches $0.937$ on XXZ but $0.888$ on TFIM, so the claim holds
@@ -646,17 +681,15 @@ production deployment, use the Transformer.
 Taken together, E6a (single-scenario ablation), E7a (cross-system),
 and E7b ($\tau$ sweep) point to a clear deployment strategy:
 \begin{itemize}
-  \item \textit{For XXZ (D):} use \texttt{physics\_lstm} with $\tau =
-    0.5$ when a single interpretable model is needed; use the Transformer
-    when accuracy is paramount ($R^2 = 0.897$ single-scenario,
-    $0.758$ cross-system).
-  \item \textit{For TFIM (E):} disable the physics prior entirely
-    ($\tau = 0.0$) or use a pure Transformer if regression accuracy is
-    the objective---every positive $\tau$ lowers $R^2$ because TFIM
-    windows are always low-$R^2_\mathrm{OLS}$.
-    If early warning matters more than $T_2$ accuracy, $\tau \approx
-    0.5$ is preferable instead (AUROC $0.868$ vs.\ $0.840$ at
-    $\tau=0$).
+  \item \textit{For XXZ (D):} use the Transformer when accuracy is
+    paramount ($R^2 = 0.897$ single-scenario, $0.758$ cross-system);
+    \texttt{physics\_lstm} remains the option when an interpretable
+    single model is needed, but we cannot recommend a specific gate
+    threshold (Sec.~\ref{sec:e7b}).
+  \item \textit{For TFIM (E):} use a pure Transformer.
+    The gate threshold is again unresolved; the only consistent
+    directional signal is that the risk head tolerates a positive
+    $\tau$ while regression does not clearly prefer one.
   \item \textit{Mixed deployment:} the Transformer trained on D+E
     with window $L=20$ and min-gap overlap control (E11a) achieves
     $R^2 = 0.817$ (XXZ) and AUROC $= 0.937$ (XXZ) / $0.888$ (TFIM)
@@ -783,12 +816,13 @@ Key findings are:
     \texttt{physics\_lstm} in all conditions.
     The physics prior is not advantageous when 2-qubit coherence is
     non-exponential.
-  \item The \emph{optimal $\tau$ is Hamiltonian-dependent}: $\tau = 0.5$
-    for XXZ and $\tau = 0.0$ (prior off) for TFIM (E7b).
-    For TFIM every positive threshold degrades \emph{regression} $R^2$,
-    because all short windows have low OLS $R^2$; the risk head behaves
-    oppositely (AUROC peaks at $\tau=0.5$), making the choice a
-    regression-versus-early-warning trade-off.
+  \item The \emph{gate threshold $\tau$ is not resolved} by our
+    experiments (E7b). The single sweep suggests Hamiltonian-dependent
+    optima, but it varies weight initialisation along with $\tau$, and a
+    three-seed replication leaves no detectable $\tau$ effect: the
+    spread across $\tau$ is smaller than the spread across seeds at the
+    same $\tau$. Establishing an optimum requires a multi-seed sweep at
+    full size, which we have not run.
   \item Decoherence predictability exhibits a pronounced \emph{dip near
     the TFIM quantum phase transition}: $R^2 = 0.32$--$0.50$ for
     $J \in [0.8, 1.2]$ vs.\ $R^2 = 0.84$--$0.88$ far from criticality
