@@ -56,10 +56,21 @@ VARIANTS = [
     PredictorVariant.PHYSICS_LSTM,
     PredictorVariant.TRANSFORMER,
 ]
-OUT = Path(__file__).parent / "results" / "e22_multiseed_ablation.csv"
+OUT = Path(__file__).parent / "results" / "e22_multiseed_ablation.csv"  # overridable via --out
 
 
-def run_seed(simulator, seed: int, n_per: int, epochs: int, scenarios: list) -> list:
+def _append(row: dict, first: bool) -> None:
+    """Append one row immediately so a long run survives interruption."""
+    OUT.parent.mkdir(exist_ok=True)
+    with OUT.open("w" if first else "a", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=list(row.keys()))
+        if first:
+            w.writeheader()
+        w.writerow(row)
+
+
+def run_seed(simulator, seed: int, n_per: int, epochs: int, scenarios: list,
+             first_row: list = None) -> list:
     groups = build_configs(n_per_scenario=n_per, seed=seed)
     uc = AblationStudyUseCase(simulator=simulator)
     rows = []
@@ -78,7 +89,7 @@ def run_seed(simulator, seed: int, n_per: int, epochs: int, scenarios: list) -> 
             verbose=False,
         )
         for r in uc.execute(cmd):
-            rows.append({
+            row = {
                 "seed": seed,
                 "scenario": scen,
                 "variant": r.spec.predictor_variant.value,
@@ -86,7 +97,10 @@ def run_seed(simulator, seed: int, n_per: int, epochs: int, scenarios: list) -> 
                 "mae": r.mae,
                 "auroc": r.risk_auroc,
                 "n_samples": r.n_samples,
-            })
+            }
+            rows.append(row)
+            _append(row, first_row[0])
+            first_row[0] = False
             print(f"    seed={seed} {scen} {r.spec.predictor_variant.value:14} "
                   f"R2={r.r2:8.3f} MAE={r.mae:7.3f} AUROC={r.risk_auroc:.3f}", flush=True)
     return rows
@@ -115,25 +129,24 @@ def main() -> None:
     p.add_argument("--n-per", type=int, default=100)
     p.add_argument("--epochs", type=int, default=30)
     p.add_argument("--scenarios", nargs="+", default=["D", "E"])
+    p.add_argument("--out", type=str, default=None,
+                   help="output CSV name under experiments/results/")
     a = p.parse_args()
+    global OUT
+    if a.out:
+        OUT = Path(__file__).parent / "results" / a.out
 
     print(f"E22 multi-seed variance | seeds={a.seeds} n_per={a.n_per} "
           f"epochs={a.epochs} scenarios={a.scenarios}")
     print(f"writing -> {OUT}  (champion CSVs untouched)\n")
 
     sim = QuTipSimulator()
-    all_rows, t0 = [], time.time()
+    all_rows, t0, first = [], time.time(), [True]
     for i, s in enumerate(a.seeds, 1):
         print(f"--- seed {s}  ({i}/{len(a.seeds)}) ---", flush=True)
         ts = time.time()
-        all_rows += run_seed(sim, s, a.n_per, a.epochs, a.scenarios)
+        all_rows += run_seed(sim, s, a.n_per, a.epochs, a.scenarios, first)
         print(f"    [{time.time()-ts:.0f}s]", flush=True)
-
-    OUT.parent.mkdir(exist_ok=True)
-    with OUT.open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(all_rows[0].keys()))
-        w.writeheader()
-        w.writerows(all_rows)
 
     summarise(all_rows)
     print(f"\ntotal {time.time()-t0:.0f}s -> {OUT}")
