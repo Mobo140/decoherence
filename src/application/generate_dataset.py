@@ -164,6 +164,14 @@ class GenerateDatasetUseCase:
     def execute(self, command: GenerateDatasetCommand) -> Dataset:
         rng = np.random.default_rng(command.seed)
 
+        # QuTipSimulator.simulate() draws the initial pure state from numpy's
+        # *global* RNG (sample_random_pure_state is called without a seed), so
+        # without this the same command simulates different physical states on
+        # every run and the dataset is not reproducible.  Cached trajectories
+        # hide this; a cold cache does not.
+        if command.seed is not None:
+            np.random.seed(command.seed)
+
         trajectories: List[TrajectoryResult] = []
         for i, cfg in enumerate(command.configs):
             trajectories.append(self._get_or_simulate(cfg, command.seed, i))
