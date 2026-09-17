@@ -182,6 +182,11 @@ class TransformerPredictor(IPredictor):
         lr         = kwargs.get("lr", 1e-3)
         verbose    = kwargs.get("verbose", True)
         loss_name  = kwargs.get("regression_loss", "huber")
+        seed       = kwargs.get("seed")
+        if seed is not None:
+            # See LSTMPredictor.train: torch's global RNG drives weight init,
+            # dropout and batch shuffling.
+            torch.manual_seed(seed)
         train_hist, val_hist = self._fit(ds, n_epochs, batch_size, lr, verbose, loss_name)
         return TrainModelResult(predictor=self, train_loss_history=train_hist, val_loss_history=val_hist)
 
