@@ -60,6 +60,7 @@ def main() -> None:
                                      adaptive_prior_r2_threshold=tau)
                 TrainModelUseCase(pred).execute(TrainModelCommand(
                     dataset=ds, n_epochs=a.epochs, batch_size=64,
+                    seed=seed,
                     learning_rate=5e-4, regression_loss="huber", verbose=False))
                 m = BacktestUseCase(pred).execute(BacktestCommand(dataset=ds, horizon=1.0))
                 row = {"seed": seed, "scenario": scen, "tau": tau,

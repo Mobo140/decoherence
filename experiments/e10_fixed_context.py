@@ -115,6 +115,7 @@ def run_e10a(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True)
         learning_rate=5e-4,
         regression_loss="huber",
         verbose=verbose,
+        seed=42,
     ))
 
     rows = []
@@ -191,6 +192,7 @@ def run_e10b(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True)
         learning_rate=5e-4,
         regression_loss="huber",
         verbose=verbose,
+        seed=42,
     ))
 
     rows = []

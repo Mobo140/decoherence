@@ -81,6 +81,7 @@ def _run_arm(simulator, configs, *, include_censored: bool, loss: str,
         learning_rate=5e-4,
         regression_loss=loss,
         verbose=verbose,
+        seed=42,
     ))
     metrics = BacktestUseCase(pred).execute(BacktestCommand(dataset=ds, horizon=1.0))
     n_cens_win = int(ds.metadata.get("n_censored_windows", 0))
