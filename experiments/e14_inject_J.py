@@ -152,6 +152,7 @@ def _train(simulator, configs, *, use_J: bool, tau: float, n_epochs: int,
         learning_rate=5e-4,
         regression_loss="huber",
         verbose=verbose,
+        seed=42,
     ))
     return pred
 
