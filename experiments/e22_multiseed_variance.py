@@ -50,6 +50,36 @@ from src.application.run_ablation import AblationCommand, AblationStudyUseCase
 from src.domain.value_objects import PredictorVariant
 from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
 
+class ImprovedAblation(AblationStudyUseCase):
+    """Mirror of the predictor factory used by E6a (``e6_2qubit_improved.py``).
+
+    The base use case builds default predictors (hidden 64, 1 layer, tau=0),
+    which is a *different, weaker* model than the one the paper reports.
+    Replicating E6a's spread requires E6a's architecture, so the factory is
+    copied here verbatim; keep the two in sync if either changes.
+    """
+
+    def _build_predictor(self, variant, command):
+        from src.infrastructure.ml.lstm_predictor import LSTMPredictor
+        from src.infrastructure.ml.physics_only_predictor import PhysicsOnlyPredictor
+        from src.infrastructure.ml.transformer_predictor import TransformerPredictor
+        if variant == PredictorVariant.PHYSICS_ONLY:
+            return PhysicsOnlyPredictor(t_max=max(c.t_max for c in command.configs))
+        if variant == PredictorVariant.LSTM_ONLY:
+            return LSTMPredictor(
+                hidden_size=128, num_layers=2, dropout=0.3,
+                use_physics_prior=False, adaptive_prior_r2_threshold=0.0,
+            )
+        if variant == PredictorVariant.PHYSICS_LSTM:
+            return LSTMPredictor(
+                hidden_size=128, num_layers=2, dropout=0.3,
+                use_physics_prior=True, adaptive_prior_r2_threshold=0.7,
+            )
+        if variant == PredictorVariant.TRANSFORMER:
+            return TransformerPredictor()
+        raise ValueError(variant)
+
+
 VARIANTS = [
     PredictorVariant.PHYSICS_ONLY,
     PredictorVariant.LSTM_ONLY,
@@ -72,7 +102,7 @@ def _append(row: dict, first: bool) -> None:
 def run_seed(simulator, seed: int, n_per: int, epochs: int, scenarios: list,
              first_row: list = None) -> list:
     groups = build_configs(n_per_scenario=n_per, seed=seed)
-    uc = AblationStudyUseCase(simulator=simulator)
+    uc = ImprovedAblation(simulator=simulator)
     rows = []
     for scen in scenarios:
         cmd = AblationCommand(
