@@ -60,6 +60,7 @@ from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
 
 
 RESULTS_DIR = Path(__file__).parent / "results"
+_UNSET = object()
 
 
 def _save_csv(rows: list, path: Path, fieldnames: list) -> None:
@@ -211,7 +212,7 @@ def _make_tfim_configs_fixed_J(
 
 def run_e7c(simulator, n_per_J: int, n_epochs: int, verbose: bool = True,
             *, seed: int = 42, config_seed: int = 123, out_path=None,
-            J_values=None) -> list:
+            J_values=None, store=_UNSET) -> list:
     """Sweep TFIM coupling J ∈ {0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0}.
 
     Phase transition at J = h_field = 1.0 (hardcoded in TwoQubitSystem).
@@ -226,7 +227,11 @@ def run_e7c(simulator, n_per_J: int, n_epochs: int, verbose: bool = True,
     if J_values is None:
         J_values = [0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0]
     rng = np.random.default_rng(config_seed)
-    gen_uc = GenerateDatasetUseCase(simulator, store=trajectory_store())
+    # store=None disables the trajectory cache. R6 needs that: cache keys do
+    # not include the simulator, so a run with a different initial-state
+    # preparation would silently read the ordinary trajectories back.
+    gen_uc = GenerateDatasetUseCase(
+        simulator, store=trajectory_store() if store is _UNSET else store)
     rows = []
 
     for J in J_values:
