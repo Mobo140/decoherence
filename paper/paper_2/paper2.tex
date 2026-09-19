@@ -246,7 +246,17 @@ global RNG, and the experiment scripts constructed their training
 commands directly, bypassing the seeded path even after the first two
 were fixed.
 All three are now closed, and repeated runs of the experiment suite are
-byte-identical.
+byte-identical for a given state of the trajectory cache.
+That qualification matters: the simulator draws each trajectory's
+initial pure state from one seeded stream, so how much of that stream a
+run consumes depends on which trajectories it finds cached.
+A cold cache---the state from which an independent replication
+starts---and a fully populated one are each deterministic; a partially
+populated cache, such as one left behind by an interrupted run, is not,
+and we measured differences of order $0.015$ in $R^2$ from this alone.
+Making trajectory content depend on the cache key rather than on stream
+position would remove the caveat, at the cost of regenerating every
+number in this paper.
 To quantify what the unseeded runs cost, we replicated this ablation
 across three seeds at the \emph{same} configuration as
 Table~\ref{tab:e1_2} ($500$~trajectories, $150$~epochs), so levels are
@@ -463,15 +473,35 @@ For XXZ, E11a achieves $R^2 = 0.817$ and AUROC $= 0.937$, the best
 \emph{cross-system} results across all experiments (the single-scenario
 Transformer of E6a reaches a higher $R^2 = 0.897$, but from a model
 trained on XXZ alone; E11a's AUROC $=0.937$ exceeds even that).
-The improvement over E7a (window=20, no overlap control) is
-$\Delta R^2 = +0.059$ and $\Delta\mathrm{AUROC} = +0.074$, showing
-that the min-gap overlap control provides a consistent regularisation
-benefit even without changing window size.
-For TFIM, $R^2 = 0.566$ remains comparable to E7a ($0.599$),
-while AUROC improves dramatically to $0.888$ ($+0.152$ vs E7a).
-The TFIM $R^2$ ceiling reflects the fundamental difficulty of predicting
-decoherence time from oscillatory two-qubit coherence windows;
-early-warning accuracy (AUROC) is unaffected by this limitation.
+The improvement over E7a is $\Delta R^2 = +0.059$ and
+$\Delta\mathrm{AUROC} = +0.074$ on XXZ.
+An earlier version attributed this to the min-gap overlap control
+``even without changing window size''; that was wrong on both counts.
+E7a uses window $L=50$, not $20$ (only E7b and E7c use $20$), so the
+window does change, and the pair additionally differs in evaluation
+protocol.
+The controlled window contrast of Sec.~\ref{sec:r3} attributes
+$\Delta R^2 = +0.058 \pm 0.028$ on XXZ to the window change alone,
+which accounts for essentially the whole gain and leaves nothing that
+the min-gap control is needed to explain.
+We therefore report the min-gap contribution as unmeasured rather than
+as demonstrated.
+For TFIM, $R^2 = 0.566$ is close to E7a's $0.599$ while AUROC improves
+to $0.888$ ($+0.152$), which invites reading E11a as trading regression
+accuracy for early-warning accuracy.
+It does not: E7a and E11a differ in window length, in min-gap control
+\emph{and} in evaluation protocol, so the pair cannot isolate any of
+them.
+Holding the protocol fixed and varying only the window across three
+seeds, the shorter window wins on both metrics and on both scenarios,
+in every one of the six paired comparisons:
+$\Delta R^2 = +0.058 \pm 0.028$ (XXZ) and $+0.199 \pm 0.014$ (TFIM),
+with $\Delta\mathrm{AUROC} = +0.045$ and $+0.100$.
+There is no trade-off to explain---window $20$ is simply better than
+window $50$ here, most markedly on TFIM.
+The remaining TFIM $R^2$ ceiling still reflects the difficulty of
+predicting decoherence time from oscillatory two-qubit coherence
+windows, but it is not the price of the AUROC gain.
 
 \paragraph{Summary of cross-system improvements.}
 Two different baselines are relevant here, and we state each explicitly
@@ -493,6 +523,72 @@ the effective sample count and degraded $R^2$ while improving AUROC
 moderately.
 E11a supersedes E10b by recovering the sample count and applying
 min-gap control, achieving improvements on both metrics simultaneously.
+
+\subsection{R3 --- controlled replication of the E11 comparisons}
+\label{sec:r3}
+
+Both statements the E11 experiments are read as supporting---that a
+shorter window trades $R^2$ for AUROC, and that \texttt{physics\_lstm}
+degrades with more data---rest on comparing runs that differ in several
+respects at once, each from a single seed.
+R3 re-runs the two comparisons with one factor varied at a time, three
+seeds each, every arm scored through the same evaluation protocol.
+Table~\ref{tab:r3} reports the arms and Table~\ref{tab:r3d} the paired
+differences.
+
+\begin{table}[h]
+\centering
+\caption{R3 arms: mean $\pm$ s.d.\ over seeds $\{42,43,44\}$ at
+  $500$ trajectories ($1{,}000$ for the last arm), $150$ epochs.
+  \texttt{e7a\_w50} applies E7a's window inside E11a's protocol; it
+  isolates the window and does not reproduce E7a's published
+  numbers.\label{tab:r3}}
+\small
+\begin{tabular}{llcc}
+\toprule
+Arm & Scen. & $R^2$ & AUROC \\
+\midrule
+\texttt{e11a\_w20}  & D & $0.814 \pm 0.034$ & $0.931 \pm 0.011$ \\
+\texttt{e11a\_w20}  & E & $0.703 \pm 0.034$ & $0.904 \pm 0.008$ \\
+\texttt{e7a\_w50}   & D & $0.755 \pm 0.015$ & $0.886 \pm 0.023$ \\
+\texttt{e7a\_w50}   & E & $0.505 \pm 0.025$ & $0.803 \pm 0.017$ \\
+\texttt{e11b\_500}  & D & $0.567 \pm 0.209$ & $0.856 \pm 0.047$ \\
+\texttt{e11b\_500}  & E & $0.536 \pm 0.105$ & $0.847 \pm 0.022$ \\
+\texttt{e11b\_1000} & D & $0.511 \pm 0.090$ & $0.853 \pm 0.019$ \\
+\texttt{e11b\_1000} & E & $0.470 \pm 0.119$ & $0.819 \pm 0.007$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\caption{R3 paired differences, one per seed. The window contrast is
+  consistent in sign across all six comparisons; the data-size contrast
+  is not.\label{tab:r3d}}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{llrr@{\,}r@{\,}r}
+\toprule
+Contrast & Sc. & $\Delta R^2$ & \multicolumn{3}{c}{per seed} \\
+\midrule
+win.\ $50\!\to\!20$ & D & $+0.058 \pm 0.028$ & $+.087$ & $+.031$ & $+.057$ \\
+win.\ $50\!\to\!20$ & E & $+0.199 \pm 0.014$ & $+.215$ & $+.188$ & $+.194$ \\
+data $500\!\to\!1000$ & D & $-0.056 \pm 0.299$ & $-.263$ & $+.287$ & $-.192$ \\
+data $500\!\to\!1000$ & E & $-0.066 \pm 0.196$ & $-.285$ & $+.094$ & $-.008$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The window contrast is unambiguous: the shorter window improves both
+metrics on both scenarios in every seed, by margins two to fourteen
+times the spread ($\Delta\mathrm{AUROC} = +0.045$ and $+0.100$).
+There is no $R^2$/AUROC trade-off to account for.
+
+The data-size contrast is not resolved: the sign reverses between
+seeds, and the mean is several times smaller than the spread.
+The $500$-trajectory arm alone varies by $\pm 0.209$ in $R^2$ on XXZ,
+which is why a single pair of runs appeared to show a large, clean
+degradation.
 
 \subsection{E7b --- Adaptive-prior threshold ($\tau$) sweep}
 \label{sec:e7b}
@@ -690,15 +786,28 @@ The adaptive gate isolates the regime where the OLS prior
 \emph{does} apply (linear window, e.g., late-stage XXZ decay) from the
 regime where it does not (oscillatory TFIM), enabling interpretable
 predictions.
-However, E11b shows that \texttt{physics\_lstm} does not benefit from
-more training data: doubling trajectories to 1{,}000 degrades
-cross-system $R^2$ (D: $0.740 \to 0.491$) despite improved AUROC,
-because the richer diversity of $\gamma(t)$ profiles introduces training
-dynamics that overwhelm the inductive bias of the OLS prior.
-The Transformer (E11a), by contrast, improves monotonically with
-sample count.
-This data-scaling asymmetry reinforces the recommendation: for
-production deployment, use the Transformer.
+An earlier version of this paper read E11b as showing that
+\texttt{physics\_lstm} does not benefit from more training data
+(D: $0.740 \to 0.491$ on doubling to 1{,}000 trajectories) and explained
+it by the richer diversity of $\gamma(t)$ profiles overwhelming the
+inductive bias of the OLS prior.
+That comparison was not controlled---E11b and its $500$-trajectory
+baseline also differ in window length, early-stopping patience and
+inference codes---so we re-ran the $500$- and $1{,}000$-trajectory
+configurations against each other across three seeds, changing nothing
+but the trajectory count.
+The effect does not survive: paired differences are $-0.263$, $+0.287$,
+$-0.192$ on XXZ and $-0.285$, $+0.094$, $-0.008$ on TFIM, giving
+$\Delta R^2 = -0.056 \pm 0.299$ and $-0.066 \pm 0.196$.
+The sign is not even consistent---on one seed the extra data helps
+markedly---and the mean is several times smaller than the spread.
+The $500$-trajectory arm is itself extremely noisy
+($R^2 = 0.567 \pm 0.209$ on XXZ), which is what made a single pair of
+runs look decisive.
+We therefore withdraw the data-scaling claim: these experiments do not
+establish that \texttt{physics\_lstm} degrades with more data, and the
+Transformer recommendation rests on its accuracy and its much smaller
+run-to-run spread, not on a scaling asymmetry.
 
 \paragraph{Transformer architecture recommendations.}
 Taken together, E6a (single-scenario ablation), E7a (cross-system),
