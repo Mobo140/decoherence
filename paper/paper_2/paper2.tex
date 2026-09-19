@@ -918,9 +918,10 @@ non-analyticity can occur---finite systems never exhibit sharp phase
 transitions, only smooth crossovers that sharpen into the transition
 as $N\to\infty$.
 We can nonetheless identify the finite-size precursor of the
-transition \emph{exactly}, since $H_{\mathrm{TFIM}} = J\sigma_z\sigma_z
-+ h(\sigma_x\otimes I + I\otimes\sigma_x)$ block-diagonalises under the
-global-flip parity $P=\sigma_x\otimes\sigma_x$ (which commutes with
+transition \emph{exactly}, since the simulated Hamiltonian
+$H_{\mathrm{TFIM}} = J\,\sigma_x\!\otimes\!\sigma_x
++ h(\sigma_z\otimes I + I\otimes\sigma_z)$ block-diagonalises under the
+global-flip parity $P=\sigma_z\otimes\sigma_z$ (which commutes with
 $H_{\mathrm{TFIM}}$) into two exactly solvable $2\times2$ sectors:
 \begin{equation}
   E_{P=+1} = \pm\sqrt{J^2+4h^2}, \qquad
@@ -941,12 +942,30 @@ the $P{=}{+}1$ sector's splitting dominates, so coherent dynamics is
 governed by essentially one frequency) through $r(h)=1/\sqrt5\approx
 0.447$ at the nominal transition to $r\to1$ (deep ferromagnetic,
 $J\gg h$: both splittings again scale together, $\propto2J$).
-Crucially, the amplitude-damping dissipator used here does \emph{not}
-commute with $P$ ($\sigma_x\sigma_-\sigma_x=\sigma_+$), so dissipation
-actively couples the two parity sectors rather than respecting the
-closed-system symmetry.
-This coupling is least consequential where one sector's timescale
-dominates the other ($r\approx0$ or $r\to1$, i.e.\ deep in either
+An earlier version of this paper asserted at this point that the
+amplitude-damping dissipator does not commute with $P$
+($\sigma_x\sigma_-\sigma_x=\sigma_+$) and therefore couples the two
+parity sectors. That is wrong for the system simulated here, and the
+claim is withdrawn.
+The jump operator $L$ enters the dissipator quadratically,
+$\mathcal{D}[L]\rho = L\rho L^\dagger - \tfrac12\{L^\dagger L,\rho\}$,
+so whenever $PLP^\dagger=\pm L$ the sign cancels and the parity
+symmetry survives; in this basis $\sigma_-\mapsto-\sigma_-$, which is
+exactly that case.
+Checked numerically on the simulator itself, the Liouvillian commutes
+with the parity superoperator $\rho\mapsto P\rho P^\dagger$ to machine
+precision at every $J$ in the sweep, for amplitude damping and for
+dephasing alike, while deliberately asymmetric jump operators (whose
+image is not proportional to $L$) give commutator norms of order $30$.
+The sectors do not mix.
+
+The rest of the argument does not require them to.
+Parity is conserved, but a generic initial state populates both
+sectors---over random pure states, $98\%$ carry more than $5\%$ of
+their weight in each---so the observed coherence is a superposition of
+modes at both sectors' frequencies, whose ratio is $r(J)$.
+That superposition is least troublesome where one frequency dominates
+($r\approx0$ or $r\to1$, i.e.\ deep in either
 phase, matching the empirically strong $R^2=0.876$ at $J=0.2$ and
 $R^2=0.836$ at $J=1.5$), and most consequential in the crossover band
 $J\in[0.8,1.5]$ where $r(J)\in[0.37,0.60]$ and neither sector's
@@ -1041,14 +1060,16 @@ Key findings are:
     quantum phase transition with recovery beyond it; neither the
     location nor the recovery reproduces, and $J = h$ is not
     distinguishable from its neighbours.
-    This is a novel phase-diagram view of early-warning reliability,
-    and---since the $N=2$ system studied here cannot host a true
-    non-analytic transition---we ground it in an exact finite-size
-    analysis (Eq.~\ref{eq:tfim-spectrum}--\ref{eq:ratio}): the dip
-    coincides with the band where the Hamiltonian's two parity sectors
-    have comparable timescales and the (parity-breaking) dissipator
-    couples them most strongly, so the $R^2$ ceiling is a structural
-    property of the model, not a training artefact.
+    Since the $N=2$ system cannot host a true non-analytic transition,
+    we ground the trend in an exact finite-size analysis
+    (Eq.~\ref{eq:tfim-spectrum}--\ref{eq:ratio}): predictability falls
+    as the Hamiltonian's two parity sectors approach comparable
+    timescales, so a generic initial state---which populates both---
+    yields a signal with two comparably weighted modes instead of one.
+    The $R^2$ ceiling is thus a structural property of the model rather
+    than a training artefact. An earlier version attributed the mixing
+    to the dissipator; the Liouvillian in fact conserves parity exactly,
+    and no coupling between sectors is needed or present.
   \item Noise robustness is exceptional: $R^2$ spans a total range of
     only $0.007$ across $\sigma = 0$--$0.10$, stronger than the
     single-qubit case ($\Delta R^2 = 0.23$).
