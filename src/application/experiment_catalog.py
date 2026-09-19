@@ -45,7 +45,7 @@ CATALOG: List[ExperimentEntry] = [
     ExperimentEntry("E7", "Transformer / τ / J (E7a/b/c)", "experiments.e7_paper2_extended", "2", "C2, C5", "D, E",
                     ("e7a_transformer_cross.csv", "e7b_tau_sweep.csv", "e7c_J_sweep.csv"),
                     status="cited"),
-    ExperimentEntry("E8", "Improved 2q training (E8c)", "experiments.e8_improved_2qubit", "2", "C4, C5", "D, E",
+    ExperimentEntry("E8c", "Improved 2q training", "experiments.e8_improved_2qubit", "2", "C4, C5", "D, E",
                     ("e8c_cross_system.csv",), status="cited"),
     ExperimentEntry("E9", "Context codes", "experiments.e9_context_injection", "-", "C5", "D, E",
                     ("e9a_cross_system.csv", "e9b_ablation.csv"), status="negative"),

@@ -23,15 +23,15 @@ def test_meta_has_tfim_champion():
 
 def test_catalog_and_e8_csv():
     cat = _client().get("/api/catalog").json()["experiments"]
-    assert any(e["id"] == "E8" for e in cat)
-    csv = _client().get("/api/csv/E8").json()
+    assert any(e["id"] == "E8c" for e in cat)
+    csv = _client().get("/api/csv/E8c").json()
     assert csv["headers"]
     assert csv["rows"]
 
 
 def test_compare_e8_e14():
-    data = _client().post("/api/compare", json={"a": "E8", "b": "E14"}).json()
-    assert "E8" in data["text"] and "E14" in data["text"]
+    data = _client().post("/api/compare", json={"a": "E8c", "b": "E14"}).json()
+    assert "E8c" in data["text"] and "E14" in data["text"]
 
 
 def test_models_slots():
