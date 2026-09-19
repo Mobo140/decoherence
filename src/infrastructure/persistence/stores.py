@@ -6,6 +6,7 @@ PickleModelStore      – saves/loads any IPredictor via state_bytes + kind side
 from __future__ import annotations
 
 import json
+import zipfile
 from pathlib import Path
 from typing import Dict, List, Type
 
@@ -56,12 +57,23 @@ class NumpyTrajectoryStore(ITrajectoryStore):
             if i == 0:
                 meta["feature_names"] = traj.feature_names
 
+        # Written through temporary files and renamed into place: a run that
+        # is interrupted mid-write would otherwise leave a truncated .npz or
+        # an empty _meta.json behind, and because the cache key is
+        # deterministic every later run would hit that same broken entry.
         npz_path = self._root / f"{name}.npz"
-        np.savez_compressed(npz_path, **arrays)
+        # The temporary name must itself end in .npz: savez_compressed
+        # appends the extension when it is missing, which would leave the
+        # bytes somewhere other than where the rename looks for them.
+        npz_tmp = self._root / f"{name}.tmp.npz"
+        np.savez_compressed(npz_tmp, **arrays)
+        npz_tmp.replace(npz_path)
 
         meta_path = self._root / f"{name}_meta.json"
-        with open(meta_path, "w") as f:
+        meta_tmp = meta_path.with_suffix(".json.tmp")
+        with open(meta_tmp, "w") as f:
             json.dump(meta, f, indent=2)
+        meta_tmp.replace(meta_path)
 
     def load(self, name: str) -> List[TrajectoryResult]:
         npz_path = self._root / f"{name}.npz"
@@ -70,10 +82,17 @@ class NumpyTrajectoryStore(ITrajectoryStore):
         if not npz_path.exists():
             raise FileNotFoundError(f"No trajectory store found at {npz_path}")
 
-        data = np.load(npz_path, allow_pickle=False)
-
-        with open(meta_path) as f:
-            meta = json.load(f)
+        # A damaged entry is reported as a miss rather than an error, so the
+        # caller re-simulates and overwrites it instead of failing. Callers
+        # treat FileNotFoundError as "not cached"; anything else propagates.
+        try:
+            data = np.load(npz_path, allow_pickle=False)
+            with open(meta_path) as f:
+                meta = json.load(f)
+        except (OSError, ValueError, json.JSONDecodeError, zipfile.BadZipFile) as exc:
+            raise FileNotFoundError(
+                f"Unreadable trajectory cache entry {name}: {exc}"
+            ) from exc
 
         trajectories: List[TrajectoryResult] = []
         feature_names: List[str] = meta.get("feature_names", [])
