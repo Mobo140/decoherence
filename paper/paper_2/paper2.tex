@@ -47,11 +47,13 @@ cross-system (up from $R^2 = -0.381$ baseline, $\Delta = +0.96$).
 Measurement noise robustness is remarkably strong: $R^2$ spans a total
 range of only $0.007$ across $\sigma = 0$--$0.10$ (vs.\ $\Delta R^2 =
 0.23$ in \cite{Paper1Brusnikin}).
-A phase-diagram sweep of the TFIM coupling constant $J$ reveals that
-predictability is lowest near the quantum phase transition ($J \approx
-h = 1.0$, $R^2 = 0.32$--$0.50$) and highest in the deep
-paramagnetic ($J = 0.2$, $R^2 = 0.876$) and ferromagnetic ($J = 1.5$,
-$R^2 = 0.836$) regimes.
+A sweep of the TFIM coupling constant $J$, replicated across three
+seeds, shows predictability falling as $J/h$ grows---from
+$R^2 = 0.72 \pm 0.03$ at $J = 0.2$ to $0.53$ on average for
+$J \geq 0.8$---and then saturating.
+A single sweep had suggested a dip localised at the quantum phase
+transition with recovery beyond it; that structure does not survive
+replication, and the transition point itself is unremarkable.
 \end{abstract}
 
 % --------------------------------------------------------------------------
@@ -684,7 +686,7 @@ Should a $\tau$ effect exist, it is smaller than the run-to-run
 variation of this pipeline, and resolving it would need more seeds
 rather than a finer grid.
 
-\subsection{E7c --- TFIM $J$-coupling sweep near the phase transition}
+\subsection{E7c --- TFIM $J$-coupling sweep across the phase diagram}
 \label{sec:e7c}
 
 The TFIM Hamiltonian is $H = J\sigma_z\sigma_z + h(\sigma_x \otimes I +
@@ -720,22 +722,64 @@ $J$ (J/h) & $R^2$ & MAE & AUROC \\
   \caption{E7c: Transformer R² and AUROC trained and evaluated at fixed $J$
     values across the TFIM phase diagram ($h=1.0$ fixed).
     Shaded regions: paramagnetic ($J<h$, blue) and ferromagnetic ($J>h$,
-    orange).  The dashed red line marks the quantum phase transition.}
+    orange).  The dashed red line marks the quantum phase transition.
+    This is the single published run; Table~\ref{tab:r5} gives the
+    three-seed replication, in which the structure near $J=h$ does not
+    survive.}
   \label{fig:e7c}
 \end{figure}
 
-Predictability is highest far from the transition: paramagnetic
-($J = 0.2$, $R^2 = 0.876$, AUROC $= 0.959$) and deep ferromagnetic
-($J = 1.5$, $R^2 = 0.836$, AUROC $= 0.942$).
-Performance degrades strongly in the critical region: worst at $J = 1.2$
-($R^2 = 0.319$, AUROC $= 0.555$), immediately past the transition.
-At exactly $J = 1.0$ the model still achieves $R^2 = 0.497$.
-The asymmetry (ferromagnetic onset $J = 1.2$ harder than $J = 1.5$)
-suggests that the onset of long-range order creates the most complex
-short-time dynamics, while the fully ordered phase at $J = 2.0$ is
-again relatively predictable ($R^2 = 0.614$).
-This phase-diagram view of decoherence predictability is a novel finding
-with practical implications for qubit protection strategies.
+Read alone, this single sweep suggests a dip localised at the
+transition: best far from it (paramagnetic $J = 0.2$, $R^2 = 0.876$;
+deep ferromagnetic $J = 1.5$, $R^2 = 0.836$), worst just past it
+($J = 1.2$, $R^2 = 0.319$), with an asymmetry pointing at the onset of
+long-range order.
+Each of those points rests on 81--94 evaluation samples from one run, so
+we replicated the whole sweep across three seeds, varying the sampled
+configurations and training together (Table~\ref{tab:r5}).
+
+\begin{table}[h]
+\centering
+\caption{R5: the E7c sweep across seeds $\{42,43,44\}$, mean $\pm$ s.d.,
+  against the single published run. $r(J)$ is the parity-splitting ratio
+  of Eq.~\ref{eq:ratio}.\label{tab:r5}}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{rrrr}
+\toprule
+$J$ & $r(J)$ & $R^2$ (3 seeds) & published \\
+\midrule
+0.2 & 0.100 & $0.715 \pm 0.032$ & 0.876 \\
+0.5 & 0.243 & $0.650 \pm 0.173$ & 0.770 \\
+0.8 & 0.371 & $0.456 \pm 0.071$ & 0.469 \\
+1.0 & 0.447 & $0.535 \pm 0.133$ & 0.497 \\
+1.2 & 0.514 & $0.577 \pm 0.142$ & 0.319 \\
+1.5 & 0.600 & $0.548 \pm 0.038$ & 0.836 \\
+2.0 & 0.707 & $0.507 \pm 0.135$ & 0.614 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The localisation does not survive.
+$J = 1.2$ is not the worst point under replication---it is better than
+$J = 0.8$ by $+0.120$ on average, with the sign varying between
+seeds---and the minimum wanders ($J = 1.0$, $2.0$ and $0.8$ for the
+three seeds).
+The recovery the single run showed at $J = 1.5$ does not appear either:
+paired against $J = 1.2$ the difference is $+0.029 \pm 0.133$ with mixed
+sign, and $J = 2.0$ stays at $0.507$ rather than recovering.
+The transition point itself is unremarkable: its $z$-score against the
+other points in the same sweep is $-1.31$, $+0.86$ and $-0.66$ across
+the three seeds.
+
+What does survive is a decline with coupling strength, which then
+flattens.
+$J = 0.2$ beats $J = 0.8$ in every seed ($+0.258 \pm 0.064$), and the
+weak-coupling points average $0.682$ against $0.525$ for
+$J \geq 0.8$; $R^2$ correlates negatively with $r(J)$ in every seed
+(Spearman $-0.39$, $-0.43$, $-0.46$).
+The honest statement is therefore a monotone loss of predictability as
+the coupling grows, not a critical-point phenomenon.
 
 % --------------------------------------------------------------------------
 \section{Discussion}
@@ -776,7 +820,8 @@ We state their outcome here explicitly, including where they fail.
     retraining, and XXZ reaches $R^2 = 0.817$; but TFIM stalls at
     $R^2 = 0.566$, short of the $0.70$ target set for this work.
     The finite-size analysis below argues this ceiling is structural
-    rather than a training deficiency.
+    rather than a training deficiency; that argument is consistent with
+    the replicated $J$-sweep but is not tested by it.
 \end{itemize}
 
 \paragraph{When does the physics prior help vs.\ hurt in 2-qubit systems?}
@@ -850,16 +895,16 @@ and E7b ($\tau$ sweep) point to a clear deployment strategy:
 \end{itemize}
 
 \paragraph{Phase-transition anomaly.}
-The E7c J-sweep reveals a striking feature: decoherence prediction
-accuracy exhibits a \emph{dip} near the TFIM quantum phase transition
-($J = h = 1.0$), with the worst performance at $J = 1.2$
-($R^2 = 0.319$, AUROC $= 0.555$).
-Far from the transition---in either the paramagnetic ($J \ll h$) or
-deep ferromagnetic ($J \gg h$) phase---performance recovers
-substantially.
-This has direct practical implications: hardware operating near a
-TFIM-like phase transition (e.g., certain flux-qubit designs) will have
-the least reliable early-warning predictions, which should be factored
+The E7c $J$-sweep shows predictability falling as the coupling grows.
+A single run had placed that loss as a dip localised at the transition,
+worst just past $J = h$ and recovering beyond it, but replication across
+seeds leaves only the monotone part: weak coupling is the predictable
+regime ($R^2 = 0.715 \pm 0.032$ at $J = 0.2$), everything from
+$J = 0.8$ upward sits near $0.5$, and $J = h$ is not distinguishable
+from its neighbours.
+The practical reading changes accordingly: it is strong coupling
+relative to the transverse field, not proximity to the transition, that
+predicts unreliable early warning, and that is what should be factored
 into error-correction scheduling policies~\cite{Lidar2013}.
 
 \paragraph{Why does predictability dip near the transition? A
@@ -913,20 +958,23 @@ extrapolate to the eventual $T_2$---the same short-window information
 limit as the single-exponential case in \cite{Paper1Brusnikin}, but now
 with two competing modes instead of one.
 Because $r(J)$ increases \emph{monotonically} rather than peaking
-symmetrically at $J=h$, this mechanism also explains the observed
-asymmetry of the dip (worst at $J=1.2$, just past the nominal
-transition, rather than exactly at $J=1.0$): the crossover band in
-$r(J)$ is not centred on $J=h$.
-We leave a precise, quantitative account of the recovery at $J=1.5$
-(where $r=0.6$ is not yet close to $1$) as an open question---it likely
-involves the interplay between the growing overall energy scale
-$\propto\sqrt{J^2+4h^2}$ and the dissipation rate $\gamma(t)$, which
-this closed-system spectral argument does not capture.
-In short, the $R^2$ ceiling near $J\approx h$ is not a training
-artefact but a structural consequence of dissipator-induced mode
-mixing between the two symmetry sectors of the Hamiltonian, at its
-strongest precisely where their timescales are of comparable
-magnitude.
+symmetrically at $J=h$, this mechanism predicts a monotone loss of
+predictability across the range we sweep, with recovery only once
+$r\to1$---which $J=2.0$ ($r=0.707$) does not reach.
+That is what the replicated sweep shows, and it is a better fit than the
+single run was: the earlier data's recovery at $J=1.5$ sat awkwardly
+with a monotone $r(J)$ and we had to leave it as an open question, but
+that recovery turns out to be a single-run artefact rather than
+something the mechanism must explain.
+What the replication removes is any claim that the effect is localised
+at criticality. The spectral argument never predicted a feature centred
+on $J=h$---$r(J)$ is smooth there---so the correct statement is that
+dissipator-induced mixing between the two symmetry sectors degrades
+predictability as the sectors' timescales approach each other, with the
+transition point carrying no special status.
+This remains an interpretation of a seven-point sweep and not a test of
+the mechanism: that would need a dissipator commuting with $P$, for
+which the mixing---and so the degradation---should be absent.
 
 \paragraph{Remaining open questions.}
 \begin{enumerate}
@@ -936,9 +984,12 @@ magnitude.
     inter-qubit correlations---particularly relevant given that
     entanglement can terminate in finite time \cite{YuEberly2009}
     while single-qubit coherence decays only asymptotically.
-  \item \textbf{Fine-grained J sweep near criticality.}
-    A denser sweep around $J \in [0.9, 1.3]$ would better resolve the
-    shape of the prediction-accuracy dip near the phase transition.
+  \item \textbf{More seeds before a finer grid.}
+    The replicated sweep leaves a monotone decline whose per-point
+    spread ($\pm 0.03$--$0.17$) is comparable to the differences between
+    neighbouring $J$. Resolving any remaining structure calls for more
+    seeds at the present seven points rather than a denser grid, which
+    would only add points of the same precision.
   \item \textbf{Extension to $n > 2$ qubits.}
     The architecture is agnostic to qubit count; scaling to 3--4 qubits
     is a natural next step.
@@ -983,10 +1034,13 @@ Key findings are:
     average) is as large as the span across $\tau$ ($0.419$).
     If a $\tau$ effect exists it is below this pipeline's run-to-run
     variation.
-  \item Decoherence predictability exhibits a pronounced \emph{dip near
-    the TFIM quantum phase transition}: $R^2 = 0.32$--$0.50$ for
-    $J \in [0.8, 1.2]$ vs.\ $R^2 = 0.84$--$0.88$ far from criticality
-    (E7c).
+  \item Decoherence predictability \emph{falls as the TFIM coupling
+    grows and then saturates}: $R^2 = 0.715 \pm 0.032$ at $J = 0.2$
+    against $\approx 0.53$ for $J \geq 0.8$ (E7c, replicated across
+    three seeds). A single sweep had suggested a dip localised at the
+    quantum phase transition with recovery beyond it; neither the
+    location nor the recovery reproduces, and $J = h$ is not
+    distinguishable from its neighbours.
     This is a novel phase-diagram view of early-warning reliability,
     and---since the $N=2$ system studied here cannot host a true
     non-analytic transition---we ground it in an exact finite-size
