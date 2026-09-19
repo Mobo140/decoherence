@@ -114,8 +114,8 @@ def _eval_per_scenario(predictor, simulator, groups, window, min_gap,
 def run_e11a(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True,
              *, seed: int = 42, window: int = 20, out_path=None) -> list:
     """Defaults reproduce the published E11a run; the keyword-only arguments
-    exist so E24 can replicate it across seeds and window lengths without
-    duplicating the configuration (see experiments/e24_multiseed_scaling.py)."""
+    exist so R3 can replicate it across seeds and window lengths without
+    duplicating the configuration (see experiments/r3_multiseed_scaling.py)."""
     from src.infrastructure.ml.transformer_predictor import TransformerPredictor
 
     WINDOW  = window
@@ -161,7 +161,7 @@ def run_e11b(simulator, groups_1000, n_epochs: int, verbose: bool = True,
              *, seed: int = 42, out_path=None) -> list:
     """Defaults reproduce the published E11b run; see run_e11a for why the
     keyword-only arguments exist. Training-set size is chosen by the caller
-    through ``groups_1000``, which is what E24 varies."""
+    through ``groups_1000``, which is what R3 varies."""
     from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 
     WINDOW  = 20

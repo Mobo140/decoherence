@@ -20,39 +20,62 @@ class ExperimentEntry:
     scenarios: str
     csv_globs: tuple
     supports_fast: bool = True
+    status: str = "cited"
+    """Role of this experiment, so the UI does not present a dead end as a
+    result: "cited" (a paper reports it), "superseded" (a later experiment
+    replaced it), "negative" (recorded outcome that did not reach its goal,
+    kept so it is not retried blindly), or "replication" (checks another
+    experiment rather than producing a result of its own)."""
 
 
 CATALOG: List[ExperimentEntry] = [
-    ExperimentEntry("E1", "Ablation", "experiments.e1_ablation", "1", "C1, C2", "A–E",
-                    ("e1_ablation_p1.csv",)),
+    ExperimentEntry("E1", "Ablation", "experiments.e1_ablation", "1", "C1, C2", "A–C",
+                    ("e1_ablation_p1.csv",), status="cited"),
     ExperimentEntry("E2", "Window sweep", "experiments.e2_window_sweep", "1", "C3", "B/C",
-                    ("e2_window_sweep_p1.csv",)),
-    ExperimentEntry("E3", "Noise sweep", "experiments.e3_noise_sweep", "1", "C4", "B–E",
-                    ("e3_noise_sweep_p1.csv",)),
-    ExperimentEntry("E4", "Cross-system", "experiments.e4_cross_system", "1+2", "C5", "A–E",
-                    ("e4_cross_system_p1.csv",)),
+                    ("e2_window_sweep_p1.csv",), status="cited"),
+    ExperimentEntry("E3", "Noise sweep", "experiments.e3_noise_sweep", "1", "C4", "B/C",
+                    ("e3_noise_sweep_p1.csv",), status="cited"),
+    ExperimentEntry("E4", "Cross-system", "experiments.e4_cross_system", "1", "C5", "A–C",
+                    ("e4_cross_system_p1.csv",), status="cited"),
     ExperimentEntry("E5", "Inverse baseline", "experiments.e5_inverse_baseline", "1", "C3", "B",
-                    ("e5_inverse_baseline.csv",)),
-    ExperimentEntry("E6", "2q improved", "experiments.e6_2qubit_improved", "2", "C2", "D, E",
-                    ("e6_ablation_improved.csv", "e6_cross_system_improved.csv")),
-    ExperimentEntry("E7", "Transformer / τ / J", "experiments.e7_paper2_extended", "2", "C2, C5", "D, E",
-                    ("e7a_transformer_cross.csv", "e7b_tau_sweep.csv", "e7c_J_sweep.csv")),
-    ExperimentEntry("E8", "Improved 2q training", "experiments.e8_improved_2qubit", "2", "C4, C5", "D, E",
-                    ("e8c_cross_system.csv",)),
-    ExperimentEntry("E9", "Context codes", "experiments.e9_context_injection", "2", "C5", "D, E",
-                    ("e9a_cross_system.csv", "e9b_ablation.csv")),
-    ExperimentEntry("E10a", "Fixed context", "experiments.e10_fixed_context", "2", "C5", "D, E",
-                    ("e10a_cross_system.csv", "e10b_cross_system.csv")),
-    ExperimentEntry("E10b", "TFIM specialized", "experiments.e10_tfim_specialized", "2", "C2", "E",
-                    ("e10_tfim_c.csv",)),
-    ExperimentEntry("E11", "Scaling", "experiments.e11_scaling", "2", "C5", "D, E",
-                    ("e11a_cross_system.csv", "e11b_cross_system.csv")),
-    ExperimentEntry("E12", "Stretched-exp baseline", "experiments.e12_baseline_comparison", "1+2", "C2", "B–E",
-                    ("e12_baseline_comparison.csv",)),
-    ExperimentEntry("E13", "Survival TFIM", "experiments.e13_survival_tfim", "2", "C2", "E",
-                    ("e13_survival_tfim.csv",)),
-    ExperimentEntry("E14", "Inject J", "experiments.e14_inject_J", "2", "C2, C5", "D, E",
-                    ("e14_inject_J.csv",)),
+                    ("e5_inverse_baseline.csv",), status="cited"),
+    ExperimentEntry("E6", "2q improved (E6a/b/c)", "experiments.e6_2qubit_improved", "2", "C2", "D, E",
+                    ("e6_ablation_improved.csv", "e6_noise_sweep_improved.csv",
+                     "e6_cross_system_improved.csv"), status="cited"),
+    ExperimentEntry("E7", "Transformer / τ / J (E7a/b/c)", "experiments.e7_paper2_extended", "2", "C2, C5", "D, E",
+                    ("e7a_transformer_cross.csv", "e7b_tau_sweep.csv", "e7c_J_sweep.csv"),
+                    status="cited"),
+    ExperimentEntry("E8", "Improved 2q training (E8c)", "experiments.e8_improved_2qubit", "2", "C4, C5", "D, E",
+                    ("e8c_cross_system.csv",), status="cited"),
+    ExperimentEntry("E9", "Context codes", "experiments.e9_context_injection", "-", "C5", "D, E",
+                    ("e9a_cross_system.csv", "e9b_ablation.csv"), status="negative"),
+    # The papers' "E10b" is the window-30 cross-system run produced by
+    # e10_fixed_context.py -- not e10_tfim_specialized.py, which this catalog
+    # used to label E10b. Ids now match what the papers cite.
+    ExperimentEntry("E10a/E10b", "Fixed context (E10b cited)", "experiments.e10_fixed_context", "2", "C5", "D, E",
+                    ("e10a_cross_system.csv", "e10b_cross_system.csv"), status="cited"),
+    ExperimentEntry("E10-TFIM", "TFIM specialized", "experiments.e10_tfim_specialized", "-", "C2", "E",
+                    ("e10_tfim_c.csv",), status="negative"),
+    ExperimentEntry("E11", "Scaling (E11a/E11b)", "experiments.e11_scaling", "2", "C5", "D, E",
+                    ("e11a_cross_system.csv", "e11b_cross_system.csv"), status="cited"),
+    ExperimentEntry("E12", "Stretched-exp baseline", "experiments.e12_baseline_comparison", "-", "C2", "B–E",
+                    ("e12_baseline_comparison.csv",), status="negative"),
+    ExperimentEntry("E13", "Survival TFIM", "experiments.e13_survival_tfim", "-", "C2", "E",
+                    ("e13_survival_tfim.csv",), status="negative"),
+    ExperimentEntry("E14", "Inject J", "experiments.e14_inject_J", "-", "C2, C5", "D, E",
+                    ("e14_inject_J.csv",), status="negative"),
+
+    # Replications: these check other experiments rather than producing
+    # results of their own, so they sit outside the E-numbering the papers
+    # cite. (They were briefly named E22-E24 after task ids, which left a
+    # phantom gap at E15-E21.)
+    ExperimentEntry("R1", "Ablation across seeds (checks E6a)", "experiments.r1_multiseed_ablation", "-", "-", "D, E",
+                    ("r1_multiseed_ablation_full.csv", "r1_multiseed_ablation_defaultarch.csv"),
+                    status="replication"),
+    ExperimentEntry("R2", "τ sweep across seeds (checks E7b)", "experiments.r2_multiseed_tau", "-", "-", "D, E",
+                    ("r2_multiseed_tau_full_seeded.csv",), status="replication"),
+    ExperimentEntry("R3", "Scaling across seeds (checks E11a/E11b)", "experiments.r3_multiseed_scaling", "-", "-", "D, E",
+                    ("r3_multiseed_scaling.csv",), status="replication"),
 ]
 
 
