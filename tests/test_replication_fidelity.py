@@ -29,6 +29,30 @@ def test_run_e11a_defaults_reproduce_the_published_run():
     assert d["seed"] == 42
     assert d["window"] == 20, "published E11a uses window 20"
     assert d["out_path"] is None, "by default it must write the champion CSV"
+    assert d["eval_groups"] is None, (
+        "by default evaluation must use the training configurations, as published"
+    )
+
+
+def test_r4_scores_disjoint_configurations():
+    """R4 measures configuration overlap, so its unseen arm must genuinely
+    use a different generator seed -- not the training configurations."""
+    src = (EXPERIMENTS / "r4_config_overlap.py").read_text()
+    tree = ast.parse(src)
+    calls = [
+        n for n in ast.walk(tree)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+        and n.func.id == "run_e11a"
+    ]
+    assert calls, "no arm calls found"
+    for call in calls:
+        kwargs = {k.arg for k in call.keywords}
+        assert {"out_path", "seed", "eval_groups"} <= kwargs, (
+            f"line {call.lineno}: R4 arm is missing out_path/seed/eval_groups"
+        )
+    assert "CONFIG_SEED_OFFSET" in src
+    from experiments.r4_config_overlap import CONFIG_SEED_OFFSET
+    assert CONFIG_SEED_OFFSET != 0, "fresh configs would equal the training ones"
 
 
 def test_run_e11b_defaults_reproduce_the_published_run():

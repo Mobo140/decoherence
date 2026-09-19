@@ -112,7 +112,8 @@ def _eval_per_scenario(predictor, simulator, groups, window, min_gap,
 # ---------------------------------------------------------------------------
 
 def run_e11a(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True,
-             *, seed: int = 42, window: int = 20, out_path=None) -> list:
+             *, seed: int = 42, window: int = 20, out_path=None,
+             eval_groups=None) -> list:
     """Defaults reproduce the published E11a run; the keyword-only arguments
     exist so R3 can replicate it across seeds and window lengths without
     duplicating the configuration (see experiments/r3_multiseed_scaling.py)."""
@@ -142,8 +143,13 @@ def run_e11a(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True,
         seed=seed,
     ))
 
-    rows = _eval_per_scenario(predictor, simulator, groups, WINDOW, MIN_GAP,
-                              eval_seed=seed + 1)
+    # eval_groups defaults to the training configurations: the published run
+    # scores the model on the same physical systems it trained on, with fresh
+    # trajectories. R4 passes disjoint configurations to measure what that is
+    # worth (see experiments/r4_config_overlap.py).
+    rows = _eval_per_scenario(predictor, simulator,
+                              groups if eval_groups is None else eval_groups,
+                              WINDOW, MIN_GAP, eval_seed=seed + 1)
     for r in rows:
         r["variant"] = f"transformer_w{WINDOW}"
         r["window"] = WINDOW

@@ -76,6 +76,8 @@ CATALOG: List[ExperimentEntry] = [
                     ("r2_multiseed_tau_full_seeded.csv",), status="replication"),
     ExperimentEntry("R3", "Scaling across seeds (checks E11a/E11b)", "experiments.r3_multiseed_scaling", "-", "-", "D, E",
                     ("r3_multiseed_scaling.csv",), status="replication"),
+    ExperimentEntry("R4", "Config overlap in E11a evaluation", "experiments.r4_config_overlap", "-", "-", "D, E",
+                    ("r4_config_overlap.csv",), status="replication"),
 ]
 
 
