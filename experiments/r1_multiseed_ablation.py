@@ -1,4 +1,4 @@
-"""E22 — multi-seed variance probe for the two-qubit ablation (E6a shape).
+"""R1 — multi-seed variance probe for the two-qubit ablation (E6a shape).
 
 Why this exists
 ---------------
@@ -12,7 +12,7 @@ judged against run-to-run spread.
 
 Safety
 ------
-Writes ONLY to experiments/results/e22_multiseed_ablation.csv.  It never touches
+Writes ONLY to experiments/results/r1_multiseed_ablation.csv.  It never touches
 the champion CSVs (e6_*_improved.csv etc.) that back the paper tables --
 re-running e6_2qubit_improved.py directly would overwrite them, which is why
 this is a separate entry point.
@@ -31,8 +31,8 @@ replication rather than a training-only reseed.
 
 Usage
 -----
-    python -m experiments.e22_multiseed_variance --seeds 42 43 44
-    python -m experiments.e22_multiseed_variance --seeds 42 43 44 --n-per 150 --epochs 40
+    python -m experiments.r1_multiseed_ablation --seeds 42 43 44
+    python -m experiments.r1_multiseed_ablation --seeds 42 43 44 --n-per 150 --epochs 40
 """
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ VARIANTS = [
     PredictorVariant.PHYSICS_LSTM,
     PredictorVariant.TRANSFORMER,
 ]
-OUT = Path(__file__).parent / "results" / "e22_multiseed_ablation.csv"  # overridable via --out
+OUT = Path(__file__).parent / "results" / "r1_multiseed_ablation.csv"  # overridable via --out
 
 
 def _append(row: dict, first: bool) -> None:
@@ -166,7 +166,7 @@ def main() -> None:
     if a.out:
         OUT = Path(__file__).parent / "results" / a.out
 
-    print(f"E22 multi-seed variance | seeds={a.seeds} n_per={a.n_per} "
+    print(f"R1 multi-seed variance | seeds={a.seeds} n_per={a.n_per} "
           f"epochs={a.epochs} scenarios={a.scenarios}")
     print(f"writing -> {OUT}  (champion CSVs untouched)\n")
 
