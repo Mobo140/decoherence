@@ -503,6 +503,25 @@ The remaining TFIM $R^2$ ceiling still reflects the difficulty of
 predicting decoherence time from oscillatory two-qubit coherence
 windows, but it is not the price of the AUROC gain.
 
+\paragraph{Does evaluating on the training configurations flatter E11a?}
+E11a scores the model on the same configurations it trained on,
+regenerating their trajectories under a different seed, so it sees fresh
+noise realisations of systems it has already seen rather than unseen
+systems.
+This is worth checking rather than assuming, because the configuration
+fixes most of $T_2$ on XXZ: the spread of $T_2$ within one configuration
+is $0.25$--$0.53$ against $1.90$ across configurations (on TFIM the two
+are comparable, $0.73$--$1.50$ against $1.46$), so a model that could
+recognise a configuration from its window would recover much of the
+target without generalising.
+We therefore scored each trained model twice, once on its training
+configurations and once on disjoint configurations drawn from a
+different generator seed, with everything else held fixed.
+The difference is nil: $\Delta R^2 = -0.000 \pm 0.009$ on XXZ and
+$+0.015 \pm 0.059$ on TFIM (three seeds, sign mixed on both).
+Configuration overlap does not inflate these numbers, and the
+cross-system results stand as reported.
+
 \paragraph{Summary of cross-system improvements.}
 Two different baselines are relevant here, and we state each explicitly
 to avoid conflating them.
