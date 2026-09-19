@@ -209,16 +209,23 @@ def _make_tfim_configs_fixed_J(
     return configs
 
 
-def run_e7c(simulator, n_per_J: int, n_epochs: int, verbose: bool = True) -> list:
+def run_e7c(simulator, n_per_J: int, n_epochs: int, verbose: bool = True,
+            *, seed: int = 42, config_seed: int = 123, out_path=None,
+            J_values=None) -> list:
     """Sweep TFIM coupling J ∈ {0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0}.
 
     Phase transition at J = h_field = 1.0 (hardcoded in TwoQubitSystem).
     Train Transformer on each J-bucket and report R² and AUROC.
+
+    The keyword-only arguments default to the published run; R5 varies
+    them to replicate the sweep across seeds without duplicating its
+    configuration (see experiments/r5_multiseed_J_sweep.py).
     """
     from src.infrastructure.ml.transformer_predictor import TransformerPredictor
 
-    J_values = [0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0]
-    rng = np.random.default_rng(123)
+    if J_values is None:
+        J_values = [0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0]
+    rng = np.random.default_rng(config_seed)
     gen_uc = GenerateDatasetUseCase(simulator, store=trajectory_store())
     rows = []
 
@@ -231,7 +238,7 @@ def run_e7c(simulator, n_per_J: int, n_epochs: int, verbose: bool = True) -> lis
             window_length=20,
             horizon=1.0,
             samples_per_trajectory=5,
-            seed=42,
+            seed=seed,
         ))
         if len(dataset.test_idx) == 0:
             print(f"  No test samples — skipping J={J}")
@@ -247,7 +254,7 @@ def run_e7c(simulator, n_per_J: int, n_epochs: int, verbose: bool = True) -> lis
             learning_rate=5e-4,
             regression_loss="huber",
             verbose=verbose,
-            seed=42,
+            seed=seed,
         ))
         metrics = BacktestUseCase(predictor).execute(
             BacktestCommand(dataset=dataset, horizon=1.0)
@@ -264,7 +271,7 @@ def run_e7c(simulator, n_per_J: int, n_epochs: int, verbose: bool = True) -> lis
         print(f"  → R²={metrics.r2:.4f}  MAE={metrics.mae:.4f}  "
               f"AUROC={metrics.risk_auroc:.4f}  N={metrics.n_samples}")
 
-    _save_csv(rows, RESULTS_DIR / "e7c_J_sweep.csv",
+    _save_csv(rows, out_path or RESULTS_DIR / "e7c_J_sweep.csv",
               ["J", "J_over_h", "r2", "mae", "rmse", "auroc", "n_samples"])
 
     print(f"\n{'J':>6} {'J/h':>6} {'R²':>8} {'MAE':>8} {'AUROC':>8} {'N':>6}")
