@@ -29,7 +29,7 @@ from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
 
 TAUS = [0.0, 0.3, 0.5, 0.7, 0.9]
-OUT = Path(__file__).parent / "results" / "e23_multiseed_tau.csv"
+OUT = Path(__file__).parent / "results" / "e23_multiseed_tau.csv"  # overridable via --out
 
 
 def main() -> None:
@@ -38,7 +38,12 @@ def main() -> None:
     p.add_argument("--n-per", type=int, default=100)
     p.add_argument("--epochs", type=int, default=30)
     p.add_argument("--scenarios", nargs="+", default=["D", "E"])
+    p.add_argument("--out", type=str, default=None,
+                   help="output CSV name under experiments/results/")
     a = p.parse_args()
+    global OUT
+    if a.out:
+        OUT = Path(__file__).parent / "results" / a.out
 
     print(f"E23 tau sweep x seeds={a.seeds} n_per={a.n_per} epochs={a.epochs}", flush=True)
     sim, rows, t0 = QuTipSimulator(), [], time.time()
@@ -55,16 +60,20 @@ def main() -> None:
                                      adaptive_prior_r2_threshold=tau)
                 TrainModelUseCase(pred).execute(TrainModelCommand(
                     dataset=ds, n_epochs=a.epochs, batch_size=64,
+                    seed=seed,
                     learning_rate=5e-4, regression_loss="huber", verbose=False))
                 m = BacktestUseCase(pred).execute(BacktestCommand(dataset=ds, horizon=1.0))
-                rows.append({"seed": seed, "scenario": scen, "tau": tau,
-                             "r2": m.r2, "mae": m.mae, "auroc": m.risk_auroc})
+                row = {"seed": seed, "scenario": scen, "tau": tau,
+                       "r2": m.r2, "mae": m.mae, "auroc": m.risk_auroc}
+                rows.append(row)
+                OUT.parent.mkdir(exist_ok=True)
+                with OUT.open("w" if len(rows) == 1 else "a", newline="") as fh:
+                    w = csv.DictWriter(fh, fieldnames=list(row.keys()))
+                    if len(rows) == 1:
+                        w.writeheader()
+                    w.writerow(row)
                 print(f"  seed={seed} {scen} tau={tau:.1f} R2={m.r2:8.3f} "
                       f"AUROC={m.risk_auroc:.3f}", flush=True)
-
-    OUT.parent.mkdir(exist_ok=True)
-    with OUT.open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0].keys())); w.writeheader(); w.writerows(rows)
 
     print(f"\n{'='*62}\nMEAN +/- STD PER TAU\n{'='*62}")
     print(f"{'scen':5} {'tau':>5} {'R2 mean':>9} {'R2 std':>8} {'AUROC mean':>11} {'AUROC std':>10}")
