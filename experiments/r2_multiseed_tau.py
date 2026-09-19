@@ -1,4 +1,4 @@
-"""E23 — multi-seed variance probe for the adaptive-prior tau sweep (E7b shape).
+"""R2 — multi-seed variance probe for the adaptive-prior tau sweep (E7b shape).
 
 Paper 2 concludes "the optimal threshold is tau=0.5 for XXZ" from a single
 sweep in which adjacent tau values differ by up to 0.46 in R^2 -- larger than
@@ -7,7 +7,7 @@ trains every tau on it, while torch is never seeded, so consecutive tau points
 differ in weight initialisation as well as in tau.  This re-runs the sweep
 across seeds so the tau effect can be separated from run-to-run spread.
 
-Writes ONLY to experiments/results/e23_multiseed_tau.csv; the champion
+Writes ONLY to experiments/results/r2_multiseed_tau.csv; the champion
 e7b_tau_sweep.csv is left untouched.
 
 Reduced size (default 100 trajectories / 30 epochs) versus the champion
@@ -29,7 +29,7 @@ from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
 
 TAUS = [0.0, 0.3, 0.5, 0.7, 0.9]
-OUT = Path(__file__).parent / "results" / "e23_multiseed_tau.csv"  # overridable via --out
+OUT = Path(__file__).parent / "results" / "r2_multiseed_tau.csv"  # overridable via --out
 
 
 def main() -> None:
@@ -45,7 +45,7 @@ def main() -> None:
     if a.out:
         OUT = Path(__file__).parent / "results" / a.out
 
-    print(f"E23 tau sweep x seeds={a.seeds} n_per={a.n_per} epochs={a.epochs}", flush=True)
+    print(f"R2 tau sweep x seeds={a.seeds} n_per={a.n_per} epochs={a.epochs}", flush=True)
     sim, rows, t0 = QuTipSimulator(), [], time.time()
 
     for seed in a.seeds:

@@ -75,7 +75,8 @@ _INFERENCE_CODES = {"A": 0.0, "B": 0.0, "C": 1.0, "D": 2.0, "E": 3.0}
 
 
 def _eval_per_scenario(predictor, simulator, groups, window, min_gap,
-                       scenarios=("D", "E"), set_inference_codes: bool = False):
+                       scenarios=("D", "E"), set_inference_codes: bool = False,
+                       eval_seed: int = 43):
     """Evaluate predictor on each scenario's test split.
 
     set_inference_codes: if True, update predictor.inference_interaction_code
@@ -92,7 +93,7 @@ def _eval_per_scenario(predictor, simulator, groups, window, min_gap,
             window_length=window,
             horizon=1.0,
             samples_per_trajectory=5,
-            seed=43,
+            seed=eval_seed,
             train_ratio=0.0, val_ratio=0.0,
             min_window_gap=min_gap,
         ))
@@ -110,10 +111,15 @@ def _eval_per_scenario(predictor, simulator, groups, window, min_gap,
 # E11a — Transformer, window=20, E8c training settings
 # ---------------------------------------------------------------------------
 
-def run_e11a(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True) -> list:
+def run_e11a(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True,
+             *, seed: int = 42, window: int = 20, out_path=None,
+             eval_groups=None) -> list:
+    """Defaults reproduce the published E11a run; the keyword-only arguments
+    exist so R3 can replicate it across seeds and window lengths without
+    duplicating the configuration (see experiments/r3_multiseed_scaling.py)."""
     from src.infrastructure.ml.transformer_predictor import TransformerPredictor
 
-    WINDOW  = 20
+    WINDOW  = window
     MIN_GAP = 10
     print(f"=== E11a: Transformer cross-system | window={WINDOW} | n_per={n_per} ===")
 
@@ -121,7 +127,7 @@ def run_e11a(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True)
     train_ds = gen_uc.execute(GenerateDatasetCommand(
         configs=groups["D"] + groups["E"],
         window_length=WINDOW, horizon=1.0,
-        samples_per_trajectory=5, seed=42,
+        samples_per_trajectory=5, seed=seed,
         train_ratio=0.9, val_ratio=0.1,
         min_window_gap=MIN_GAP,
     ))
@@ -134,15 +140,21 @@ def run_e11a(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True)
         dataset=train_ds, n_epochs=n_epochs,
         batch_size=64, learning_rate=5e-4,
         regression_loss="huber", verbose=verbose,
-        seed=42,
+        seed=seed,
     ))
 
-    rows = _eval_per_scenario(predictor, simulator, groups, WINDOW, MIN_GAP)
+    # eval_groups defaults to the training configurations: the published run
+    # scores the model on the same physical systems it trained on, with fresh
+    # trajectories. R4 passes disjoint configurations to measure what that is
+    # worth (see experiments/r4_config_overlap.py).
+    rows = _eval_per_scenario(predictor, simulator,
+                              groups if eval_groups is None else eval_groups,
+                              WINDOW, MIN_GAP, eval_seed=seed + 1)
     for r in rows:
-        r["variant"] = "transformer_w20"
+        r["variant"] = f"transformer_w{WINDOW}"
         r["window"] = WINDOW
 
-    _save_csv(rows, RESULTS_DIR / "e11a_cross_system.csv",
+    _save_csv(rows, out_path or RESULTS_DIR / "e11a_cross_system.csv",
               ["scenario", "variant", "window", "mae", "rmse", "r2", "mape", "auroc", "n_samples"])
     return rows
 
@@ -151,7 +163,11 @@ def run_e11a(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True)
 # E11b — physics_lstm, 1000 trajs, window=20
 # ---------------------------------------------------------------------------
 
-def run_e11b(simulator, groups_1000, n_epochs: int, verbose: bool = True) -> list:
+def run_e11b(simulator, groups_1000, n_epochs: int, verbose: bool = True,
+             *, seed: int = 42, out_path=None) -> list:
+    """Defaults reproduce the published E11b run; see run_e11a for why the
+    keyword-only arguments exist. Training-set size is chosen by the caller
+    through ``groups_1000``, which is what R3 varies."""
     from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 
     WINDOW  = 20
@@ -162,7 +178,7 @@ def run_e11b(simulator, groups_1000, n_epochs: int, verbose: bool = True) -> lis
     train_ds = gen_uc.execute(GenerateDatasetCommand(
         configs=groups_1000["D"] + groups_1000["E"],
         window_length=WINDOW, horizon=1.0,
-        samples_per_trajectory=5, seed=42,
+        samples_per_trajectory=5, seed=seed,
         train_ratio=0.9, val_ratio=0.1,
         min_window_gap=MIN_GAP,
     ))
@@ -180,17 +196,17 @@ def run_e11b(simulator, groups_1000, n_epochs: int, verbose: bool = True) -> lis
         dataset=train_ds, n_epochs=n_epochs,
         batch_size=64, learning_rate=5e-4,
         regression_loss="huber", verbose=verbose,
-        seed=42,
+        seed=seed,
     ))
 
     rows = _eval_per_scenario(predictor, simulator, groups_1000, WINDOW, MIN_GAP,
-                              set_inference_codes=True)
+                              set_inference_codes=True, eval_seed=seed + 1)
     for r in rows:
         r["variant"] = "physics_lstm_1000"
         r["window"] = WINDOW
 
     # Use groups_1000 for eval too (1000 trajs provides larger test set)
-    _save_csv(rows, RESULTS_DIR / "e11b_cross_system.csv",
+    _save_csv(rows, out_path or RESULTS_DIR / "e11b_cross_system.csv",
               ["scenario", "variant", "window", "mae", "rmse", "r2", "mape", "auroc", "n_samples"])
     return rows
 

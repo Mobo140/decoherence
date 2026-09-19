@@ -63,12 +63,12 @@ class PredictIn(BaseModel):
 
 
 class JobIn(BaseModel):
-    exp_id: str = "E8"
+    exp_id: str = "E8c"
     mode: str = "fast"
 
 
 class CompareIn(BaseModel):
-    a: str = "E8"
+    a: str = "E8c"
     b: str = "E14"
 
 
