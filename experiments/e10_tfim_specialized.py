@@ -104,6 +104,7 @@ def _train_single(
         learning_rate=5e-4,
         regression_loss="huber",
         verbose=verbose,
+        seed=42,
     ))
     metrics = BacktestUseCase(pred).execute(BacktestCommand(dataset=ds, horizon=1.0))
     return metrics, pred

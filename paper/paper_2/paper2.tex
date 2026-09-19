@@ -238,23 +238,33 @@ paper---the physics prior is structurally wrong for two qubits---but the
 $R^2$ magnitude itself should not be over-interpreted.
 
 \paragraph{Run-to-run spread.}
-All numbers in this paper come from single runs. While preparing this
-version we found that the training path did not seed the ML framework's
-RNG, and that the simulator drew each trajectory's initial pure state
-from an unseeded global RNG, so weight initialisation and the initial
-quantum states both varied between otherwise identical runs; both are
-now seeded.
-To quantify what that cost, we replicated this ablation across three
-seeds at a reduced size ($100$~trajectories, $30$~epochs; levels are
-therefore not comparable to Table~\ref{tab:e1_2}, and the spread at
-this size is if anything an upper bound on the full configuration's).
-The seed-to-seed standard deviation of $R^2$ is $0.31$
-(\texttt{physics\_lstm}, XXZ) and $0.76$ (TFIM), against $0.19$ and
-$0.16$ for \texttt{lstm\_only} and $0.15$ and $0.16$ for the
-Transformer; \texttt{physics\_only} reaches $1.06$ and $4.09$,
-consistent with the clamp behaviour described above.
-The Transformer was best or tied-best in every seed on both scenarios
-and had the smallest variance, so the architecture conclusion below is
+The levels in Table~\ref{tab:e1_2} come from single runs.
+While preparing this version we found three separate reproducibility
+defects: the training path did not seed the ML framework's RNG, the
+simulator drew each trajectory's initial pure state from an unseeded
+global RNG, and the experiment scripts constructed their training
+commands directly, bypassing the seeded path even after the first two
+were fixed.
+All three are now closed, and repeated runs of the experiment suite are
+byte-identical.
+To quantify what the unseeded runs cost, we replicated this ablation
+across three seeds at the \emph{same} configuration as
+Table~\ref{tab:e1_2} ($500$~trajectories, $150$~epochs), so levels are
+directly comparable.
+Every value in Table~\ref{tab:e1_2} falls inside the replicated spread,
+but two of the gaps the table appears to show do not survive it
+(mean~$\pm$~s.d.\ over three seeds):
+on XXZ, \texttt{lstm\_only} reaches $0.633 \pm 0.060$ against
+$0.599 \pm 0.120$ for \texttt{physics\_lstm}; on TFIM,
+\texttt{lstm\_only} reaches $0.422 \pm 0.171$ against
+$0.245 \pm 0.356$ for \texttt{physics\_lstm}.
+The Transformer is best on both scenarios with the smallest spread
+($0.843 \pm 0.028$ on D, $0.699 \pm 0.045$ on E), and
+\texttt{physics\_only} stays far negative with a very large spread
+($-3.98 \pm 4.31$ and $-5.98 \pm 4.09$), consistent with the clamp
+behaviour described above.
+The architecture conclusion is therefore robust; the
+\texttt{physics\_lstm}/\texttt{lstm\_only} ordering is not.
 robust; gaps of order $0.04$, however, are not.
 
 \paragraph{Key findings.}
@@ -271,17 +281,23 @@ multi-qubit correlations that the OLS prior misses.
 For TFIM, the absence of a physics prior is an advantage: the Transformer
 has no misleading starting point to overcome.
 
-The \texttt{physics\_lstm} remains competitive on E ($R^2 = 0.455$ vs.\
-$0.377$ for \texttt{lstm\_only}) because the adaptive gate correctly
-discards the physics estimate on oscillatory windows (typically
-$R^2_\mathrm{OLS} < 0.3$ for TFIM), letting the LSTM residual operate
-as a pure predictor.
-On XXZ (D) the gate is less selective ($R^2_\mathrm{OLS}$ more
-variable) and \texttt{physics\_lstm} sits slightly below
-\texttt{lstm\_only} ($0.636$ vs.\ $0.673$); this gap is well inside
-the seed-to-seed spread measured in Sec.~\ref{sec:e7b}, so we read it
-as ``no clear advantage either way'' rather than as evidence that the
-prior hurts on XXZ.
+Between \texttt{physics\_lstm} and \texttt{lstm\_only} this table
+resolves nothing on either scenario.
+The single run suggests that the prior helps on TFIM ($0.455$ vs.\
+$0.377$) and slightly hurts on XXZ ($0.636$ vs.\ $0.673$), and an
+earlier version of this paper explained the TFIM figure by the adaptive
+gate discarding the physics estimate on oscillatory windows.
+The three-seed replication does not support that reading: on TFIM the
+ordering reverses in the mean ($0.245 \pm 0.356$ for
+\texttt{physics\_lstm} against $0.422 \pm 0.171$ for
+\texttt{lstm\_only}), and on XXZ the two overlap
+($0.599 \pm 0.120$ against $0.633 \pm 0.060$).
+Both gaps sit well inside the seed-to-seed spread, so we withdraw the
+gate explanation and read the comparison as ``no resolvable difference
+either way''.
+What the table does establish is that \emph{some} learned component is
+essential---every variant with one beats \texttt{physics\_only} by
+orders of magnitude---not that the prior earns its place alongside it.
 
 \subsection{E6b --- Measurement noise robustness}
 \label{sec:e3}
@@ -530,21 +546,28 @@ $\tau$ points differ in weight initialisation as much as in $\tau$.
 Adjacent $\tau$ values here differ by up to $0.46$ in $R^2$, which is
 larger than the effect the sweep claims to measure.
 
-Second, replicating the sweep across three seeds (at a reduced
-$100$~trajectories / $30$~epochs, so levels are not comparable to this
-table) leaves no detectable $\tau$ effect: on XXZ the spread of means
-across $\tau$ ($0.448$--$0.647$) is smaller than the standard deviation
-of the individual points (up to $0.455$), and $\tau=0.5$ is not the
-best mean; on TFIM the ordering does not reproduce either, with the
-means increasing weakly towards large $\tau$ rather than favouring
-$\tau=0$.
+Second, we replicated the sweep across three seeds at this table's own
+configuration ($500$~trajectories, $150$~epochs, seeded throughout), and
+it leaves no detectable $\tau$ effect.
+On XXZ the means across $\tau$ span $0.620$--$0.688$, a range of
+$0.068$, against a typical seed-to-seed standard deviation of $0.085$
+at fixed $\tau$: the sweep's entire span is smaller than its own noise,
+and $\tau=0.5$ is the \emph{worst} mean rather than the best.
+On TFIM the means span $0.040$--$0.459$, a range of $0.419$, but the
+standard deviations at fixed $\tau$ average $0.397$ and reach $0.730$
+at $\tau=0.5$, so that ordering is not resolved either.
+Neither scenario reproduces the optimum the single sweep appeared to
+show.
 
 The honest statement is therefore that \emph{the gate threshold is not
-resolved by this experiment}. The one directional signal that is
-consistent across both the original sweep and the replication is that
-the risk head tolerates---and on TFIM mildly prefers---a positive
-$\tau$, while regression does not clearly care; establishing an optimum
-would need a multi-seed sweep at full size, which we have not run.
+resolved}, now at full size rather than as a provisional caveat.
+The one directional signal surviving both the original sweep and the
+replication is that the risk head tolerates a positive $\tau$ while
+regression does not clearly care; on TFIM the replication mildly favours
+small $\tau$ for regression, but well inside the spread.
+Should a $\tau$ effect exist, it is smaller than the run-to-run
+variation of this pipeline, and resolving it would need more seeds
+rather than a finer grid.
 
 \subsection{E7c --- TFIM $J$-coupling sweep near the phase transition}
 \label{sec:e7c}
@@ -801,10 +824,16 @@ to two-qubit XXZ and TFIM systems and completed a thorough experimental
 programme (E6--E7).
 Key findings are:
 \begin{enumerate}
-  \item The \emph{adaptive prior gate} (Eq.~\ref{eq:adaptive}) eliminates
-    the catastrophic OLS failure on TFIM: $R^2$ improves from
-    $-4.27$ (\texttt{physics\_only}) to $+0.455$ (\texttt{physics\_lstm})
-    in single-scenario training.
+  \item A \emph{learned component} eliminates the catastrophic OLS
+    failure on TFIM: $R^2$ improves from $-4.27$
+    (\texttt{physics\_only}) to $+0.455$ (\texttt{physics\_lstm}) in
+    single-scenario training, an improvement that survives replication
+    across seeds.
+    We had attributed this to the adaptive prior gate
+    (Eq.~\ref{eq:adaptive}), but the gain is not specific to it:
+    \texttt{lstm\_only}, which carries no prior and no gate, does at
+    least as well under replication, so the evidence supports the
+    learned residual rather than the gate.
   \item Scaling to 500 trajectories and adding improved training
     (weighted BCE for risk head, noise augmentation, min-gap window
     sampling) pushes TFIM cross-system $R^2$ from $-0.381$ (pilot) to
@@ -819,10 +848,13 @@ Key findings are:
   \item The \emph{gate threshold $\tau$ is not resolved} by our
     experiments (E7b). The single sweep suggests Hamiltonian-dependent
     optima, but it varies weight initialisation along with $\tau$, and a
-    three-seed replication leaves no detectable $\tau$ effect: the
-    spread across $\tau$ is smaller than the spread across seeds at the
-    same $\tau$. Establishing an optimum requires a multi-seed sweep at
-    full size, which we have not run.
+    three-seed replication at full size ($500$~trajectories,
+    $150$~epochs) leaves no detectable effect: on XXZ the means span
+    $0.068$ across $\tau$ against a seed-to-seed spread of $0.085$ at
+    fixed $\tau$, and on TFIM the spread across seeds ($0.397$ on
+    average) is as large as the span across $\tau$ ($0.419$).
+    If a $\tau$ effect exists it is below this pipeline's run-to-run
+    variation.
   \item Decoherence predictability exhibits a pronounced \emph{dip near
     the TFIM quantum phase transition}: $R^2 = 0.32$--$0.50$ for
     $J \in [0.8, 1.2]$ vs.\ $R^2 = 0.84$--$0.88$ far from criticality

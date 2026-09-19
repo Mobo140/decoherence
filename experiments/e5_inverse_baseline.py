@@ -241,6 +241,7 @@ def main() -> None:
             n_epochs=100,
             batch_size=32,
             verbose=True,
+            seed=42,
         ))
         m_direct = BacktestUseCase(direct).execute(
             BacktestCommand(dataset=dataset, horizon=1.0)

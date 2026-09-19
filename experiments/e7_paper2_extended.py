@@ -155,6 +155,7 @@ def run_e7b(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
                 learning_rate=5e-4,
                 regression_loss="huber",
                 verbose=verbose,
+                seed=42,
             ))
             metrics = BacktestUseCase(predictor).execute(
                 BacktestCommand(dataset=dataset, horizon=1.0)
@@ -246,6 +247,7 @@ def run_e7c(simulator, n_per_J: int, n_epochs: int, verbose: bool = True) -> lis
             learning_rate=5e-4,
             regression_loss="huber",
             verbose=verbose,
+            seed=42,
         ))
         metrics = BacktestUseCase(predictor).execute(
             BacktestCommand(dataset=dataset, horizon=1.0)

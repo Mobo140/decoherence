@@ -134,6 +134,7 @@ def run_e11a(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True)
         dataset=train_ds, n_epochs=n_epochs,
         batch_size=64, learning_rate=5e-4,
         regression_loss="huber", verbose=verbose,
+        seed=42,
     ))
 
     rows = _eval_per_scenario(predictor, simulator, groups, WINDOW, MIN_GAP)
@@ -179,6 +180,7 @@ def run_e11b(simulator, groups_1000, n_epochs: int, verbose: bool = True) -> lis
         dataset=train_ds, n_epochs=n_epochs,
         batch_size=64, learning_rate=5e-4,
         regression_loss="huber", verbose=verbose,
+        seed=42,
     ))
 
     rows = _eval_per_scenario(predictor, simulator, groups_1000, WINDOW, MIN_GAP,
