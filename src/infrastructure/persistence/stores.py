@@ -85,38 +85,42 @@ class NumpyTrajectoryStore(ITrajectoryStore):
         # A damaged entry is reported as a miss rather than an error, so the
         # caller re-simulates and overwrites it instead of failing. Callers
         # treat FileNotFoundError as "not cached"; anything else propagates.
+        # The whole reconstruction sits inside the guard because np.load is
+        # lazy: a truncated archive raises its CRC error when an array is
+        # first touched, not when the file is opened.
         try:
             data = np.load(npz_path, allow_pickle=False)
             with open(meta_path) as f:
                 meta = json.load(f)
-        except (OSError, ValueError, json.JSONDecodeError, zipfile.BadZipFile) as exc:
+
+            trajectories: List[TrajectoryResult] = []
+            feature_names: List[str] = meta.get("feature_names", [])
+
+            for i, cfg_dict in enumerate(meta["configs"]):
+                times = data[f"times_{i}"]
+                t_decoh = float(data[f"t_decoh_{i}"][0])
+                censored = bool(int(data[f"censored_{i}"][0])) if f"censored_{i}" in data else False
+                observables: Dict[str, np.ndarray] = {}
+                for key in feature_names:
+                    arr_key = f"obs_{i}_{key}"
+                    if arr_key in data:
+                        observables[key] = data[arr_key]
+
+                config = _config_from_dict(cfg_dict)
+                trajectories.append(
+                    TrajectoryResult(
+                        times=times,
+                        observables=observables,
+                        t_decoh=t_decoh,
+                        system_config=config,
+                        censored=censored,
+                    )
+                )
+        except (OSError, ValueError, KeyError, EOFError,
+                json.JSONDecodeError, zipfile.BadZipFile) as exc:
             raise FileNotFoundError(
                 f"Unreadable trajectory cache entry {name}: {exc}"
             ) from exc
-
-        trajectories: List[TrajectoryResult] = []
-        feature_names: List[str] = meta.get("feature_names", [])
-
-        for i, cfg_dict in enumerate(meta["configs"]):
-            times = data[f"times_{i}"]
-            t_decoh = float(data[f"t_decoh_{i}"][0])
-            censored = bool(int(data[f"censored_{i}"][0])) if f"censored_{i}" in data else False
-            observables: Dict[str, np.ndarray] = {}
-            for key in feature_names:
-                arr_key = f"obs_{i}_{key}"
-                if arr_key in data:
-                    observables[key] = data[arr_key]
-
-            config = _config_from_dict(cfg_dict)
-            trajectories.append(
-                TrajectoryResult(
-                    times=times,
-                    observables=observables,
-                    t_decoh=t_decoh,
-                    system_config=config,
-                    censored=censored,
-                )
-            )
 
         return trajectories
 
