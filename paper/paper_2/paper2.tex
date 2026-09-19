@@ -546,21 +546,28 @@ $\tau$ points differ in weight initialisation as much as in $\tau$.
 Adjacent $\tau$ values here differ by up to $0.46$ in $R^2$, which is
 larger than the effect the sweep claims to measure.
 
-Second, replicating the sweep across three seeds (at a reduced
-$100$~trajectories / $30$~epochs, so levels are not comparable to this
-table) leaves no detectable $\tau$ effect: on XXZ the spread of means
-across $\tau$ ($0.448$--$0.647$) is smaller than the standard deviation
-of the individual points (up to $0.455$), and $\tau=0.5$ is not the
-best mean; on TFIM the ordering does not reproduce either, with the
-means increasing weakly towards large $\tau$ rather than favouring
-$\tau=0$.
+Second, we replicated the sweep across three seeds at this table's own
+configuration ($500$~trajectories, $150$~epochs, seeded throughout), and
+it leaves no detectable $\tau$ effect.
+On XXZ the means across $\tau$ span $0.620$--$0.688$, a range of
+$0.068$, against a typical seed-to-seed standard deviation of $0.085$
+at fixed $\tau$: the sweep's entire span is smaller than its own noise,
+and $\tau=0.5$ is the \emph{worst} mean rather than the best.
+On TFIM the means span $0.040$--$0.459$, a range of $0.419$, but the
+standard deviations at fixed $\tau$ average $0.397$ and reach $0.730$
+at $\tau=0.5$, so that ordering is not resolved either.
+Neither scenario reproduces the optimum the single sweep appeared to
+show.
 
 The honest statement is therefore that \emph{the gate threshold is not
-resolved by this experiment}. The one directional signal that is
-consistent across both the original sweep and the replication is that
-the risk head tolerates---and on TFIM mildly prefers---a positive
-$\tau$, while regression does not clearly care; establishing an optimum
-would need a multi-seed sweep at full size, which we have not run.
+resolved}, now at full size rather than as a provisional caveat.
+The one directional signal surviving both the original sweep and the
+replication is that the risk head tolerates a positive $\tau$ while
+regression does not clearly care; on TFIM the replication mildly favours
+small $\tau$ for regression, but well inside the spread.
+Should a $\tau$ effect exist, it is smaller than the run-to-run
+variation of this pipeline, and resolving it would need more seeds
+rather than a finer grid.
 
 \subsection{E7c --- TFIM $J$-coupling sweep near the phase transition}
 \label{sec:e7c}
@@ -841,10 +848,13 @@ Key findings are:
   \item The \emph{gate threshold $\tau$ is not resolved} by our
     experiments (E7b). The single sweep suggests Hamiltonian-dependent
     optima, but it varies weight initialisation along with $\tau$, and a
-    three-seed replication leaves no detectable $\tau$ effect: the
-    spread across $\tau$ is smaller than the spread across seeds at the
-    same $\tau$. Establishing an optimum requires a multi-seed sweep at
-    full size, which we have not run.
+    three-seed replication at full size ($500$~trajectories,
+    $150$~epochs) leaves no detectable effect: on XXZ the means span
+    $0.068$ across $\tau$ against a seed-to-seed spread of $0.085$ at
+    fixed $\tau$, and on TFIM the spread across seeds ($0.397$ on
+    average) is as large as the span across $\tau$ ($0.419$).
+    If a $\tau$ effect exists it is below this pipeline's run-to-run
+    variation.
   \item Decoherence predictability exhibits a pronounced \emph{dip near
     the TFIM quantum phase transition}: $R^2 = 0.32$--$0.50$ for
     $J \in [0.8, 1.2]$ vs.\ $R^2 = 0.84$--$0.88$ far from criticality

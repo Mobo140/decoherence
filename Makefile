@@ -9,7 +9,7 @@ PYTEST := $(PYTHON) -m pytest tests/ -q
 
 .DEFAULT_GOAL := help
 .PHONY: help install app test \
-	paper1 paper2 paper1-full paper2-full paper2-improved \
+	paper1 paper1-full paper2-improved \
 	e1 e2 e3 e4 e5 e6 e7 e8 e9 e10a e10b e11 e12 e13 e14 \
 	e6-full e8-full pdf pdf-1 pdf-2
 
@@ -30,14 +30,8 @@ test: ## pytest tests/
 paper1: ## Paper 1 (E1–E5) smoke
 	$(PYTHON) experiments/run_paper1.py --fast
 
-paper2: ## Paper 2 (E1/E3/E4 на D,E) smoke
-	$(PYTHON) experiments/run_paper2.py --fast
-
 paper1-full: ## Paper 1 полный прогон
 	$(PYTHON) experiments/run_paper1.py
-
-paper2-full: ## Paper 2 полный прогон
-	$(PYTHON) experiments/run_paper2.py
 
 paper2-improved: ## E6 suite smoke
 	$(PYTHON) experiments/run_paper2_improved.py --fast
@@ -95,7 +89,7 @@ e6-full: ## полный E6 — перезапишет e6_*.csv
 e8-full: ## полный E8 — перезапишет e8_*.csv чемпионов
 	$(PYTHON) -m experiments.e8_improved_2qubit
 
-# --- PDF статей (latexmk). Не путать с paper1/paper2 = прогон экспериментов.
+# --- PDF статей (latexmk). Не путать с paper1/paper2-improved = прогон экспериментов.
 
 pdf: pdf-1 pdf-2 ## собрать paper_1 и paper_2 PDF
 
