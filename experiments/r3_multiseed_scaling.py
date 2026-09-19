@@ -1,4 +1,4 @@
-"""E24 — multi-seed check of the two E11 claims Paper 2 marks as hypotheses.
+"""R3 — multi-seed check of the two E11 claims Paper 2 marks as hypotheses.
 
 Why
 ---
@@ -32,13 +32,13 @@ it replicates.  ``e7a_w50`` is *not* E7a: it applies E7a's window inside
 E11a's protocol, and so isolates the window without reproducing E7a's
 published number.
 
-Writes ONLY to experiments/results/e24_multiseed_scaling.csv; the
+Writes ONLY to experiments/results/r3_multiseed_scaling.csv; the
 champion CSVs are never touched.
 
 Usage
 -----
-    python -m experiments.e24_multiseed_scaling --fast
-    python -m experiments.e24_multiseed_scaling --seeds 42 43 44
+    python -m experiments.r3_multiseed_scaling --fast
+    python -m experiments.r3_multiseed_scaling --seeds 42 43 44
 """
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ from experiments.e11_scaling import run_e11a, run_e11b
 from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
 
 RESULTS_DIR = Path(__file__).parent / "results"
-SCRATCH = RESULTS_DIR / "_e24_scratch.csv"   # run_e11* insist on writing a CSV
+SCRATCH = RESULTS_DIR / "_r3_scratch.csv"   # run_e11* insist on writing a CSV
 
 
 def _append(path: Path, row: dict, first: bool) -> None:
@@ -74,7 +74,7 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--seeds", type=int, nargs="+", default=[42, 43, 44])
     p.add_argument("--fast", action="store_true")
-    p.add_argument("--out", type=str, default="e24_multiseed_scaling.csv")
+    p.add_argument("--out", type=str, default="r3_multiseed_scaling.csv")
     p.add_argument("--arms", nargs="+",
                    default=["e11a_w20", "e7a_w50", "e11b_500", "e11b_1000"])
     a = p.parse_args()
@@ -84,7 +84,7 @@ def main() -> None:
     epochs = 10 if a.fast else 150
     out = RESULTS_DIR / a.out
 
-    print(f"E24 | seeds={a.seeds} arms={a.arms} n={n_500}/{n_1000} epochs={epochs}")
+    print(f"R3 | seeds={a.seeds} arms={a.arms} n={n_500}/{n_1000} epochs={epochs}")
     print(f"writing -> {out}  (champion CSVs untouched)\n", flush=True)
 
     sim, first, t0 = QuTipSimulator(), True, time.time()
