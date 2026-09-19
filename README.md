@@ -152,7 +152,7 @@ python app.py
 | Screen | What it does |
 | --- | --- |
 | **01 Dashboard** | Champion R² A–E (Paper 1 done, TFIM 0.575 / цель 0.70) |
-| **02 Runs** | Каталог E1–E14, CSV, Compare, Replay `--fast` / full |
+| **02 Runs** | Каталог E1–E14 и R1–R5, CSV, Compare, Replay `--fast` / full |
 | **03 Models** | `HamiltonianModelRegistry` (best_XXZ / best_TFIM / 1q) |
 | **04 Simulate** | Пресет сценария A–E (тот же `build_configs`) |
 | **05 Train** | Очередь eN в фоне, UI не блокируется |
@@ -236,6 +236,10 @@ CSV → `experiments/results/`. Catalog and champions: `src/application/experime
 - **E6–E8** — 2-qubit scale-up; E8c is TFIM R² champion (0.575)
 - **E9–E11** — context codes, Transformer AUROC, scaling (E11a XXZ R²=0.817)
 - **E12–E14** — stretched-exp baseline, survival loss, inject J
+- **R1–R5** — replications that check the experiments above across seeds
+  rather than producing results of their own. They overturned five of Paper 2's
+  contested conclusions (see `docks/current/CURRENT_STATUS.md`); the tables
+  themselves were unaffected.
 
 ### Scenario taxonomy
 
@@ -321,8 +325,23 @@ TrainModelUseCase(predictor).execute(
 python -m pytest tests/
 ```
 
-Covers physics (T₂, Lindblad, censoring), predictors, Hamiltonian registry,
-survival backtest, inject-J, and the experiment catalog / dashboard HTML.
+138 tests. Covers physics (T₂, Lindblad, censoring), predictors, Hamiltonian
+registry, survival backtest, inject-J, and the experiment catalog / dashboard
+HTML, plus the invariants that make the reported metrics meaningful:
+
+- **Split integrity** — the train/val/test split is trajectory-level (several
+  windows share one trajectory's T₂, so a per-window split would leak), no
+  window reaches its own decoherence time, and normalisation statistics are
+  fitted on training rows only.
+- **Cache robustness** — a run interrupted mid-write must not poison the
+  trajectory cache for every later run.
+- **Seeding** — same seed gives identical data and identical weights, and no
+  experiment script builds a training command without a seed.
+- **Catalog integrity** — ids unique and matching the labels the papers cite,
+  declared CSVs present, modules importable.
+- **Replication fidelity** — R1/R2 mirror the hyperparameters of the
+  experiments they check, R3–R5 call those experiments rather than copying
+  them, and no probe can write a champion CSV.
 
 ---
 
