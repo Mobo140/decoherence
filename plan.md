@@ -237,7 +237,6 @@ R²=0.9995 for physics_only on A (constant γ) exceeds target.
 - `experiments/e5_inverse_baseline.py`
 - `experiments/e6_2qubit_improved.py` — 500 trajs, hidden=128, adaptive prior
 - `experiments/run_paper1.py` — E1-E5 for scenarios A,B,C
-- `experiments/run_paper2.py` — E1,E3,E4 for scenarios D,E (100 trajs baseline)
 - `experiments/run_paper2_improved.py` — E6 (500 trajs, adaptive prior)
 
 **Done — results:**
