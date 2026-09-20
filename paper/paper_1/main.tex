@@ -8,6 +8,11 @@
 \usepackage{microtype}
 \usepackage{authblk}
 \usepackage[hidelinks]{hyperref}
+% --------------------------------------------------------------------------
+% BEFORE SUBMISSION: every \needspaste{} below must be resolved.
+%   grep -n needspaste *.tex
+% They render in red in the PDF so they cannot be missed on a read-through.
+\newcommand{\needspaste}[1]{{\color{red}\textbf{[NEED TO PASTE: #1]}}}
 \graphicspath{{figures/}}
 
 % --------------------------------------------------------------------------
@@ -15,7 +20,7 @@
 in Single-Qubit Systems Under Unknown Time-Dependent Dissipation}}
 
 \author[1]{Nikita Brusnikin}
-\affil[1]{Independent Researcher}
+\affil[1]{Independent Researcher~\needspaste{confirm this affiliation or replace it}}
 
 \date{}
 % --------------------------------------------------------------------------
@@ -679,6 +684,14 @@ QuTiP~5.2.3 and PyTorch~2.11.0 on CPU.
 Single-run tables use seed~42; every replication reported here uses seeds
 $\{42,43,44\}$ and states its per-seed values so that any comparison can
 be checked against its own spread.
+
+\section*{Competing interests}
+\needspaste{competing-interests declaration --- usually ``The author
+declares no competing interests.''}
+
+\section*{Funding}
+\needspaste{funding statement, or ``This research received no specific
+grant from any funding agency.''}
 
 % --------------------------------------------------------------------------
 \bibliographystyle{unsrt}
