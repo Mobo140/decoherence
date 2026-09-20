@@ -52,14 +52,21 @@ from src.domain.value_objects import PredictorVariant
 from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
 
 
-def main(scenarios: list | None = None, n_per: int | None = None, suffix: str = "") -> None:
+def main(scenarios: list | None = None, n_per: int | None = None, suffix: str = "",
+         *, seed: int = 42, out_path=None) -> list:
+    """Defaults reproduce the published E1 run.
+
+    The keyword-only arguments exist so R7 can replicate it across seeds
+    without duplicating the configuration; see
+    experiments/r7_multiseed_1qubit.py.
+    """
     results_dir = Path(__file__).parent / "results"
     results_dir.mkdir(exist_ok=True)
 
     simulator = QuTipSimulator()
     if n_per is None:
         n_per = int(sys.argv[1]) if len(sys.argv) > 1 else 80
-    groups = build_configs(n_per_scenario=n_per, seed=42)
+    groups = build_configs(n_per_scenario=n_per, seed=seed)
 
     if scenarios is None:
         scenarios = ["A", "B", "C", "D", "E"]
@@ -82,7 +89,7 @@ def main(scenarios: list | None = None, n_per: int | None = None, suffix: str = 
             batch_size=32,
             lr=1e-3,
             regression_loss="huber",
-            seed=42,
+            seed=seed,
             verbose=True,
         )
 
@@ -95,7 +102,7 @@ def main(scenarios: list | None = None, n_per: int | None = None, suffix: str = 
 
     # --- Save CSV ---
     fname = f"e1_ablation{suffix}.csv" if suffix else "e1_ablation.csv"
-    out_path = results_dir / fname
+    out_path = out_path or results_dir / fname
     fieldnames = ["scenario", "name", "variant", "window_fraction", "noise_sigma",
                   "mae", "rmse", "r2", "mape", "auroc", "n_samples"]
     with open(out_path, "w", newline="") as f:
@@ -105,6 +112,7 @@ def main(scenarios: list | None = None, n_per: int | None = None, suffix: str = 
 
     print(f"\nResults saved to {out_path}")
     _print_summary(all_rows)
+    return all_rows
 
 
 def _print_summary(rows: list) -> None:
