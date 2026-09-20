@@ -38,14 +38,20 @@ class QuTipSimulator(ISimulator):
         n_steps = int(round(config.t_max / config.dt)) + 1
         times = np.linspace(0.0, config.t_max, n_steps)
 
-        initial_state = sample_random_pure_state(
-            n_qubits=config.n_qubits.value
-        )
+        initial_state = self._initial_state(config)
 
         if config.n_qubits == QubitCount.ONE:
             return self._simulate_single(config, initial_state, times)
         else:
             return self._simulate_two(config, initial_state, times)
+
+    def _initial_state(self, config: SystemConfig) -> qt.Qobj:
+        """Draw the initial pure state. Override to constrain its preparation.
+
+        R6 overrides this to project onto one parity sector; nothing else
+        does, so the default behaviour is what every published run used.
+        """
+        return sample_random_pure_state(n_qubits=config.n_qubits.value)
 
     # ------------------------------------------------------------------
     # Single-qubit path
