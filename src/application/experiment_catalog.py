@@ -80,6 +80,8 @@ CATALOG: List[ExperimentEntry] = [
                     ("r4_config_overlap.csv",), status="replication"),
     ExperimentEntry("R5", "J sweep across seeds (checks E7c)", "experiments.r5_multiseed_J_sweep", "-", "-", "E",
                     ("r5_multiseed_J_sweep.csv",), status="replication"),
+    ExperimentEntry("R6", "Parity-sector preparation (tests the ceiling mechanism)", "experiments.r6_parity_sector", "-", "-", "E",
+                    ("r6_parity_sector.csv",), status="replication"),
 ]
 
 

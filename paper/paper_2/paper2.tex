@@ -54,6 +54,10 @@ $J \geq 0.8$---and then saturating.
 A single sweep had suggested a dip localised at the quantum phase
 transition with recovery beyond it; that structure does not survive
 replication, and the transition point itself is unremarkable.
+We offered two mechanisms for the decline and tested both---parity-sector
+mixing by the dissipator, and a two-mode superposition from generic
+initial states---and report that neither survives, leaving the trend as
+an empirical result without an established cause.
 \end{abstract}
 
 % --------------------------------------------------------------------------
@@ -959,41 +963,78 @@ dephasing alike, while deliberately asymmetric jump operators (whose
 image is not proportional to $L$) give commutator norms of order $30$.
 The sectors do not mix.
 
-The rest of the argument does not require them to.
+A second, weaker account remains available at this point, and we tested it
+rather than adopting it.
 Parity is conserved, but a generic initial state populates both
 sectors---over random pure states, $98\%$ carry more than $5\%$ of
-their weight in each---so the observed coherence is a superposition of
-modes at both sectors' frequencies, whose ratio is $r(J)$.
-That superposition is least troublesome where one frequency dominates
-($r\approx0$ or $r\to1$, i.e.\ deep in either
-phase, matching the empirically strong $R^2=0.876$ at $J=0.2$ and
-$R^2=0.836$ at $J=1.5$), and most consequential in the crossover band
-$J\in[0.8,1.5]$ where $r(J)\in[0.37,0.60]$ and neither sector's
-frequency dominates: a generic (non-$P$-eigenstate) initial state then
-produces an $\ell_1$-coherence trajectory with two comparably-weighted,
-comparably-fast oscillation/decay channels rather than one, which is
-precisely the regime in which a short early window is least able to
-extrapolate to the eventual $T_2$---the same short-window information
-limit as the single-exponential case in \cite{Paper1Brusnikin}, but now
-with two competing modes instead of one.
-Because $r(J)$ increases \emph{monotonically} rather than peaking
-symmetrically at $J=h$, this mechanism predicts a monotone loss of
-predictability across the range we sweep, with recovery only once
-$r\to1$---which $J=2.0$ ($r=0.707$) does not reach.
-That is what the replicated sweep shows, and it is a better fit than the
-single run was: the earlier data's recovery at $J=1.5$ sat awkwardly
-with a monotone $r(J)$ and we had to leave it as an open question, but
-that recovery turns out to be a single-run artefact rather than
-something the mechanism must explain.
-What the replication removes is any claim that the effect is localised
-at criticality. The spectral argument never predicted a feature centred
-on $J=h$---$r(J)$ is smooth there---so the correct statement is that
-dissipator-induced mixing between the two symmetry sectors degrades
-predictability as the sectors' timescales approach each other, with the
-transition point carrying no special status.
-This remains an interpretation of a seven-point sweep and not a test of
-the mechanism: that would need a dissipator commuting with $P$, for
-which the mixing---and so the degradation---should be absent.
+their weight in each---so the observed coherence superposes modes at
+both sectors' frequencies, whose ratio is $r(J)$.
+Where one frequency dominates ($r\approx0$) the signal is effectively
+single-mode; in the band $r(J)\in[0.37,0.60]$ neither dominates, and an
+$\ell_1$-coherence trajectory with two comparably weighted, comparably
+fast channels is harder to extrapolate from a short early window than
+one---the same information limit as the single-exponential case in
+\cite{Paper1Brusnikin}, with two competing modes instead of one.
+Since $r(J)$ rises monotonically and is smooth at $J=h$, this predicts a
+monotone decline with no feature at the transition, which is what the
+replicated sweep shows.
+
+That agreement is not evidence, because the prediction is falsifiable
+directly: confine the initial state to a single parity sector and the
+signal carries one frequency instead of two, so the $J$-dependence
+should largely disappear.
+We ran that test (Table~\ref{tab:r6}), preparing initial states by
+projection onto $P=+1$ and onto $P=-1$, with the Hamiltonian,
+dissipator and integration unchanged.
+
+\begin{table}[h]
+\centering
+\caption{R6: mean $R^2$ over seeds $\{42,43,44\}$ under generic and
+  single-sector state preparation. ``Drop'' is the mean at $J\leq0.5$
+  minus the mean at $J\geq0.8$.\label{tab:r6}}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{rrrrr}
+\toprule
+$J$ & $r(J)$ & generic & $P={+}1$ & $P={-}1$ \\
+\midrule
+0.2 & 0.100 & $0.625$ & $0.831$ & $0.862$ \\
+0.5 & 0.243 & $0.650$ & $0.585$ & $0.660$ \\
+0.8 & 0.371 & $0.456$ & $0.634$ & $0.535$ \\
+1.0 & 0.447 & $0.535$ & $0.652$ & $0.489$ \\
+1.2 & 0.514 & $0.577$ & $0.560$ & $0.584$ \\
+1.5 & 0.600 & $0.548$ & $0.497$ & $0.566$ \\
+2.0 & 0.707 & $0.507$ & $0.582$ & $0.489$ \\
+\midrule
+\multicolumn{2}{l}{Drop} & $+0.113$ & $+0.123$ & $+0.229$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The prediction fails.
+The decline does not shrink under single-sector preparation: paired
+against the generic arm on the same seed, the drop changes by
+$+0.011 \pm 0.085$ for $P={+}1$ and $+0.116 \pm 0.191$ for $P={-}1$,
+with mixed sign---markedly negative values were required.
+Whatever costs predictability as $J$ grows survives having only one
+sector populated, so it is not the superposition of the two.
+We therefore withdraw this account as well.
+
+What the test does show is that sector purity matters at weak coupling
+and stops mattering as $J$ grows: at $J=0.2$ the single-sector arms
+reach $0.831$ and $0.862$ against $0.625$ for generic preparation, and
+with a quarter of the spread ($\pm0.06$, $\pm0.04$ against $\pm0.26$),
+while by $J\geq0.8$ the three arms are indistinguishable.
+Something else dominates at strong coupling.
+The overall energy scale $\sqrt{J^2+4h^2}$ grows relative to the
+dissipation rate $\gamma(t)$, and the shape of the decay changes with
+it; separating those is beyond a seven-point sweep and we leave it open.
+
+The empirical finding stands on its own: predictability falls with
+coupling strength and then saturates, robustly across seeds, with $J=h$
+carrying no special status.
+Its cause is now an open question rather than a settled one---both
+explanations this paper offered have been tested and neither survived.
 
 \paragraph{Remaining open questions.}
 \begin{enumerate}
@@ -1003,6 +1044,12 @@ which the mixing---and so the degradation---should be absent.
     inter-qubit correlations---particularly relevant given that
     entanglement can terminate in finite time \cite{YuEberly2009}
     while single-qubit coherence decays only asymptotically.
+  \item \textbf{What drives the loss at strong coupling.}
+    Sector purity helps markedly at $J=0.2$ and not at all by
+    $J\geq0.8$, so the strong-coupling regime is governed by something
+    the spectral picture does not capture---plausibly the growth of the
+    overall energy scale $\sqrt{J^2+4h^2}$ relative to $\gamma(t)$, and
+    the change in decay shape that comes with it.
   \item \textbf{More seeds before a finer grid.}
     The replicated sweep leaves a monotone decline whose per-point
     spread ($\pm 0.03$--$0.17$) is comparable to the differences between
@@ -1060,16 +1107,14 @@ Key findings are:
     quantum phase transition with recovery beyond it; neither the
     location nor the recovery reproduces, and $J = h$ is not
     distinguishable from its neighbours.
-    Since the $N=2$ system cannot host a true non-analytic transition,
-    we ground the trend in an exact finite-size analysis
-    (Eq.~\ref{eq:tfim-spectrum}--\ref{eq:ratio}): predictability falls
-    as the Hamiltonian's two parity sectors approach comparable
-    timescales, so a generic initial state---which populates both---
-    yields a signal with two comparably weighted modes instead of one.
-    The $R^2$ ceiling is thus a structural property of the model rather
-    than a training artefact. An earlier version attributed the mixing
-    to the dissipator; the Liouvillian in fact conserves parity exactly,
-    and no coupling between sectors is needed or present.
+    The cause is open. This paper offered two explanations and tested
+    both: that the dissipator couples the Hamiltonian's parity sectors
+    (the Liouvillian in fact conserves parity exactly, at every $J$),
+    and that a generic initial state superposes two comparable modes,
+    one per sector (confining the state to a single sector does not
+    reduce the decline---see Table~\ref{tab:r6}). Neither survives, so
+    we report the trend as an empirical result whose mechanism is not
+    established, rather than attach an account we have falsified.
   \item Noise robustness is exceptional: $R^2$ spans a total range of
     only $0.007$ across $\sigma = 0$--$0.10$, stronger than the
     single-qubit case ($\Delta R^2 = 0.23$).
