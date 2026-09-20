@@ -39,8 +39,11 @@ trained on diverse interaction types generalises across both architectures witho
 **Experiments:** E6–E14 (plus E1/E3/E4 on D,E)
 
 **Status:** closed. Best TFIM cross-system R² is 0.575 (E8c). Target 0.70 on mixed J
-is a physics ceiling near the TFIM QPT, not an unfinished training run. XXZ R² 0.817
-(E11a); AUROC D/E 0.890 / 0.801 (E10b Transformer).
+is a ceiling of the setup, not an unfinished training run: predictability falls with
+coupling strength and saturates (E7c, replicated in R5). It is *not* localised near the
+QPT — that structure came from a single run — and its mechanism is not established:
+both accounts the paper offered were tested and withdrawn (R6). XXZ R² 0.817 (E11a);
+AUROC D/E 0.890 / 0.801 (E10b Transformer).
 
 ---
 

@@ -38,8 +38,12 @@ that embeds the OLS-slope estimate as a structural prior and predicts only
 the correction $\delta T$ to it.
 On three single-qubit scenarios (constant $\gamma$, time-dependent
 amplitude damping $\sigma_-$, and time-dependent dephasing $\sigma_z$),
-the residual model achieves $R^2 = 0.94$--$0.98$, improving over the
-physics-only baseline by up to $\Delta R^2 = +0.19$.
+the residual model achieves $R^2 = 0.94$--$0.98$.
+A network given the same data without the prior does not work at all
+($R^2 \in \{-0.45, 0.01, -0.03\}$), a gap of order $1.0$ that holds in
+every seed we ran; the narrower margin over a classical fit is smaller
+than that headline suggests, and we report a three-seed replication
+that resolves it on dephasing and leaves it open on amplitude damping.
 The risk alarm (binary: decoherence within horizon $\Delta t$) reaches
 AUROC $\geq 0.93$ using as little as $5\%$ of the trajectory, and the
 system outperforms a two-step inverse approach by $3$--$9\times$ in MAE
@@ -283,21 +287,105 @@ Key observations:
     \texttt{physics\_only} achieves $R^2 = 0.9995$ on scenario~A,
     validating the OLS formula for constant-$\gamma$ amplitude damping.
     No ML is needed in this regime.
-  \item \textbf{Claim C2 confirmed.}
-    \texttt{physics\_lstm} outperforms \texttt{physics\_only} on
-    time-dependent scenarios: $+0.19$ on~B ($0.945$ vs.\ $0.753$)
-    and $+0.01$ on~C ($0.976$ vs.\ $0.965$).
-    Crucially, \texttt{lstm\_only} fails catastrophically on all three
-    scenarios ($R^2 \in \{-0.45, 0.01, -0.03\}$), confirming that the
-    physics prior is \emph{essential}, not merely helpful.
+  \item \textbf{Claim C2 confirmed, with one qualification.}
+    \texttt{lstm\_only} fails on all three scenarios
+    ($R^2 \in \{-0.45, 0.01, -0.03\}$) against roughly $0.95$ for
+    \texttt{physics\_lstm}: a network given the same data but no physics
+    prior does not merely do worse, it does not work.
+    That margin is of order $1.0$ in $R^2$ and is the claim this paper
+    rests on.
+    The narrower comparison against the formula---$+0.19$ on~B
+    ($0.945$ vs.\ $0.753$) and $+0.01$ on~C ($0.976$ vs.\
+    $0.965$)---is weaker than it looks, and Sec.~\ref{sec:r7} reports
+    what survives replication.
   \item \textbf{Transformer competitiveness.}
     The pure Transformer achieves $R^2 = 0.981$ on scenario~C and
     $0.902$ on~B---competitive with, but not superior to,
-    \texttt{physics\_lstm}.
+    \texttt{physics\_lstm}; across seeds the ordering on~C is in fact
+    the other way round (Sec.~\ref{sec:r7}).
     The residual architecture is preferred because it is guaranteed to
     recover the exact analytical solution in the constant-$\gamma$ limit
     (scenario~A: $0.976$ vs.\ $0.799$ for the Transformer).
+  \item \textbf{A stronger classical baseline belongs here.}
+    \texttt{physics\_only} fits a pure exponential, so it is the weakest
+    classical comparison available. A stretched-exponential fit,
+    $C(t)=C_0\exp(-(t/\tau)^\beta)$, is the honest one, and it beats
+    \texttt{physics\_only} on both time-dependent scenarios
+    (Sec.~\ref{sec:r7}). We report it because the interesting question
+    is not whether a network beats one particular formula but whether
+    learning is needed at all.
 \end{itemize}
+
+\subsection{R7 --- the ablation across seeds}
+\label{sec:r7}
+
+Every number in Table~\ref{tab:e1} comes from one run. We replicated the
+ablation across three seeds, varying the sampled configurations and
+training together, and report the comparisons as paired differences
+within each seed.
+
+\begin{table}[h]
+\centering
+\caption{R7: mean $R^2$ $\pm$ s.d.\ over seeds $\{42,43,44\}$, including
+  the stretched-exponential baseline that Table~\ref{tab:e1} omits.
+  \label{tab:r7}}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lccc}
+\toprule
+Variant & A & B & C \\
+\midrule
+\texttt{physics\_only}  & $1.000 \pm 0.000$ & $0.719 \pm 0.030$ & $0.905 \pm 0.056$ \\
+\texttt{stretched\_exp} & $1.000 \pm 0.000$ & $0.883 \pm 0.060$ & $0.954 \pm 0.021$ \\
+\texttt{lstm\_only}     & $-0.133 \pm 0.94$ & $0.328 \pm 0.259$ & $-0.729 \pm 1.364$ \\
+\texttt{physics\_lstm}  & $0.881 \pm 0.182$ & $0.856 \pm 0.182$ & $0.980 \pm 0.011$ \\
+\texttt{transformer}    & $0.825 \pm 0.153$ & $0.836 \pm 0.185$ & $0.959 \pm 0.030$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{What holds.}
+The claim the paper rests on is unaffected: \texttt{physics\_lstm} beats
+\texttt{lstm\_only} in every seed on every scenario, by $+1.014$ (A),
+$+0.528$ (B) and $+1.709$ (C).
+\texttt{lstm\_only} is not merely worse but erratic---on~C its three
+seeds give $-2.275$, $+0.309$ and $-0.221$---which is itself the point:
+without the prior the model is unreliable, not just less accurate.
+\texttt{physics\_only} returns $1.000$ on~A in all three seeds (C1), the
+residual beats the Transformer on~A in all three ($+0.056 \pm 0.042$),
+and---contrary to what its published margin of $+0.011$ suggested---
+\texttt{physics\_lstm} beats \texttt{physics\_only} on~C in all three
+($+0.075 \pm 0.045$).
+
+\paragraph{What does not.}
+Two entries of Table~\ref{tab:e1} do not survive.
+The advantage of \texttt{physics\_lstm} over \texttt{physics\_only} on~B,
+published as a comfortable $+0.19$, is $+0.137 \pm 0.157$ across seeds
+with the sign varying ($+0.201$, $+0.253$, $-0.042$); we report it as
+unresolved.
+The Transformer's edge on~C reverses: paired per seed it is
+$-0.021 \pm 0.029$ ($-0.002$, $-0.054$, $-0.006$), so
+\texttt{physics\_lstm} is the better model there, not the worse one.
+The hedge in Table~\ref{tab:e1}'s discussion was right; its direction
+was not.
+
+\paragraph{The stretched-exponential baseline.}
+Table~\ref{tab:e1} compares against \texttt{physics\_only}, a pure
+exponential fit, which is the weakest classical baseline available.
+Against the stronger one the picture is different: the stretched
+exponential beats \texttt{physics\_only} in every seed, by $+0.164$
+on~B and $+0.049$ on~C, and against \texttt{physics\_lstm} on~B it is
+indistinguishable ($+0.027 \pm 0.231$, sign varying).
+On~C \texttt{physics\_lstm} still wins in every seed, but by $0.026$.
+
+This bounds what the ablation establishes.
+That a network needs the physics prior is settled, with a margin of
+order~$1$.
+That \emph{learning} is needed---rather than a two-parameter curve
+fit---is settled on~C only, and on~B our experiments do not settle it.
+We state this explicitly because the alternative reading, that the
+residual architecture is required wherever $\gamma$ varies, is not what
+these data show.
 
 \subsection{E2 --- Minimum observation window}
 \label{sec:e2}
@@ -539,10 +627,15 @@ We have presented a physics-informed residual BiLSTM for online early
 warning of quantum decoherence in single-qubit systems.
 The key contributions are:
 \begin{enumerate}
-  \item A precise characterisation of when ML is necessary: the OLS
-    formula suffices for constant-$\gamma$ amplitude damping
-    ($R^2 = 0.9995$); ML is needed only when $\gamma(t)$ is
-    time-dependent.
+  \item A precise characterisation of when the prior is necessary: the
+    OLS formula suffices for constant-$\gamma$ amplitude damping
+    ($R^2 = 0.9995$), and for time-dependent $\gamma(t)$ a network
+    without the prior fails outright, in every seed.
+    Whether \emph{learning} is needed at all is a narrower question: a
+    stretched-exponential fit matches the residual model on
+    time-dependent amplitude damping and loses to it by $0.026$ on
+    dephasing (Sec.~\ref{sec:r7}), so we claim the prior, not the
+    network, as what these data establish.
   \item A residual architecture~(\ref{eq:residual}) that embeds the OLS
     prior structurally, guaranteeing recovery of the analytical solution
     and achieving $R^2 = 0.94$--$0.98$ for time-dependent scenarios.
