@@ -8,6 +8,11 @@
 \usepackage{microtype}
 \usepackage{authblk}
 \usepackage[hidelinks]{hyperref}
+% --------------------------------------------------------------------------
+% BEFORE SUBMISSION: every \needspaste{} below must be resolved.
+%   grep -n needspaste *.tex
+% They render in red in the PDF so they cannot be missed on a read-through.
+\newcommand{\needspaste}[1]{{\color{red}\textbf{[NEED TO PASTE: #1]}}}
 
 \graphicspath{{figures/}}
 
@@ -16,7 +21,7 @@
 in Two-Qubit Systems}}
 
 \author[1]{Nikita Brusnikin}
-\affil[1]{Independent Researcher}
+\affil[1]{Independent Researcher~\needspaste{confirm this affiliation or replace it}}
 \date{}
 % --------------------------------------------------------------------------
 
@@ -121,6 +126,7 @@ Trajectories are solved via the Lindblad master equation
 
 % --------------------------------------------------------------------------
 \section{Method}
+\label{sec:method}
 
 \subsection{Base architecture}
 
@@ -1119,6 +1125,46 @@ Key findings are:
     only $0.007$ across $\sigma = 0$--$0.10$, stronger than the
     single-qubit case ($\Delta R^2 = 0.23$).
 \end{enumerate}
+
+% --------------------------------------------------------------------------
+\section*{Data availability}
+All data in this paper are simulated; no experimental data were used.
+Every table is produced by the accompanying code from the trajectory
+generator described in Sec.~\ref{sec:method}, and the result files behind
+each table are retained alongside it.
+Regenerating them requires only the seeds listed below.
+
+\section*{Code availability}
+The simulation, training, evaluation and figure-generating code, together
+with the result files behind every table, is available from the author on
+request.
+
+\section*{Reproducibility}
+All reported runs are seeded end to end: the sampled system
+configurations, the trajectory simulation (including each trajectory's
+random initial pure state), the window sampling and train/validation/test
+split, and the network initialisation and batch order.
+Repeated runs of the experiment suite reproduce byte-identically for a
+given state of the trajectory cache; the cache stores each simulated
+trajectory under a key derived from its configuration, seed and index, so
+a cold cache---the state from which an independent replication
+starts---and a fully populated one are each deterministic, while a
+partially populated one is not, because the initial states are drawn from
+one seeded stream whose position depends on how many trajectories are
+cache hits.
+Results were produced with Python~3.12.1, NumPy~2.4.4, SciPy~1.17.1,
+QuTiP~5.2.3 and PyTorch~2.11.0 on CPU.
+Single-run tables use seed~42; every replication reported here uses seeds
+$\{42,43,44\}$ and states its per-seed values so that any comparison can
+be checked against its own spread.
+
+\section*{Competing interests}
+\needspaste{competing-interests declaration --- usually ``The author
+declares no competing interests.''}
+
+\section*{Funding}
+\needspaste{funding statement, or ``This research received no specific
+grant from any funding agency.''}
 
 % --------------------------------------------------------------------------
 \bibliographystyle{unsrt}

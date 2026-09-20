@@ -56,3 +56,19 @@ experiments/logs_*.txt
 # OS
 .DS_Store
 Thumbs.db
+
+# Собираемые PDF статей: выход latexmk, восстанавливаются через `make pdf`.
+# Рисунки в paper/*/figures/ НЕ игнорируются — это вход сборки, без них
+# latexmk не соберёт статью у того, кто клонировал репозиторий.
+paper/paper_1/main.pdf
+paper/paper_2/paper2.pdf
+paper/papers_explained_ru.pdf
+paper/description_ru.pdf
+
+# Побочные файлы latexmk
+*.aux
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.out
+*.toc
