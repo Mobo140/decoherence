@@ -95,7 +95,7 @@ python -c "from src.infrastructure.ml.lstm_predictor import LSTMPredictor, physi
 
 Итог: 780 → 128/88/87/223/321.
 
-Коммит: `71aa300`.
+Коммит: `705f74d`.
 
 ## Priority
 

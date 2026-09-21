@@ -77,7 +77,7 @@ cd paper && pdflatex -interaction=nonstopmode description_ru.tex
 
 `description_ru.pdf` теперь трекается — для единообразия с PDF обеих статей.
 
-Коммит: `07a9f33`.
+Коммит: `e5cc3c2`.
 
 ## Priority
 

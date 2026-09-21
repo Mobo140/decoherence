@@ -66,7 +66,7 @@ arXiv:2505.06928 (Chen & Kuo) реально опубликован в Phys. Rev
 помечен «partially confirmed», не «confirmed» — сценарий A слабый (R²=0.49)
 под mixture-моделью.
 
-Коммит: `b789695`.
+Коммит: `e8786c6`.
 
 ## Priority
 

@@ -55,8 +55,8 @@ pytest tests/ -q
 артефакты не из этого проекта, на диске их не было).
 
 Коммиты:
-- `39e4c64` — снимок 9 месяцев работы (DDD, статьи, docks/, experiments) + untrack `.venv`
-- `7a88624` — сам фикс: `qt.Options(nsteps=...)` → dict; `e_ops` positional → keyword.
+- `cc053b1` — снимок 9 месяцев работы (DDD, статьи, docks/, experiments) + untrack `.venv`
+- `8f03966` — сам фикс: `qt.Options(nsteps=...)` → dict; `e_ops` positional → keyword.
   Численно идентично (max abs diff = 0.0 на тестовом mesolve), 92 passed без warnings.
 
 ## Priority
