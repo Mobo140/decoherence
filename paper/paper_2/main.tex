@@ -88,9 +88,10 @@ This is a non-trivial extension for three reasons.
     Coherent oscillations (e.g., in the TFIM model) can make $C(t)$
     non-monotone over the observation window, breaking the OLS assumption.
   \item \textbf{Richer feature space.}
-    Two-qubit observables include all 15 two-body Pauli correlators
-    $\langle\sigma_\alpha \otimes \sigma_\beta\rangle$, providing more
-    information but also more noise.
+    The observable vector grows from three single-qubit Pauli
+    expectations to six, $\langle\sigma_\alpha\otimes I\rangle$ and
+    $\langle I\otimes\sigma_\alpha\rangle$ for
+    $\alpha\in\{x,y,z\}$, alongside $\ell_1$-coherence and purity.
   \item \textbf{Entanglement-mediated decoherence.}
     Inter-qubit coupling ($J$ in both XXZ and TFIM) creates an
     additional decay channel that depends on the joint state and has no
@@ -139,8 +140,11 @@ We use the same residual structure as \cite{Paper1Brusnikin}:
   \label{eq:residual}
 \end{equation}
 with a BiLSTM \cite{HochreiterSchmidhuber1997} (hidden size 128, 2
-layers) processing the full two-qubit observable set: all 15 Pauli
-correlators, $\ell_1$-coherence, purity, and their $\log$ transforms.
+layers) processing the two-qubit observable set: the six single-qubit
+Pauli expectations, $\ell_1$-coherence, purity, and the $\log$
+transforms of the latter two, for eight channels in total. Two-body
+correlators $\langle\sigma_\alpha\otimes\sigma_\beta\rangle$ are not
+among the inputs.
 The regression and risk heads are unchanged from \cite{Paper1Brusnikin}.
 Risk-head quality is reported throughout as the area under the ROC
 curve (AUROC) \cite{Fawcett2006}.
@@ -381,8 +385,8 @@ regression accuracy---it moves $R^2$ about as much as changing the seed
 does ($0.113$ against $0.139$), which is the honest statement and still
 a useful one.
 It remains a milder degradation than the single-qubit case
-($\Delta R^2 = 0.23$ in \cite{Paper1Brusnikin}), plausibly because the
-15 Pauli correlator channels average noise more effectively, but we no
+($\Delta R^2 = 0.23$ in \cite{Paper1Brusnikin}), plausibly because eight
+observable channels average noise more effectively than four, but we no
 longer quantify the gap with a single run's span.
 
 \subsection{E6c/E8c --- Cross-system generalisation}
