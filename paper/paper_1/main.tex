@@ -166,12 +166,21 @@ Analytic limit & No & Yes (Eq.~\ref{eq:ols}) \\
 
 We study three single-qubit scenarios (Table~\ref{tab:scenarios}).
 The dissipation rate $\gamma(t)$ is parameterised by degree-4 Bernstein
-polynomials, guaranteeing $\gamma(t) \geq 0$.
-Six qualitatively distinct profiles are used: constant, monotone
-increasing/decreasing, peak, step-up, and step-down.
-Each scenario uses 100 randomly sampled configurations; trajectories are
-solved via the Lindblad master equation solver in
-\textsc{QuTiP}~\cite{qutip}.
+polynomials with non-negative coefficients, which guarantees
+$\gamma(t) \geq 0$ by construction.
+Scenarios~B and~C cycle through six profile shapes---random, monotone
+increasing, monotone decreasing, peak, step-up and step-down---while
+scenario~A uses a constant rate.
+The coefficient range differs by channel, since the two dissipators give
+different $T_2$ for the same rate: $\gamma \leq 0.8$ for amplitude
+damping ($T_2 \approx 2/\gamma$) and $\gamma \leq 0.2$ for dephasing
+($T_2 = 1/2\gamma$), so that $T_2 \gtrsim 2.5$ in both.
+Each scenario uses 100 randomly sampled configurations, integrated on a
+grid of step $dt = 0.1$ up to $t_\mathrm{max} = 20$ ($30$ for
+scenario~A, whose slowest configurations decohere later), via the
+Lindblad solver in \textsc{QuTiP}~\cite{qutip}.
+Each trajectory contributes five windows, sampled at random end times
+strictly before $T_2$.
 
 \begin{table}[h]
 \centering
@@ -210,8 +219,9 @@ predicting $T_2$ from scratch.
 
 \paragraph{Network details.}
 A bidirectional LSTM~\cite{HochreiterSchmidhuber1997} (hidden size 64,
-1 layer) processes $\mathbf{w}$
-augmented with $\log C$ and $\log(\mathrm{purity})$.
+1 layer) processes $\mathbf{w}$---the three Pauli expectations,
+$\ell_1$-coherence and purity---augmented with $\log C$ and
+$\log(\mathrm{purity})$, so $F = 7$ input channels.
 The mean-pooled output is concatenated with seven physics scalars
 $(t_\text{obs},\text{slope},\log C_\text{obs},T_\text{physics},
 R^2_\text{OLS}$, and two categorical codes identifying the Hamiltonian
@@ -222,10 +232,14 @@ into two linear heads:
   p_{\mathrm{risk}} &= \sigma\!\bigl(
     \mathrm{Lin}(32) \xrightarrow{\mathrm{GELU}} \mathrm{Lin}(1)\bigr),
 \end{align}
-where $p_{\mathrm{risk}} = P(\mathrm{decoherence\ within\ }\Delta t)$.
-Training uses AdamW~\cite{LoshchilovHutter2019} with Huber regression
-loss and BCE classification loss, with a patience-based early-stop
-scheduler.
+where $p_{\mathrm{risk}} = P(\mathrm{decoherence\ within\ }\Delta t)$
+with horizon $\Delta t = 1$ throughout.
+Training uses AdamW~\cite{LoshchilovHutter2019} (learning rate
+$10^{-3}$, weight decay $10^{-3}$, batch size 32, at most 100 epochs)
+with Huber regression loss and BCE classification loss, a
+\texttt{ReduceLROnPlateau} schedule and patience-based early stopping on
+validation loss.
+Unless stated otherwise the observation window is $W = 20$ steps.
 
 \paragraph{Ablation variants.}
 \texttt{physics\_only}: OLS formula, no neural network.

@@ -141,10 +141,12 @@ We use the same residual structure as \cite{Paper1Brusnikin}:
 \end{equation}
 with a BiLSTM \cite{HochreiterSchmidhuber1997} (hidden size 128, 2
 layers) processing the two-qubit observable set: the six single-qubit
-Pauli expectations, $\ell_1$-coherence, purity, and the $\log$
-transforms of the latter two, for eight channels in total. Two-body
-correlators $\langle\sigma_\alpha\otimes\sigma_\beta\rangle$ are not
-among the inputs.
+Pauli expectations $\langle\sigma_\alpha\otimes I\rangle$,
+$\langle I\otimes\sigma_\alpha\rangle$, together with
+$\ell_1$-coherence and purity---eight observable channels, extended to
+ten input channels by the $\log$ transforms of the latter two.
+Two-body correlators $\langle\sigma_\alpha\otimes\sigma_\beta\rangle$
+are not among the inputs.
 The regression and risk heads are unchanged from \cite{Paper1Brusnikin}.
 Risk-head quality is reported throughout as the area under the ROC
 curve (AUROC) \cite{Fawcett2006}.
