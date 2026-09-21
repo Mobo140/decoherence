@@ -3,7 +3,7 @@
 All experiments import `build_configs()` from here to ensure reproducibility
 and a single source of truth for the physical parameters.
 
-Scenario taxonomy (matches plan.md):
+Scenario taxonomy (see paper/description_ru.tex):
     A — 1-qubit, σ₋, constant γ          (physics formula exact)
     B — 1-qubit, σ₋, time-dependent γ    (core hard case)
     C — 1-qubit, σ_z, time-dependent γ   (dephasing, different decay form)

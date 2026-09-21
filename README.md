@@ -116,14 +116,18 @@ and the network predicts T₂ directly from sequences.
 │   ├── application/                    # use-cases + experiment_catalog / job_queue
 │   ├── infrastructure/                 # QuTiP, LSTM, Transformer, registries
 │   └── physics/                        # Lindblad systems, T₂
-├── paper/paper_1/  paper/paper_2/
-├── docks/                              # plan, architecture, task log
+├── paper/
+│   ├── paper_1/main.tex                # Paper 1 (single qubit)
+│   ├── paper_2/main.tex                # Paper 2 (two qubits)
+│   └── description_ru.tex              # what both papers do, in Russian
 ├── tests/
 ├── checkpoints/
 └── requirements.txt
 ```
 
-Full layer map: `docks/main/ARCHITECTURE.md`. Status: `docks/current/CURRENT_STATUS.md`.
+The layering is the usual dependency rule: `domain` knows nothing about
+frameworks, `application` orchestrates use cases, `infrastructure` holds QuTiP
+and PyTorch. Nothing outside `infrastructure` imports torch.
 
 ---
 
@@ -152,7 +156,7 @@ python app.py
 | Screen | What it does |
 | --- | --- |
 | **01 Dashboard** | Champion R² A–E (Paper 1 done, TFIM 0.575 / цель 0.70) |
-| **02 Runs** | Каталог E1–E14 и R1–R5, CSV, Compare, Replay `--fast` / full |
+| **02 Runs** | Каталог E1–E14 и R1–R8, CSV, Compare, Replay `--fast` / full |
 | **03 Models** | `HamiltonianModelRegistry` (best_XXZ / best_TFIM / 1q) |
 | **04 Simulate** | Пресет сценария A–E (тот же `build_configs`) |
 | **05 Train** | Очередь eN в фоне, UI не блокируется |
@@ -236,10 +240,10 @@ CSV → `experiments/results/`. Catalog and champions: `src/application/experime
 - **E6–E8** — 2-qubit scale-up; E8c is TFIM R² champion (0.575)
 - **E9–E11** — context codes, Transformer AUROC, scaling (E11a XXZ R²=0.817)
 - **E12–E14** — stretched-exp baseline, survival loss, inject J
-- **R1–R5** — replications that check the experiments above across seeds
-  rather than producing results of their own. They overturned five of Paper 2's
-  contested conclusions (see `docks/current/CURRENT_STATUS.md`); the tables
-  themselves were unaffected.
+- **R1–R8** — replications that check the experiments above across seeds
+  rather than producing results of their own. Every published table survived
+  them; several of the conclusions built on top of those tables did not.
+  `paper/description_ru.tex` lists each probe and its outcome.
 
 ### Scenario taxonomy
 
