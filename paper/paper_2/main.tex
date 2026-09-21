@@ -106,25 +106,57 @@ This is a non-trivial extension for three reasons.
 
 We study two two-qubit scenarios (Table~\ref{tab:scenarios2}).
 Both use per-qubit $\sigma_-$ jump operators with the same Bernstein
-$\gamma(t)$ parameterisation and shape diversity as \cite{Paper1Brusnikin}.
+$\gamma(t)$ parameterisation and shape diversity as
+\cite{Paper1Brusnikin}: degree-4 polynomials with non-negative
+coefficients bounded by $\gamma \leq 0.8$, cycling through six profile
+shapes (random, monotone increasing, monotone decreasing, peak, step-up,
+step-down).
+The open-system dynamics is the two-qubit Lindblad equation
+($\hbar = 1$), with one jump operator per qubit and a rate shared
+between them:
+\begin{equation}
+  \dot\rho = -i[H,\rho]
+  + \sum_{k=1}^{2} \gamma(t)\!\left(
+      L_k \rho L_k^\dagger
+      - \tfrac{1}{2}\{L_k^\dagger L_k, \rho\}\right),
+  \label{eq:lindblad2}
+\end{equation}
+with $L_1 = \sigma_-\otimes I$ and $L_2 = I\otimes\sigma_-$.
+As in \cite{Paper1Brusnikin}, $T_2$ is the time at which the
+$\ell_1$-coherence $C(t)=\sum_{i\neq j}|\rho_{ij}(t)|$ falls to
+$e^{-1}$ of its initial value; trajectories that do not reach the
+threshold within $t_\mathrm{max}$ are marked censored and excluded by
+default.
 
 \begin{table}[h]
 \centering
 \caption{Two-qubit scenarios.\label{tab:scenarios2}}
-\small
+\footnotesize
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{lll}
 \toprule
 Label & Hamiltonian & $J$ range \\
 \midrule
 D & XXZ: $J(\sigma_x\sigma_x + \sigma_y\sigma_y + \sigma_z\sigma_z)$ & [0.2, 1.0] \\
-E & TFIM: $J\sigma_z\sigma_z + h(\sigma_x \otimes I + I \otimes \sigma_x)$ & [0.2, 1.0] \\
+E & TFIM: $J\sigma_x\!\otimes\!\sigma_x + h(\sigma_z\!\otimes\! I + I\!\otimes\!\sigma_z)$, $h{=}1$ & [0.2, 1.0] \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Trajectories are solved via the Lindblad master equation
-\cite{Lindblad1976,Breuer2002} using the solver in
-\textsc{QuTiP}~\cite{qutip}.
+The XXZ model is taken isotropic ($\Delta = 1$). Note that the TFIM is
+written with the coupling on $\sigma_x$ and the transverse field on
+$\sigma_z$, which is the form integrated here; this fixes the parity
+operator as $P = \sigma_z\otimes\sigma_z$, used in
+Sec.~\ref{sec:discussion}.
+
+Trajectories are integrated with the solver in
+\textsc{QuTiP}~\cite{qutip} \cite{Lindblad1976,Breuer2002} on a grid of
+step $dt = 0.1$ up to $t_\mathrm{max} = 20$, and each contributes five
+windows ending strictly before $T_2$. Unless stated otherwise a run uses
+500 trajectories per scenario and trains for at most 150 epochs with
+AdamW (learning rate $5\times10^{-4}$, batch size 64) under a Huber
+regression loss; the alarm horizon is $\Delta t = 1$. Window length
+varies by experiment and is given with each.
 
 % --------------------------------------------------------------------------
 \section{Method}
@@ -725,9 +757,8 @@ rather than a finer grid.
 \subsection{E7c --- TFIM $J$-coupling sweep across the phase diagram}
 \label{sec:e7c}
 
-The TFIM Hamiltonian is $H = J\sigma_z\sigma_z + h(\sigma_x \otimes I +
-I \otimes \sigma_x)$ with $h = 1.0$ fixed; the quantum phase transition
-occurs at $J = h = 1.0$.
+With $h = 1$ fixed (Table~\ref{tab:scenarios2}), the quantum phase
+transition of the corresponding chain occurs at $J = h = 1$.
 Table~\ref{tab:e7c} sweeps $J \in \{0.2, 0.5, 0.8, 1.0, 1.2, 1.5,
 2.0\}$ and trains a Transformer separately on each $J$-bucket (200
 trajs per bucket).
