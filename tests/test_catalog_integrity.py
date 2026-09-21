@@ -20,7 +20,7 @@ from src.application.experiment_catalog import (
 )
 
 REPO = Path(__file__).resolve().parents[1]
-PAPER2 = REPO / "paper" / "paper_2" / "paper2.tex"
+PAPER2 = REPO / "paper" / "paper_2" / "main.tex"
 VALID_STATUS = {"cited", "superseded", "negative", "replication"}
 
 

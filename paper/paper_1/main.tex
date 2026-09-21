@@ -19,8 +19,8 @@
 \title{\textbf{Physics-Informed Early Warning of Quantum Decoherence\\
 in Single-Qubit Systems Under Unknown Time-Dependent Dissipation}}
 
-\author[1]{Nikita Brusnikin}
-\affil[1]{Independent Researcher~\needspaste{confirm this affiliation or replace it}}
+\author[1]{}
+\affil[1]{\needspaste{confirm this affiliation or replace it}}
 
 \date{}
 % --------------------------------------------------------------------------
@@ -212,9 +212,11 @@ predicting $T_2$ from scratch.
 A bidirectional LSTM~\cite{HochreiterSchmidhuber1997} (hidden size 64,
 1 layer) processes $\mathbf{w}$
 augmented with $\log C$ and $\log(\mathrm{purity})$.
-The mean-pooled output is concatenated with four physics scalars
-$(\text{slope},\log C_\text{obs},t_\text{obs},T_\text{physics})$,
-yielding a 132-dimensional representation fed into two linear heads:
+The mean-pooled output is concatenated with seven physics scalars
+$(t_\text{obs},\text{slope},\log C_\text{obs},T_\text{physics},
+R^2_\text{OLS}$, and two categorical codes identifying the Hamiltonian
+and the jump operator$)$, yielding a 135-dimensional representation fed
+into two linear heads:
 \begin{align}
   \delta T &= \mathrm{Lin}(64) \xrightarrow{\mathrm{GELU}} \mathrm{Lin}(1),\\
   p_{\mathrm{risk}} &= \sigma\!\bigl(

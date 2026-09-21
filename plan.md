@@ -248,5 +248,5 @@ R²=0.9995 for physics_only on A (constant γ) exceeds target.
 
 **Done — papers:**
 - `paper/paper_1/main.tex` — Paper 1 (1-qubit)
-- `paper/paper_2/paper2.tex` — Paper 2 (2-qubit)
+- `paper/paper_2/main.tex` — Paper 2 (2-qubit)
 

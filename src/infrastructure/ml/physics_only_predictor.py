@@ -104,4 +104,4 @@ class PhysicsOnlyPredictor(IPredictor):
         rem, slope, _ = physics_remaining(window, t_obs, dt=self.dt, t_max=self.t_max)
         if slope >= -1e-6:
             return float(self.t_max)
-        return rem
+        return rem 

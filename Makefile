@@ -96,8 +96,8 @@ pdf: pdf-1 pdf-2 ## собрать paper_1 и paper_2 PDF
 pdf-1: ## paper/paper_1/main.pdf
 	cd paper/paper_1 && latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex
 
-pdf-2: ## paper/paper_2/paper2.pdf
-	cd paper/paper_2 && latexmk -pdf -interaction=nonstopmode -halt-on-error paper2.tex
+pdf-2: ## paper/paper_2/main.pdf
+	cd paper/paper_2 && latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex
 
-pdf-ru: ## paper/papers_explained_ru.pdf (разбор обеих статей на русском)
-	cd paper && latexmk -pdf -interaction=nonstopmode -halt-on-error papers_explained_ru.tex
+pdf-ru: ## paper/description_ru.pdf (описание обеих работ на русском)
+	cd paper && latexmk -pdf -interaction=nonstopmode -halt-on-error description_ru.tex

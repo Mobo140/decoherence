@@ -61,8 +61,7 @@ Thumbs.db
 # Рисунки в paper/*/figures/ НЕ игнорируются — это вход сборки, без них
 # latexmk не соберёт статью у того, кто клонировал репозиторий.
 paper/paper_1/main.pdf
-paper/paper_2/paper2.pdf
-paper/papers_explained_ru.pdf
+paper/paper_2/main.pdf
 paper/description_ru.pdf
 
 # Побочные файлы latexmk
