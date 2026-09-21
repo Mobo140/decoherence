@@ -164,7 +164,7 @@ def run_e8b(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
         batch_size=64,
         lr=5e-4,
         regression_loss="huber",
-        seed=42,
+        seed=seed,
         verbose=verbose,
         min_window_gap=MIN_GAP,
     )
@@ -196,8 +196,13 @@ def run_e8b(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
 # E8c — cross-system
 # ---------------------------------------------------------------------------
 
-def run_e8c(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
-    """Cross-system: improved physics_lstm trained on D+E, eval per scenario."""
+def run_e8c(simulator, groups, n_epochs: int, verbose: bool = True,
+            *, seed: int = 42, out_path=None) -> list:
+    """Cross-system: improved physics_lstm trained on D+E, eval per scenario.
+
+    Defaults reproduce the published run; see _noise_sweep in
+    e6_2qubit_improved.py for why the keyword-only arguments exist.
+    """
     from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 
     cmd = CrossSystemCommand(
@@ -226,7 +231,7 @@ def run_e8c(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
 
     results = E8CrossSystem(simulator, store=trajectory_store()).execute(cmd)
     rows = [r.as_dict() for r in results]
-    _save_csv(rows, RESULTS_DIR / "e8c_cross_system.csv",
+    _save_csv(rows, out_path or RESULTS_DIR / "e8c_cross_system.csv",
               ["name", "variant", "window_fraction", "noise_sigma",
                "mae", "rmse", "r2", "mape", "auroc", "n_samples"])
 
