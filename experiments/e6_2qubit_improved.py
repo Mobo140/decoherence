@@ -135,8 +135,13 @@ def _ablation(simulator, groups, scenarios, n_epochs, suffix, verbose=True):
     return all_rows
 
 
-def _noise_sweep(simulator, groups, scenarios, n_epochs, suffix, verbose=True):
-    """Run E6b: noise robustness with improved model on given 2-qubit scenarios."""
+def _noise_sweep(simulator, groups, scenarios, n_epochs, suffix, verbose=True,
+                 *, seed: int = 42, out_path=None):
+    """Run E6b: noise robustness with improved model on given 2-qubit scenarios.
+
+    Defaults reproduce the published run; the keyword-only arguments let R8
+    replicate it across seeds without duplicating the configuration.
+    """
     from src.infrastructure.ml.lstm_predictor import LSTMPredictor
     results_dir = Path(__file__).parent / "results"
     configs = [cfg for s in scenarios for cfg in groups[s]]
@@ -151,7 +156,7 @@ def _noise_sweep(simulator, groups, scenarios, n_epochs, suffix, verbose=True):
         batch_size=64,
         lr=5e-4,
         regression_loss="huber",
-        seed=42,
+        seed=seed,
         verbose=verbose,
     )
 
@@ -167,7 +172,7 @@ def _noise_sweep(simulator, groups, scenarios, n_epochs, suffix, verbose=True):
     fname = f"e6_noise_sweep{suffix}.csv"
     fieldnames = ["name", "variant", "window_fraction", "noise_sigma",
                   "mae", "rmse", "r2", "mape", "auroc", "n_samples"]
-    _save_csv(rows, results_dir / fname, fieldnames)
+    _save_csv(rows, out_path or results_dir / fname, fieldnames)
 
     print(f"\n{'σ_noise':>9} {'R²':>8} {'MAE':>8} {'AUROC':>8}")
     print("-" * 38)
