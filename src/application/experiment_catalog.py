@@ -84,6 +84,8 @@ CATALOG: List[ExperimentEntry] = [
                     ("r6_parity_sector.csv",), status="replication"),
     ExperimentEntry("R7", "Paper 1 ablation across seeds (checks E1)", "experiments.r7_multiseed_1qubit", "-", "-", "A-C",
                     ("r7_multiseed_1qubit.csv",), status="replication"),
+    ExperimentEntry("R8", "Noise sweep and scaling across seeds (checks E6b/E8c)", "experiments.r8_noise_and_scaling", "-", "-", "D, E",
+                    ("r8_noise_and_scaling.csv",), status="replication"),
 ]
 
 

@@ -55,7 +55,9 @@ from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
 RESULTS_DIR = Path(__file__).parent / "results"
 SCRATCH = RESULTS_DIR / "_r8_scratch.csv"
 
-PUBLISHED_E6B = {0.0: 0.8189, 0.01: 0.8193, 0.02: 0.8180, 0.05: 0.8148, 0.10: 0.8124}
+# Published R^2 from e6_noise_sweep_improved.csv (an earlier version of this
+# file mistakenly held the AUROC column here).
+PUBLISHED_E6B = {0.0: 0.5372, 0.01: 0.5383, 0.02: 0.5393, 0.05: 0.5440, 0.10: 0.5440}
 PUBLISHED_E8C = {"D": 0.740, "E": 0.575}
 
 

@@ -49,9 +49,10 @@ On the TFIM model (scenario~E), the \texttt{transformer} achieves
 $R^2 = 0.689$ (single-scenario) and $R^2 = 0.599$ (cross-system, $N =
 780$); the improved \texttt{physics\_lstm} reaches $R^2 = 0.575$
 cross-system (up from $R^2 = -0.381$ baseline, $\Delta = +0.96$).
-Measurement noise robustness is remarkably strong: $R^2$ spans a total
-range of only $0.007$ across $\sigma = 0$--$0.10$ (vs.\ $\Delta R^2 =
-0.23$ in \cite{Paper1Brusnikin}).
+Measurement noise up to $\sigma = 0.10$ does not systematically degrade
+accuracy: paired within seeds, $R^2$ changes by $-0.008 \pm 0.069$ with
+the sign varying, a milder degradation than the single-qubit case
+($\Delta R^2 = 0.23$ in \cite{Paper1Brusnikin}).
 A sweep of the TFIM coupling constant $J$, replicated across three
 seeds, shows predictability falling as $J/h$ grows---from
 $R^2 = 0.72 \pm 0.03$ at $J = 0.2$ to $0.53$ on average for
@@ -355,15 +356,34 @@ $\sigma_\mathrm{noise}$ & $R^2$ & MAE & AUROC \\
   \label{fig:e6b}
 \end{figure}
 
-Noise robustness is exceptional: over the full range
-$\sigma = 0$--$0.10$ the $R^2$ values span only $0.007$
-($0.537$--$0.544$) and AUROC only $0.013$ ($0.813$--$0.826$).
-The AUROC even \emph{increases} slightly with noise ($0.813 \to 0.826$
-at $\sigma = 0.05$), likely because small additive noise acts as
-implicit regularisation for the risk head.
-This is considerably stronger than the single-qubit result
-($\Delta R^2 = 0.23$ in \cite{Paper1Brusnikin}), attributable to the
-15 Pauli correlator channels providing more independent noise-averaging.
+Read alone, this table suggests near-perfect insensitivity: $R^2$ spans
+$0.007$ across the full range and AUROC $0.013$, and AUROC even
+\emph{increases} slightly with noise, which we had attributed to small
+additive noise acting as implicit regularisation for the risk head.
+Those readings do not survive replication, though the robustness itself
+does.
+
+Across three seeds the levels reproduce---$R^2 = 0.496 \pm 0.168$ at
+$\sigma = 0$ against $0.537$ here---but the $0.007$ span does not: the
+per-seed spans are $0.072$, $0.148$ and $0.119$, an order of magnitude
+wider, so this run's flatness was a fortunate draw rather than a
+property of the model.
+The apparent AUROC gain reverses as well: paired within each seed,
+AUROC \emph{falls} from $\sigma = 0$ to $\sigma = 0.10$ in all three
+($-0.059 \pm 0.050$), so the regularisation reading is withdrawn.
+
+What robustness means here is therefore narrower, and we state it as the
+paired comparison the claim needs: going from clean data to
+$\sigma = 0.10$ changes $R^2$ by $-0.008 \pm 0.069$, with the sign
+varying between seeds ($-0.072$, $-0.017$, $+0.065$).
+Measurement noise up to $\sigma = 0.10$ does not systematically degrade
+regression accuracy---it moves $R^2$ about as much as changing the seed
+does ($0.113$ against $0.139$), which is the honest statement and still
+a useful one.
+It remains a milder degradation than the single-qubit case
+($\Delta R^2 = 0.23$ in \cite{Paper1Brusnikin}), plausibly because the
+15 Pauli correlator channels average noise more effectively, but we no
+longer quantify the gap with a single run's span.
 
 \subsection{E6c/E8c --- Cross-system generalisation}
 \label{sec:e4}
@@ -820,10 +840,13 @@ We state their outcome here explicitly, including where they fail.
     E11a reaches $0.937$ on XXZ but $0.888$ on TFIM, so the claim holds
     for XXZ and falls short for TFIM.
   \item \textbf{Noise robustness (stability yes, absolute level no).}
-    The \emph{stability} result is stronger than in the single-qubit
-    case (total $R^2$ range $0.007$ vs.\ $\Delta R^2 = 0.23$), but the
-    absolute AUROC of the D+E mixture model sits at $0.813$--$0.826$,
-    below the $\geq 0.90$ bar the single-qubit study met.
+    Noise up to $\sigma = 0.10$ does not systematically degrade $R^2$
+    ($-0.008 \pm 0.069$ paired within seeds, sign varying), a milder
+    degradation than the single-qubit case ($\Delta R^2 = 0.23$),
+    though not the near-perfect flatness a single run suggested.
+    The absolute AUROC of the D+E mixture model sits at
+    $0.813$--$0.826$ in that run and $0.70$--$0.84$ across seeds, below
+    the $\geq 0.90$ bar the single-qubit study met.
     Robust, but not yet accurate enough.
   \item \textbf{Cross-system generalisation (partially confirmed).}
     A single E11a checkpoint does serve both Hamiltonians without
@@ -1121,9 +1144,16 @@ Key findings are:
     reduce the decline---see Table~\ref{tab:r6}). Neither survives, so
     we report the trend as an empirical result whose mechanism is not
     established, rather than attach an account we have falsified.
-  \item Noise robustness is exceptional: $R^2$ spans a total range of
-    only $0.007$ across $\sigma = 0$--$0.10$, stronger than the
-    single-qubit case ($\Delta R^2 = 0.23$).
+  \item \emph{Measurement noise up to $\sigma = 0.10$ does not
+    systematically degrade accuracy}: paired within each seed, $R^2$
+    changes by $-0.008 \pm 0.069$ and the sign varies, so noise moves
+    the metric about as much as changing the seed does. This is a
+    milder degradation than the single-qubit case ($\Delta R^2 = 0.23$).
+    The single run's much flatter reading---a total span of $0.007$,
+    with AUROC apparently improving under noise---does not replicate:
+    per-seed spans are $0.072$--$0.148$ and AUROC falls in all three
+    seeds, so that reading and the implicit-regularisation explanation
+    for it are both withdrawn.
 \end{enumerate}
 
 % --------------------------------------------------------------------------
