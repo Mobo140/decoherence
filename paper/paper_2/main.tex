@@ -345,17 +345,17 @@ has no misleading starting point to overcome.
 Between \texttt{physics\_lstm} and \texttt{lstm\_only} this table
 resolves nothing on either scenario.
 The single run suggests that the prior helps on TFIM ($0.455$ vs.\
-$0.377$) and slightly hurts on XXZ ($0.636$ vs.\ $0.673$), and an
-earlier version of this paper explained the TFIM figure by the adaptive
-gate discarding the physics estimate on oscillatory windows.
+$0.377$) and slightly hurts on XXZ ($0.636$ vs.\ $0.673$), which
+invites explaining the TFIM figure by the adaptive gate discarding the
+physics estimate on oscillatory windows.
 The three-seed replication does not support that reading: on TFIM the
 ordering reverses in the mean ($0.245 \pm 0.356$ for
 \texttt{physics\_lstm} against $0.422 \pm 0.171$ for
 \texttt{lstm\_only}), and on XXZ the two overlap
 ($0.599 \pm 0.120$ against $0.633 \pm 0.060$).
-Both gaps sit well inside the seed-to-seed spread, so we withdraw the
-gate explanation and read the comparison as ``no resolvable difference
-either way''.
+Both gaps sit well inside the seed-to-seed spread, so the gate
+explanation is not supported and we read the comparison as ``no
+resolvable difference either way''.
 What the table does establish is that \emph{some} learned component is
 essential---every variant with one beats \texttt{physics\_only} by
 orders of magnitude---not that the prior earns its place alongside it.
@@ -408,7 +408,7 @@ wider, so this run's flatness was a fortunate draw rather than a
 property of the model.
 The apparent AUROC gain reverses as well: paired within each seed,
 AUROC \emph{falls} from $\sigma = 0$ to $\sigma = 0.10$ in all three
-($-0.059 \pm 0.050$), so the regularisation reading is withdrawn.
+($-0.059 \pm 0.050$), so noise does not act as a regulariser here.
 
 What robustness means here is therefore narrower, and we state it as the
 paired comparison the claim needs: going from clean data to
@@ -545,11 +545,9 @@ Transformer of E6a reaches a higher $R^2 = 0.897$, but from a model
 trained on XXZ alone; E11a's AUROC $=0.937$ exceeds even that).
 The improvement over E7a is $\Delta R^2 = +0.059$ and
 $\Delta\mathrm{AUROC} = +0.074$ on XXZ.
-An earlier version attributed this to the min-gap overlap control
-``even without changing window size''; that was wrong on both counts.
-E7a uses window $L=50$, not $20$ (only E7b and E7c use $20$), so the
-window does change, and the pair additionally differs in evaluation
-protocol.
+This gap cannot be attributed to the min-gap overlap control alone:
+E7a uses window $L=50$ against E11a's $20$ (only E7b and E7c use $20$),
+and the two additionally differ in evaluation protocol.
 The controlled window contrast of Sec.~\ref{sec:r3} attributes
 $\Delta R^2 = +0.058 \pm 0.028$ on XXZ to the window change alone,
 which accounts for essentially the whole gain and leaves nothing that
@@ -920,11 +918,11 @@ The adaptive gate isolates the regime where the OLS prior
 \emph{does} apply (linear window, e.g., late-stage XXZ decay) from the
 regime where it does not (oscillatory TFIM), enabling interpretable
 predictions.
-An earlier version of this paper read E11b as showing that
-\texttt{physics\_lstm} does not benefit from more training data
-(D: $0.740 \to 0.491$ on doubling to 1{,}000 trajectories) and explained
-it by the richer diversity of $\gamma(t)$ profiles overwhelming the
-inductive bias of the OLS prior.
+E11b appears to show that \texttt{physics\_lstm} does not benefit from
+more training data (D: $0.740 \to 0.491$ on doubling to 1{,}000
+trajectories), which would invite explaining it by the richer diversity
+of $\gamma(t)$ profiles overwhelming the inductive bias of the OLS
+prior.
 That comparison was not controlled---E11b and its $500$-trajectory
 baseline also differ in window length, early-stopping patience and
 inference codes---so we re-ran the $500$- and $1{,}000$-trajectory
@@ -1012,11 +1010,10 @@ the $P{=}{+}1$ sector's splitting dominates, so coherent dynamics is
 governed by essentially one frequency) through $r(h)=1/\sqrt5\approx
 0.447$ at the nominal transition to $r\to1$ (deep ferromagnetic,
 $J\gg h$: both splittings again scale together, $\propto2J$).
-An earlier version of this paper asserted at this point that the
-amplitude-damping dissipator does not commute with $P$
-($\sigma_x\sigma_-\sigma_x=\sigma_+$) and therefore couples the two
-parity sectors. That is wrong for the system simulated here, and the
-claim is withdrawn.
+It is tempting to conclude here that the amplitude-damping dissipator,
+which does not commute with $P$ ($\sigma_x\sigma_-\sigma_x=\sigma_+$),
+therefore couples the two parity sectors. For the system simulated here
+that conclusion is wrong.
 The jump operator $L$ enters the dissipator quadratically,
 $\mathcal{D}[L]\rho = L\rho L^\dagger - \tfrac12\{L^\dagger L,\rho\}$,
 so whenever $PLP^\dagger=\pm L$ the sign cancels and the parity
@@ -1140,11 +1137,10 @@ Key findings are:
     (\texttt{physics\_only}) to $+0.455$ (\texttt{physics\_lstm}) in
     single-scenario training, an improvement that survives replication
     across seeds.
-    We had attributed this to the adaptive prior gate
-    (Eq.~\ref{eq:adaptive}), but the gain is not specific to it:
-    \texttt{lstm\_only}, which carries no prior and no gate, does at
-    least as well under replication, so the evidence supports the
-    learned residual rather than the gate.
+    The gain is not specific to the adaptive prior gate
+    (Eq.~\ref{eq:adaptive}): \texttt{lstm\_only}, which carries neither
+    prior nor gate, does at least as well under replication, so the
+    evidence supports the learned residual rather than the gate.
   \item Scaling to 500 trajectories and adding improved training
     (weighted BCE for risk head, noise augmentation, min-gap window
     sampling) pushes TFIM cross-system $R^2$ from $-0.381$ (pilot) to
