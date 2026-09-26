@@ -13,16 +13,26 @@ Physical Review Applied)
 
 ## Contents
 
-- [Physics background](#physics-background)
-- [Model architecture](#model-architecture)
-- [Project structure](#project-structure)
-- [Installation](#installation)
-- [Quick start](#quick-start)
-- [Running experiments](#running-experiments)
-- [Analysing results](#analysing-results)
-- [Interactive UI](#interactive-ui)
-- [Key parameters](#key-parameters)
-- [Scientific motivation](#scientific-motivation)
+- [Physics-Informed Early Warning of Quantum Decoherence](#physics-informed-early-warning-of-quantum-decoherence)
+  - [Contents](#contents)
+  - [Physics background](#physics-background)
+    - [Supported systems](#supported-systems)
+    - [Why γ(t) cannot be assumed known](#why-γt-cannot-be-assumed-known)
+    - [Analytical baseline (constant γ, σ₋)](#analytical-baseline-constant-γ-σ)
+  - [Model architecture](#model-architecture)
+  - [Project structure](#project-structure)
+  - [Installation](#installation)
+  - [Quick start](#quick-start)
+    - [1. Interactive UI](#1-interactive-ui)
+    - [2. Programmatic API](#2-programmatic-api)
+    - [3. Single inference](#3-single-inference)
+  - [Running experiments](#running-experiments)
+    - [Scenario taxonomy](#scenario-taxonomy)
+  - [Analysing results](#analysing-results)
+  - [Plugging in a custom loss](#plugging-in-a-custom-loss)
+  - [Key parameters](#key-parameters)
+  - [Tests](#tests)
+  - [Scientific motivation (extended)](#scientific-motivation-extended)
 
 ---
 
@@ -162,8 +172,6 @@ python app.py
 | **05 Train** | Очередь eN в фоне, UI не блокируется |
 | **06 Predict** | Окно до T₂ + risk alarm (fallback: physics_only) |
 | **07 Backtest** | Таблица чемпионов из CSV статей |
-
-Интерфейс — макет аудита (сайдбар + blueprint), не Gradio. Перезапусти `python app.py`.
 
 ### 2. Programmatic API
 
