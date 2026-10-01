@@ -43,14 +43,16 @@ that embeds the OLS-slope estimate as a structural prior and predicts only
 the correction $\delta T$ to it.
 On three single-qubit scenarios (constant $\gamma$, time-dependent
 amplitude damping $\sigma_-$, and time-dependent dephasing $\sigma_z$),
-the residual model achieves $R^2 = 0.94$--$0.98$.
+the residual model reaches $R^2 = 0.980 \pm 0.011$ on dephasing and
+$0.856 \pm 0.182$ on amplitude damping (three seeds).
 A network given the same data without the prior does not work at all
 ($R^2 \in \{-0.45, 0.01, -0.03\}$), a gap of order $1.0$ that holds in
 every seed we ran; the narrower margin over a classical fit is smaller
 than that headline suggests, and we report a three-seed replication
 that resolves it on dephasing and leaves it open on amplitude damping.
 The risk alarm (binary: decoherence within horizon $\Delta t$) reaches
-AUROC $\geq 0.93$ using as little as $5\%$ of the trajectory, and the
+AUROC $\geq 0.93$ with an observation window as short as $5\%$ of the
+median $T_2$, and the
 system outperforms a two-step inverse approach by $3$--$9\times$ in MAE
 across all tested observation windows ($f=0.10$--$0.50$), the inverse
 baseline never achieving a positive $R^2$.
@@ -417,7 +419,7 @@ these data show.
 \label{sec:e2}
 
 Table~\ref{tab:e2} shows \texttt{physics\_lstm} trained separately for
-each window fraction $f \in \{0.05, 0.10, 0.15, 0.20, 0.30, 0.50\}$
+each window fraction $f = L\,dt/\mathrm{median}(T_2) \in \{0.05, 0.10, 0.15, 0.20, 0.30, 0.50\}$
 on a mixture of scenarios B and C ($N = 120$ each).
 
 \begin{table}[h]
@@ -444,7 +446,8 @@ $f$ & $R^2$ & MAE & AUROC \\
   \includegraphics[width=\columnwidth]{fig2_window_sweep}
   \caption{E2 window sweep on scenarios B+C: $R^2$ (left) plateaus near
     $0.70$--$0.74$ regardless of window length, while risk AUROC (right)
-    already exceeds $0.93$ at $f=0.05$.}
+    already exceeds $0.93$ at $f=0.05$. $f$ sets the window length; the
+    window end is drawn uniformly before $T_2$.}
   \label{fig:e2}
 \end{figure}
 
@@ -455,11 +458,19 @@ rather than observation length.
 This is consistent with the E1 finding that a \emph{single-scenario}
 model (scenario~B alone) achieves $R^2 = 0.945$ at the same
 $W = 20$ steps: mixing B with C reduces per-regime accuracy.
-Second, and more importantly, the risk alarm (AUROC) already exceeds
-$0.93$ at $f = 0.05$---meaning the binary decoherence warning is
-reliable when only $5\%$ of the trajectory has elapsed.
-\textbf{Claim C3 confirmed.} Risk AUROC $\geq 0.93$ is achievable using
-as little as $5\%$--$15\%$ of the trajectory ($0.933$--$0.947$); $R^2$
+Second, the risk alarm (AUROC) already exceeds $0.93$ at $f = 0.05$:
+a window as short as $5\%$ of the median $T_2$ carries enough
+information for the alarm.
+Because the window end $t_\mathrm{obs}$ is drawn uniformly over
+$[L\,dt, T_2)$, $f$ controls how much history the model sees, not how
+early the prediction is made; how the alarm degrades with
+$t_\mathrm{obs}/T_2$ is a separate question this sweep does not answer.
+Larger $f$ also excludes trajectories with $T_2 < L\,dt$ and shifts the
+admissible windows towards the end of the trajectory, which favours the
+alarm; the AUROC values at different $f$ are therefore not computed on
+the same population.
+\textbf{Claim C3 confirmed.} Risk AUROC $\geq 0.93$ is achievable with
+windows of $5\%$--$15\%$ of the median $T_2$ ($0.933$--$0.947$); $R^2$
 plateaus near $0.70$--$0.74$ and should \emph{not} be claimed to reach
 $0.95$ in this window-sweep setting.
 
@@ -633,9 +644,8 @@ regression accuracy ($R^2$) is moderate.
 This decoupling matters for deployment: a quantum error-correction
 scheduler only needs a calibrated probability estimate to decide whether
 to reset a qubit, not a precise $T_2$ value.
-The alarm is operational from the very first $5\%$ of the trajectory
-(AUROC $= 0.933$, $f = 0.05$), making it suitable for real-time
-integration.
+The alarm needs only a short window (AUROC $= 0.933$ with a window of
+$5\%$ of the median $T_2$), which suits real-time integration.
 
 \paragraph{Limitations.}
 The experiments were conducted on simulated data with 100 trajectories
@@ -664,9 +674,10 @@ The key contributions are:
     network, as what these data establish.
   \item A residual architecture~(\ref{eq:residual}) that embeds the OLS
     prior structurally, guaranteeing recovery of the analytical solution
-    and achieving $R^2 = 0.94$--$0.98$ for time-dependent scenarios.
-  \item A risk alarm with AUROC $\geq 0.93$ from the first $5\%$ of the
-    trajectory, suitable for real-time integration in quantum
+    and reaching $R^2 = 0.980 \pm 0.011$ (dephasing) and
+    $0.856 \pm 0.182$ (amplitude damping) for time-dependent scenarios.
+  \item A risk alarm with AUROC $\geq 0.93$ from a window of $5\%$ of the
+    median $T_2$, suitable for real-time integration in quantum
     error-correction pipelines.
   \item Direct empirical evidence that inverse $\gamma$-reconstruction
     followed by simulation is ill-conditioned at short windows, while

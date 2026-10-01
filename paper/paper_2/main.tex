@@ -30,90 +30,71 @@ in Two-Qubit Systems}}
 
 % --------------------------------------------------------------------------
 \begin{abstract}
-We extend the physics-informed residual BiLSTM framework of
+We extend the physics-informed residual BiLSTM of
 \cite{Paper1Brusnikin} to two-qubit systems with XXZ and TFIM
-Hamiltonians under unknown time-dependent dissipation.
-We identify two root causes of poor initial 2-qubit performance:
-(i)~the OLS physics prior is structurally wrong when coherence
-oscillates (TFIM); (ii)~100 training trajectories per scenario is
-insufficient.
-We address both: an \emph{adaptive prior} gates the physics estimate
-off when its own OLS $R^2 < 0.7$, and training is scaled to 500
-trajectories.
-On the XXZ model (scenario~D), the \texttt{transformer} achieves
-$R^2 = 0.897$ (single-scenario) and $R^2 = 0.758$ (cross-system,
-$N = 849$); the \texttt{physics\_lstm} with adaptive prior and improved
-training (weighted BCE, noise augmentation) reaches $R^2 = 0.740$ and
-AUROC $= 0.789$ in cross-system evaluation.
-On the TFIM model (scenario~E), the \texttt{transformer} achieves
-$R^2 = 0.689$ (single-scenario) and $R^2 = 0.599$ (cross-system, $N =
-780$); the improved \texttt{physics\_lstm} reaches $R^2 = 0.575$
-cross-system (up from $R^2 = -0.381$ baseline, $\Delta = +0.96$).
+Hamiltonians under unknown time-dependent amplitude damping, and ask
+whether its conclusions transfer.
+All results are replicated across three seeds.
+They do not transfer: the slope-based physics estimate is structurally
+wrong when two-qubit coherence oscillates, and a pure Transformer is the
+best model on both systems ($R^2 = 0.843 \pm 0.028$ on XXZ,
+$0.699 \pm 0.045$ on TFIM, single-scenario training), while the residual
+model is not distinguishable from the same network without the prior.
+A single Transformer trained on both systems with a 20-step window
+reaches $R^2 = 0.814 \pm 0.034$ and $0.703 \pm 0.034$, with alarm AUROC
+$0.931$ and $0.904$; a shorter window beats a longer one on both metrics
+in every seed.
 Measurement noise up to $\sigma = 0.10$ does not systematically degrade
-accuracy: paired within seeds, $R^2$ changes by $-0.008 \pm 0.069$ with
-the sign varying, a milder degradation than the single-qubit case
-($\Delta R^2 = 0.23$ in \cite{Paper1Brusnikin}).
-A sweep of the TFIM coupling constant $J$, replicated across three
-seeds, shows predictability falling as $J/h$ grows---from
-$R^2 = 0.72 \pm 0.03$ at $J = 0.2$ to $0.53$ on average for
-$J \geq 0.8$---and then saturating.
-A single sweep had suggested a dip localised at the quantum phase
-transition with recovery beyond it; that structure does not survive
-replication, and the transition point itself is unremarkable.
-We offered two mechanisms for the decline and tested both---parity-sector
-mixing by the dissipator, and a two-mode superposition from generic
-initial states---and report that neither survives, leaving the trend as
-an empirical result without an established cause.
+$R^2$ ($-0.008 \pm 0.069$, paired within seeds).
+On TFIM, predictability falls as the coupling $J$ grows and then
+saturates, with no feature at the nominal transition $J = h$.
+We trace this decline to the target rather than the dynamics: $T_2$ is
+the first $1/e$ crossing of $\ell_1$-coherence in the computational
+basis, which the TFIM Hamiltonian rotates by an angle
+$\tan 2\theta = J/2h$; the resulting unitary modulation makes the
+crossing time depend on the oscillation phase. The fraction of
+trajectories whose coherence re-crosses the threshold tracks the loss in
+$R^2$ across $J$ ($r = -0.85$), while the XXZ model, whose mixing angle
+does not depend on $J$, shows neither effect.
 \end{abstract}
 
 % --------------------------------------------------------------------------
 \section{Introduction}
 
-In \cite{Paper1Brusnikin} we established that a physics-informed residual
-BiLSTM achieves $R^2 = 0.94$--$0.98$ for single-qubit decoherence time
-prediction under unknown time-dependent dissipation.
-The architecture embeds the OLS-slope formula as a structural prior and
-learns only the residual correction $\delta T$, ensuring analytical
-recovery in the constant-$\gamma$ limit while being expressive for
-complex $\gamma(t)$ profiles.
-
-In this paper we ask: does the same approach scale to two-qubit systems?
-This is a non-trivial extension for three reasons.
+In \cite{Paper1Brusnikin} we showed that, for a single qubit under
+unknown time-dependent dissipation, a residual model that adds a learned
+correction $\delta T$ to the slope-based estimate of the decoherence
+time recovers the analytic limit at constant dissipation and improves on
+the bare formula when the rate varies.
+Here we ask whether this carries over to two qubits.
+Three things change.
 
 \begin{enumerate}
   \item \textbf{Non-exponential coherence.}
-    For a two-qubit system with interaction Hamiltonian $H_\mathrm{int}$
-    and per-qubit amplitude damping, the $\ell_1$-coherence is
-    \emph{not} a simple exponential.
-    Coherent oscillations (e.g., in the TFIM model) can make $C(t)$
-    non-monotone over the observation window, breaking the OLS assumption.
-  \item \textbf{Richer feature space.}
-    The observable vector grows from three single-qubit Pauli
-    expectations to six, $\langle\sigma_\alpha\otimes I\rangle$ and
-    $\langle I\otimes\sigma_\alpha\rangle$ for
-    $\alpha\in\{x,y,z\}$, alongside $\ell_1$-coherence and purity.
-  \item \textbf{Entanglement-mediated decoherence.}
-    Inter-qubit coupling ($J$ in both XXZ and TFIM) creates an
-    additional decay channel that depends on the joint state and has no
-    analogue in the single-qubit formula.
-    Two-qubit entanglement can moreover vanish in finite time under
-    purely local damping---the ``entanglement sudden death'' effect
-    \cite{YuEberly2009}---so the joint decay need not follow the
+    With an interaction Hamiltonian that is not diagonal in the
+    computational basis, unitary evolution moves amplitude between basis
+    states, so the $\ell_1$-coherence oscillates on top of its
+    dissipative decay and can increase within an observation window.
+    The slope-based estimate assumes it does not.
+  \item \textbf{Partial observation.}
+    The model sees the six single-qubit Pauli expectations, coherence
+    and purity, but no two-body correlators; the two local Bloch vectors
+    do not determine the two-qubit state.
+  \item \textbf{Entanglement.}
+    Two-qubit entanglement can vanish in finite time under purely local
+    damping \cite{YuEberly2009}, so the joint decay need not follow the
     asymptotic exponential of either qubit alone.
 \end{enumerate}
 
 \subsection*{Scenarios}
 
-We study two two-qubit scenarios (Table~\ref{tab:scenarios2}).
-Both use per-qubit $\sigma_-$ jump operators with the same Bernstein
-$\gamma(t)$ parameterisation and shape diversity as
+Both scenarios (Table~\ref{tab:scenarios2}) use per-qubit $\sigma_-$
+jump operators with the Bernstein $\gamma(t)$ parameterisation of
 \cite{Paper1Brusnikin}: degree-4 polynomials with non-negative
 coefficients bounded by $\gamma \leq 0.8$, cycling through six profile
 shapes (random, monotone increasing, monotone decreasing, peak, step-up,
 step-down).
-The open-system dynamics is the two-qubit Lindblad equation
-($\hbar = 1$), with one jump operator per qubit and a rate shared
-between them:
+The dynamics is the two-qubit Lindblad equation ($\hbar = 1$)
 \begin{equation}
   \dot\rho = -i[H,\rho]
   + \sum_{k=1}^{2} \gamma(t)\!\left(
@@ -121,17 +102,20 @@ between them:
       - \tfrac{1}{2}\{L_k^\dagger L_k, \rho\}\right),
   \label{eq:lindblad2}
 \end{equation}
-with $L_1 = \sigma_-\otimes I$ and $L_2 = I\otimes\sigma_-$.
-As in \cite{Paper1Brusnikin}, $T_2$ is the time at which the
-$\ell_1$-coherence $C(t)=\sum_{i\neq j}|\rho_{ij}(t)|$ falls to
-$e^{-1}$ of its initial value; trajectories that do not reach the
-threshold within $t_\mathrm{max}$ are marked censored and excluded by
-default.
+with $L_1 = \sigma_-\otimes I$ and $L_2 = I\otimes\sigma_-$, integrated
+with \textsc{QuTiP}~\cite{qutip} \cite{Lindblad1976,Breuer2002} on a grid
+of step $dt = 0.1$ up to $t_\mathrm{max} = 20$ from Haar-random pure
+initial states.
+$T_2$ is the time at which the $\ell_1$-coherence
+$C(t)=\sum_{i\neq j}|\rho_{ij}(t)|$, computed in the computational
+basis, first falls below $e^{-1}C(0)$, linearly interpolated between grid
+points; trajectories that do not reach the threshold within
+$t_\mathrm{max}$ are censored and excluded.
 
 \begin{table}[h]
 \centering
 \caption{Two-qubit scenarios.\label{tab:scenarios2}}
-\footnotesize
+\scriptsize
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{lll}
 \toprule
@@ -143,1050 +127,415 @@ E & TFIM: $J\sigma_x\!\otimes\!\sigma_x + h(\sigma_z\!\otimes\! I + I\!\otimes\!
 \end{tabular}
 \end{table}
 
-The XXZ model is taken isotropic ($\Delta = 1$). Note that the TFIM is
-written with the coupling on $\sigma_x$ and the transverse field on
-$\sigma_z$, which is the form integrated here; this fixes the parity
-operator as $P = \sigma_z\otimes\sigma_z$, used in
-Sec.~\ref{sec:discussion}.
+The XXZ model is isotropic ($\Delta = 1$). The TFIM is written with the
+coupling on $\sigma_x$ and the field on $\sigma_z$, which fixes its
+parity as $P = \sigma_z\otimes\sigma_z$.
 
-Trajectories are integrated with the solver in
-\textsc{QuTiP}~\cite{qutip} \cite{Lindblad1976,Breuer2002} on a grid of
-step $dt = 0.1$ up to $t_\mathrm{max} = 20$, and each contributes five
-windows ending strictly before $T_2$. Unless stated otherwise a run uses
-500 trajectories per scenario and trains for at most 150 epochs with
-AdamW (learning rate $5\times10^{-4}$, batch size 64) under a Huber
-regression loss; the alarm horizon is $\Delta t = 1$. Window length
-varies by experiment and is given with each.
+Each trajectory contributes five windows whose end $t_\mathrm{obs}$ is
+drawn uniformly among grid points with $L\,dt \le t_\mathrm{obs} < T_2$.
+The regression target is the remaining time $T_2 - t_\mathrm{obs}$; the
+alarm label is $T_2 - t_\mathrm{obs} \le \Delta t = 1$.
+Train, validation and test sets are split $80/10/10$ by trajectory, so
+no trajectory contributes windows to more than one set.
+Unless stated otherwise a run uses 500 trajectories per scenario and
+trains for at most 150 epochs with AdamW (learning rate
+$5\times10^{-4}$, batch size 64) under a Huber regression loss and a
+class-weighted binary cross-entropy for the alarm.
 
 % --------------------------------------------------------------------------
 \section{Method}
 \label{sec:method}
 
-\subsection{Base architecture}
+\subsection{Models}
 
-We use the same residual structure as \cite{Paper1Brusnikin}:
-\begin{equation}
+The residual model of \cite{Paper1Brusnikin} predicts
+\begin{gather}
   \widehat{T}_{2,\mathrm{rem}}
   = T_{\mathrm{physics}}(\mathbf{w})
   + \delta T_{\mathrm{LSTM}}(\mathbf{w}),
-  \label{eq:residual}
-\end{equation}
-with a BiLSTM \cite{HochreiterSchmidhuber1997} (hidden size 128, 2
-layers) processing the two-qubit observable set: the six single-qubit
-Pauli expectations $\langle\sigma_\alpha\otimes I\rangle$,
-$\langle I\otimes\sigma_\alpha\rangle$, together with
-$\ell_1$-coherence and purity---eight observable channels, extended to
-ten input channels by the $\log$ transforms of the latter two.
-Two-body correlators $\langle\sigma_\alpha\otimes\sigma_\beta\rangle$
-are not among the inputs.
-The regression and risk heads are unchanged from \cite{Paper1Brusnikin}.
-Risk-head quality is reported throughout as the area under the ROC
-curve (AUROC) \cite{Fawcett2006}.
+  \label{eq:residual}\\
+  T_{\mathrm{physics}} = -1/\hat{s} - t_\mathrm{obs}, \nonumber
+\end{gather}
+where $\hat s$ is the least-squares slope of $\log C$ over the window
+$\mathbf w$, and $\delta T$ comes from a BiLSTM
+\cite{HochreiterSchmidhuber1997} (hidden size 128, 2 layers) over ten
+input channels: the six single-qubit Pauli expectations
+$\langle\sigma_\alpha\otimes I\rangle$, $\langle I\otimes\sigma_\alpha\rangle$,
+$\ell_1$-coherence and purity, and the logarithms of the last two.
+Because oscillating coherence often yields near-zero or positive slopes,
+the physics term is gated: $T_\mathrm{physics}$ is set to zero when the
+coefficient of determination of the slope fit, $R^2_\mathrm{OLS}$, is
+below $\tau = 0.7$ or when $\hat s \ge 0$, at training and inference
+alike.
 
-\subsection{Adaptive prior}
-\label{sec:adaptive}
+The ablation compares four variants on identical data.
+\texttt{physics\_only}: the ungated formula of Eq.~\ref{eq:residual},
+no learning.
+\texttt{lstm\_only}: the same network with $T_\mathrm{physics}$ and
+$\hat s$ zeroed, learning the full target.
+\texttt{physics\_lstm}: the gated residual model.
+\texttt{transformer}: a Transformer encoder \cite{Vaswani2017} over the
+same channels, learning the full target, architecturally analogous to
+the model used in \cite{TransformerLindblad2025} for the inverse
+$\gamma(t)$-reconstruction task.
+The cross-system and $J$-sweep experiments use a larger Transformer
+(128-dimensional, 4 heads, 3 layers, feed-forward 512).
 
-The OLS physics prior assumes $\log C(t)$ is linear in $t$, which holds
-for single-qubit amplitude damping but fails when coherence oscillates
-(TFIM Hamiltonian with transverse field).
-We introduce an \emph{adaptive prior gate}:
-\begin{equation}
-  T_{\mathrm{physics}}(\mathbf{w}) =
-  \begin{cases}
-    -1/\hat{s} - t_\mathrm{obs} & \text{if } R^2_\mathrm{OLS} \geq \tau \text{ and } \hat{s} < 0,\\
-    0 & \text{otherwise,}
-  \end{cases}
-  \label{eq:adaptive}
-\end{equation}
-where $\hat{s}$ is the OLS slope of $\log C$ over the window and
-$R^2_\mathrm{OLS}$ is the coefficient of determination of that fit.
-When $R^2_\mathrm{OLS} < \tau = 0.7$, the physics estimate is
-discarded and the LSTM residual head predicts $T_2$ directly.
-The gate is applied identically at training and inference time, so the
-model learns under the same signal it will receive at deployment.
+\subsection{Evaluation and replication}
 
-\paragraph{Ablation variants.}
-\texttt{physics\_only}: the bare OLS formula, \emph{without} the adaptive gate
-(the gate of Eq.~\ref{eq:adaptive} is a property of the residual model, not of
-the analytic baseline).
-\texttt{lstm\_only}: BiLSTM without any physics prior.
-\texttt{physics\_lstm}: full residual model with adaptive prior (ours).
-\texttt{transformer}: pure Transformer encoder \cite{Vaswani2017} (same
-as \cite{Paper1Brusnikin}, architecturally analogous to the Transformer
-used in \cite{TransformerLindblad2025} for the related inverse
-$\gamma(t)$-reconstruction task).
+Regression is scored by $R^2$ and MAE on the remaining time, the alarm
+by the area under the ROC curve (AUROC) \cite{Fawcett2006}.
+Every number reported below is a mean $\pm$ sample standard deviation
+over seeds $\{42, 43, 44\}$; a seed fixes the sampled configurations,
+the initial states, the window sampling, the split and the network
+initialisation.
+Comparisons between two arms are made as paired differences within a
+seed and are called resolved only when the sign agrees across seeds.
+Test sets hold about 40 trajectories per scenario in the ablation, about
+18 per $J$ value in the coupling sweep and about 230 in the cross-system
+runs; with three seeds, differences of order $0.05$ in $R^2$ are below
+the resolution of the smaller experiments.
 
 % --------------------------------------------------------------------------
-\section{Experiments}
+\section{Results}
 
-\subsection{E6a --- Ablation study (500 trajectories, adaptive prior)}
+\subsection{Ablation}
 \label{sec:e1}
-
-Table~\ref{tab:e1_2} reports ablation results with 500 trajectories per
-scenario and the adaptive prior gate ($\tau = 0.7$).
-Test set sizes are $N = 209$ (D) and $N = 210$ (E) after decoherence
-filtering---a $5\times$ improvement over the pilot experiment.
 
 \begin{table}[h]
 \centering
-\caption{E6a ablation for two-qubit scenarios (500 trajs each, adaptive
-  prior). Best per scenario in \textbf{bold}. MAE is reported alongside
-  $R^2$ because the two disagree sharply for \texttt{physics\_only}
-  (see the caveat below).\label{tab:e1_2}}
-\footnotesize
-\setlength{\tabcolsep}{2.5pt}
-\begin{tabular}{lrrrrrr}
+\caption{Ablation on each scenario (500 trajectories; mean $\pm$ s.d.\
+  over three seeds). Best per column in \textbf{bold}.\label{tab:e1_2}}
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{lcccc}
 \toprule
-Variant & \multicolumn{3}{c}{Scen.~D (XXZ)} & \multicolumn{3}{c}{Scen.~E (TFIM)} \\
-\cmidrule(lr){2-4}\cmidrule(lr){5-7}
-        & $R^2$ & MAE & AUROC & $R^2$ & MAE & AUROC \\
+Variant & \multicolumn{2}{c}{D (XXZ)} & \multicolumn{2}{c}{E (TFIM)} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+        & $R^2$ & AUROC & $R^2$ & AUROC \\
 \midrule
-\texttt{physics\_only}
-  & $-0.687$ & 1.303 & 0.843
-  & $-4.267$ & 2.706 & 0.727 \\
-\texttt{lstm\_only}
-  & 0.673 & 0.802 & 0.847
-  & 0.377 & 1.077 & 0.743 \\
-\texttt{physics\_lstm}
-  & 0.636 & 0.897 & 0.819
-  & 0.455 & 1.049 & 0.789 \\
-\texttt{transformer}
-  & \textbf{0.897} & \textbf{0.444} & \textbf{0.929}
-  & \textbf{0.689} & \textbf{0.718} & \textbf{0.840} \\
+\texttt{physics\_only} & $-3.98 \pm 4.31$ & $.829 \pm .089$ & $-5.98 \pm 4.09$ & $.698 \pm .071$ \\
+\texttt{lstm\_only}    & $.633 \pm .060$ & $.863 \pm .035$ & $.422 \pm .171$ & $.775 \pm .024$ \\
+\texttt{physics\_lstm} & $.599 \pm .120$ & $.885 \pm .037$ & $.245 \pm .356$ & $.760 \pm .061$ \\
+\texttt{transformer}   & $\mathbf{.843 \pm .028}$ & $\mathbf{.930 \pm .032}$ & $\mathbf{.699 \pm .045}$ & $\mathbf{.841 \pm .036}$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\columnwidth]{fig7_e6a_ablation_2q}
-  \caption{E6a ablation: R² and AUROC for all architecture variants on XXZ
-    (D) and TFIM (E) scenarios (500 trajectories, adaptive prior $\tau=0.7$).
-    The Transformer dominates both scenarios.}
+  \includegraphics[width=\columnwidth]{fig_r1_ablation}
+  \caption{Ablation of Table~\ref{tab:e1_2}; bars are means, whiskers one
+    standard deviation over three seeds.}
   \label{fig:e6a}
 \end{figure}
 
-\paragraph{How to read the \texttt{physics\_only} row.}
-Its $R^2$ values ($-0.687$ on D, $-4.267$ on E) should be read as
-\emph{``the analytic formula does not apply here''} rather than as a
-calibrated measure of how bad it is, because their magnitude is governed
-by the clamp $t_\mathrm{max}$ rather than by the physics.
-The estimator $T_2 = -1/\hat{s}$ is a hyperbola: it diverges as the
-fitted slope $\hat{s} \to 0^-$, and the implementation returns
-$t_\mathrm{max}$ outright when $\hat{s} \geq 0$.
-Two-qubit coherence oscillates and plateaus, so near-zero slopes are
-common, and each such window contributes an error of order
-$t_\mathrm{max}$; since $R^2$ is a squared-error metric, a small minority
-of windows dominates it.
-In our diagnostics a handful of saturated windows accounted for the bulk
-of the degradation, and sweeping the clamp moved $R^2$ by more than an
-order of magnitude while leaving the median error unchanged.
-MAE, which is not dominated by this tail, tells the proportionate story:
-\texttt{physics\_only} is roughly $3\times$ (D) and $3.8\times$ (E) worse
-than the Transformer, not unboundedly so.
-We keep the row because it is the ablation that motivates the whole
-paper---the physics prior is structurally wrong for two qubits---but the
-$R^2$ magnitude itself should not be over-interpreted.
+The Transformer is the best model on both scenarios and has the smallest
+spread (Table~\ref{tab:e1_2}, Fig.~\ref{fig:e6a}).
+Every learned variant beats \texttt{physics\_only} by a wide margin.
+The residual model and the same network without the prior are not
+distinguishable: their means differ by $0.03$ on XXZ and $0.18$ on TFIM,
+within the spread of either.
 
-\paragraph{Run-to-run spread.}
-The levels in Table~\ref{tab:e1_2} come from single runs.
-While preparing this version we found three separate reproducibility
-defects: the training path did not seed the ML framework's RNG, the
-simulator drew each trajectory's initial pure state from an unseeded
-global RNG, and the experiment scripts constructed their training
-commands directly, bypassing the seeded path even after the first two
-were fixed.
-All three are now closed, and repeated runs of the experiment suite are
-byte-identical for a given state of the trajectory cache.
-That qualification matters: the simulator draws each trajectory's
-initial pure state from one seeded stream, so how much of that stream a
-run consumes depends on which trajectories it finds cached.
-A cold cache---the state from which an independent replication
-starts---and a fully populated one are each deterministic; a partially
-populated cache, such as one left behind by an interrupted run, is not,
-and we measured differences of order $0.015$ in $R^2$ from this alone.
-Making trajectory content depend on the cache key rather than on stream
-position would remove the caveat, at the cost of regenerating every
-number in this paper.
-To quantify what the unseeded runs cost, we replicated this ablation
-across three seeds at the \emph{same} configuration as
-Table~\ref{tab:e1_2} ($500$~trajectories, $150$~epochs), so levels are
-directly comparable.
-Every value in Table~\ref{tab:e1_2} falls inside the replicated spread,
-but two of the gaps the table appears to show do not survive it
-(mean~$\pm$~s.d.\ over three seeds):
-on XXZ, \texttt{lstm\_only} reaches $0.633 \pm 0.060$ against
-$0.599 \pm 0.120$ for \texttt{physics\_lstm}; on TFIM,
-\texttt{lstm\_only} reaches $0.422 \pm 0.171$ against
-$0.245 \pm 0.356$ for \texttt{physics\_lstm}.
-The Transformer is best on both scenarios with the smallest spread
-($0.843 \pm 0.028$ on D, $0.699 \pm 0.045$ on E), and
-\texttt{physics\_only} stays far negative with a very large spread
-($-3.98 \pm 4.31$ and $-5.98 \pm 4.09$), consistent with the clamp
-behaviour described above.
-The architecture conclusion is therefore robust; the
-\texttt{physics\_lstm}/\texttt{lstm\_only} ordering is not.
-robust; gaps of order $0.04$, however, are not.
+The large negative $R^2$ of \texttt{physics\_only} reflects the form of
+the estimator rather than the physics: $-1/\hat s$ diverges as
+$\hat s \to 0^-$ and the implementation returns $t_\mathrm{max}$ for
+$\hat s \geq 0$, so a few windows on oscillating coherence dominate a
+squared-error metric. Its MAE ($1.75 \pm 0.83$ on D, $2.77 \pm 0.74$ on
+E) is $3.5$--$3.8$ times that of the Transformer.
 
-\paragraph{Key findings.}
-With 500 trajectories and the adaptive prior, scenario~E (TFIM) becomes
-learnable: \texttt{lstm\_only} reaches $R^2 = 0.377$ and
-\texttt{physics\_lstm} reaches $R^2 = 0.455$.
-Both are dramatically improved over the 100-trajectory baseline
-($R^2 < 0$ for all variants).
-
-The \texttt{transformer} is the strongest single-scenario model:
-$R^2 = 0.897$ on D and $R^2 = 0.689$ on E.
-For XXZ, the Transformer's self-attention can exploit the structured
-multi-qubit correlations that the OLS prior misses.
-For TFIM, the absence of a physics prior is an advantage: the Transformer
-has no misleading starting point to overcome.
-
-Between \texttt{physics\_lstm} and \texttt{lstm\_only} this table
-resolves nothing on either scenario.
-The single run suggests that the prior helps on TFIM ($0.455$ vs.\
-$0.377$) and slightly hurts on XXZ ($0.636$ vs.\ $0.673$), which
-invites explaining the TFIM figure by the adaptive gate discarding the
-physics estimate on oscillatory windows.
-The three-seed replication does not support that reading: on TFIM the
-ordering reverses in the mean ($0.245 \pm 0.356$ for
-\texttt{physics\_lstm} against $0.422 \pm 0.171$ for
-\texttt{lstm\_only}), and on XXZ the two overlap
-($0.599 \pm 0.120$ against $0.633 \pm 0.060$).
-Both gaps sit well inside the seed-to-seed spread, so the gate
-explanation is not supported and we read the comparison as ``no
-resolvable difference either way''.
-What the table does establish is that \emph{some} learned component is
-essential---every variant with one beats \texttt{physics\_only} by
-orders of magnitude---not that the prior earns its place alongside it.
-
-\subsection{E6b --- Measurement noise robustness}
+\subsection{Measurement noise}
 \label{sec:e3}
 
-A single \texttt{physics\_lstm} (500 trajs, adaptive prior) trained on
-clean D+E data is evaluated at increasing noise (Table~\ref{tab:e3_2},
-$N = 198$).
+A \texttt{physics\_lstm} trained on clean D+E data is evaluated with
+Gaussian noise of standard deviation $\sigma$ added to every observable
+(Table~\ref{tab:e3_2}).
 
 \begin{table}[h]
 \centering
-\caption{E6b noise robustness for two-qubit scenarios D+E
-  ($N=198$).\label{tab:e3_2}}
+\caption{Noise robustness on D+E (mean $\pm$ s.d.\ over three
+  seeds).\label{tab:e3_2}}
 \small
-\begin{tabular}{rrrr}
+\begin{tabular}{rccc}
 \toprule
-$\sigma_\mathrm{noise}$ & $R^2$ & MAE & AUROC \\
+$\sigma$ & $R^2$ & MAE & AUROC \\
 \midrule
-0.000 & 0.537 & 0.620 & 0.813 \\
-0.010 & 0.538 & 0.620 & 0.816 \\
-0.020 & 0.539 & 0.621 & 0.817 \\
-0.050 & 0.544 & 0.616 & 0.826 \\
-0.100 & 0.544 & 0.616 & 0.825 \\
+0.00 & $0.496 \pm 0.168$ & $0.624 \pm 0.143$ & $0.796 \pm 0.020$ \\
+0.01 & $0.528 \pm 0.132$ & $0.621 \pm 0.143$ & $0.793 \pm 0.014$ \\
+0.02 & $0.489 \pm 0.170$ & $0.625 \pm 0.156$ & $0.784 \pm 0.046$ \\
+0.05 & $0.544 \pm 0.107$ & $0.605 \pm 0.141$ & $0.786 \pm 0.058$ \\
+0.10 & $0.488 \pm 0.119$ & $0.644 \pm 0.118$ & $0.737 \pm 0.046$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\columnwidth]{fig8_e6b_noise_2q}
-  \caption{E6b: R² and AUROC of \texttt{physics\_lstm} on the D+E mixture
-    as measurement noise $\sigma$ increases from 0 to 0.10.
-    Both metrics remain essentially flat.}
-  \label{fig:e6b}
-\end{figure}
+Paired within each seed, going from $\sigma = 0$ to $\sigma = 0.10$
+changes $R^2$ by $-0.008 \pm 0.069$ (per seed $-0.072$, $-0.017$,
+$+0.065$): noise at this level moves $R^2$ about as much as changing the
+seed does, and does not degrade it systematically.
+AUROC falls in every seed ($-0.059 \pm 0.050$).
+The degradation is milder than in the single-qubit case
+($\Delta R^2 = 0.23$ in \cite{Paper1Brusnikin}), plausibly because more
+observable channels average the noise.
 
-Read alone, this table suggests near-perfect insensitivity: $R^2$ spans
-$0.007$ across the full range and AUROC $0.013$, and AUROC even
-\emph{increases} slightly with noise, which we had attributed to small
-additive noise acting as implicit regularisation for the risk head.
-Those readings do not survive replication, though the robustness itself
-does.
-
-Across three seeds the levels reproduce---$R^2 = 0.496 \pm 0.168$ at
-$\sigma = 0$ against $0.537$ here---but the $0.007$ span does not: the
-per-seed spans are $0.072$, $0.148$ and $0.119$, an order of magnitude
-wider, so this run's flatness was a fortunate draw rather than a
-property of the model.
-The apparent AUROC gain reverses as well: paired within each seed,
-AUROC \emph{falls} from $\sigma = 0$ to $\sigma = 0.10$ in all three
-($-0.059 \pm 0.050$), so noise does not act as a regulariser here.
-
-What robustness means here is therefore narrower, and we state it as the
-paired comparison the claim needs: going from clean data to
-$\sigma = 0.10$ changes $R^2$ by $-0.008 \pm 0.069$, with the sign
-varying between seeds ($-0.072$, $-0.017$, $+0.065$).
-Measurement noise up to $\sigma = 0.10$ does not systematically degrade
-regression accuracy---it moves $R^2$ about as much as changing the seed
-does ($0.113$ against $0.139$), which is the honest statement and still
-a useful one.
-It remains a milder degradation than the single-qubit case
-($\Delta R^2 = 0.23$ in \cite{Paper1Brusnikin}), plausibly because eight
-observable channels average noise more effectively than four, but we no
-longer quantify the gap with a single run's span.
-
-\subsection{E6c/E8c --- Cross-system generalisation}
-\label{sec:e4}
-
-A single \texttt{physics\_lstm} trained on the D+E mixture (500 trajs
-each) is evaluated on each subsystem.
-Table~\ref{tab:e4_2} reports two configurations: the E6c baseline
-(window=20, no augmentation) and E8c, which adds three training
-improvements identified by the CTO audit: (i)~auto-weighted BCE for
-the risk head (\texttt{risk\_pos\_weight}$=0$, auto from label ratio),
-(ii)~Gaussian noise augmentation ($\sigma_\mathrm{aug}=0.02$), and
-(iii)~a minimum window gap of 15 steps to reduce within-trajectory
-overlap.
-E8c uses a wider observation window ($L=30$ steps vs.\ $L=20$); note
-that single-scenario training with $L=30$ yields fewer valid
-pre-decoherence samples, so E8c improvements are specific to the
-mixture-training regime.
-
-\begin{table}[h]
-\centering
-\caption{Cross-system: \texttt{physics\_lstm} trained on D+E mixture.
-  E8c adds weighted BCE, augmentation, and min-gap
-  sampling.\label{tab:e4_2}}
-\small
-\begin{tabular}{lllrrr}
-\toprule
-Exp & Scen. & Hamiltonian & $R^2$ & MAE & AUROC \\
-\midrule
-E6c & D & XXZ  & 0.706 & 0.498 & 0.758 \\
-E6c & E & TFIM & 0.533 & 0.758 & 0.692 \\
-\midrule
-E8c & D & XXZ  & \textbf{0.740} & 0.792 & \textbf{0.789} \\
-E8c & E & TFIM & \textbf{0.575} & 1.055 & \textbf{0.759} \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\columnwidth]{fig9_cross_system_2q}
-  \caption{E6c vs.\ E7a: cross-system R² and AUROC for
-    \texttt{physics\_lstm} and the Transformer, both trained on the D+E
-    mixture and evaluated per scenario.}
-  \label{fig:cross}
-\end{figure}
-
-E8c improves over E6c on both scenarios: XXZ $R^2 = 0.706 \to 0.740$
-($+0.034$) and TFIM $R^2 = 0.533 \to 0.575$ ($+0.042$).
-The AUROC gains follow the same direction---XXZ $0.758 \to 0.789$
-($+0.031$) and TFIM $0.692 \to 0.759$ ($+0.067$)---and are
-disproportionately large on TFIM, where the AUROC gain ($+0.067$)
-exceeds the $R^2$ gain ($+0.042$); on XXZ the two move together
-($+0.031$ vs.\ $+0.034$).
-This is consistent with the weighted risk head and augmentation
-benefiting risk-score calibration most where the regression target is
-hardest.
-
-Comparing with the 100-trajectory baseline:
-TFIM improves from $R^2 = -0.381 \to +0.575$ ($\Delta = +0.96$) and
-XXZ from $R^2 = 0.523 \to 0.740$ ($\Delta = +0.22$).
-
-\subsection{E7a --- Transformer cross-system generalisation}
-\label{sec:e7a}
-
-Table~\ref{tab:e7a} evaluates the large Transformer (128-dim, 4-head,
-3-layer, FF=512) trained on the D+E mixture and tested on each
-subsystem individually.
-
-\begin{table}[h]
-\centering
-\caption{E7a: Transformer trained on D+E mixture (cross-system),
-  $N_\mathrm{D}=849$, $N_\mathrm{E}=780$.\label{tab:e7a}}
-\small
-\begin{tabular}{llrrr}
-\toprule
-Scen. & Hamiltonian & $R^2$ & MAE & AUROC \\
-\midrule
-D & XXZ  & 0.758 & 0.470 & 0.863 \\
-E & TFIM & 0.599 & 0.666 & 0.736 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The Transformer cross-system results (E7a) compare favourably with the
-\texttt{physics\_lstm} cross-system (E6c): XXZ improves from $0.706
-\to 0.758$ and TFIM from $0.533 \to 0.599$.
-Both use a single mixed model, confirming that the Transformer's superior
-single-scenario performance (E6a) translates to cross-system
-generalisation as well.
-
-\subsection{E11a --- Transformer cross-system, optimal window and training}
+\subsection{One model for both systems}
 \label{sec:e11a}
 
-We combine the E8c training improvements (minimum window gap, weighted
-BCE risk head) with the original window $L=20$, which yields substantially
-more valid pre-decoherence windows per trajectory than $L=30$
-(training set: 1{,}974 samples vs.\ $\sim$1{,}000 in E10b).
-Table~\ref{tab:e11a} reports the final cross-system results.
+A Transformer is trained on the D+E mixture and scored on each system
+(Table~\ref{tab:r3}).
+Only the window length differs between the two arms.
 
 \begin{table}[h]
 \centering
-\caption{E11a: Transformer cross-system, window $L=20$, min-gap $=10$,
-  500 trajs/scenario ($N_\mathrm{D}=1116$, $N_\mathrm{E}=1149$).
-  $\Delta R^2$ is relative to E7a.
-  \label{tab:e11a}}
+\caption{Cross-system Transformer, 500 trajectories per scenario
+  (mean $\pm$ s.d.\ over three seeds).\label{tab:r3}}
 \footnotesize
 \setlength{\tabcolsep}{3pt}
-\begin{tabular}{llrrrr}
+\begin{tabular}{llccc}
 \toprule
-Scen. & Ham. & $R^2$ & MAE & AUROC & $\Delta R^2$ \\
+Window & Sc. & $R^2$ & MAE & AUROC \\
 \midrule
-D & XXZ  & \textbf{0.817} & 0.616 & \textbf{0.937} & $+0.059$ \\
-E & TFIM & 0.566 & 0.900 & \textbf{0.888} & $-0.033$ \\
+20 & D & $\mathbf{0.814 \pm 0.034}$ & $0.603 \pm 0.045$ & $\mathbf{0.931 \pm 0.011}$ \\
+20 & E & $\mathbf{0.703 \pm 0.034}$ & $0.760 \pm 0.038$ & $\mathbf{0.904 \pm 0.008}$ \\
+50 & D & $0.755 \pm 0.015$ & $0.536 \pm 0.007$ & $0.886 \pm 0.023$ \\
+50 & E & $0.505 \pm 0.025$ & $0.822 \pm 0.013$ & $0.803 \pm 0.017$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-For XXZ, E11a achieves $R^2 = 0.817$ and AUROC $= 0.937$, the best
-\emph{cross-system} results across all experiments (the single-scenario
-Transformer of E6a reaches a higher $R^2 = 0.897$, but from a model
-trained on XXZ alone; E11a's AUROC $=0.937$ exceeds even that).
-The improvement over E7a is $\Delta R^2 = +0.059$ and
-$\Delta\mathrm{AUROC} = +0.074$ on XXZ.
-This gap cannot be attributed to the min-gap overlap control alone:
-E7a uses window $L=50$ against E11a's $20$ (only E7b and E7c use $20$),
-and the two additionally differ in evaluation protocol.
-The controlled window contrast of Sec.~\ref{sec:r3} attributes
-$\Delta R^2 = +0.058 \pm 0.028$ on XXZ to the window change alone,
-which accounts for essentially the whole gain and leaves nothing that
-the min-gap control is needed to explain.
-We therefore report the min-gap contribution as unmeasured rather than
-as demonstrated.
-For TFIM, $R^2 = 0.566$ is close to E7a's $0.599$ while AUROC improves
-to $0.888$ ($+0.152$), which invites reading E11a as trading regression
-accuracy for early-warning accuracy.
-It does not: E7a and E11a differ in window length, in min-gap control
-\emph{and} in evaluation protocol, so the pair cannot isolate any of
-them.
-Holding the protocol fixed and varying only the window across three
-seeds, the shorter window wins on both metrics and on both scenarios,
-in every one of the six paired comparisons:
+The shorter window wins on both metrics and both systems in every seed:
 $\Delta R^2 = +0.058 \pm 0.028$ (XXZ) and $+0.199 \pm 0.014$ (TFIM),
-with $\Delta\mathrm{AUROC} = +0.045$ and $+0.100$.
-There is no trade-off to explain---window $20$ is simply better than
-window $50$ here, most markedly on TFIM.
-The remaining TFIM $R^2$ ceiling still reflects the difficulty of
-predicting decoherence time from oscillatory two-qubit coherence
-windows, but it is not the price of the AUROC gain.
+$\Delta\mathrm{AUROC} = +0.045$ and $+0.100$.
+At window 20 a single checkpoint serves both Hamiltonians at
+$R^2 \geq 0.70$ and AUROC $\geq 0.90$.
 
-\paragraph{Does evaluating on the training configurations flatter E11a?}
-E11a scores the model on the same configurations it trained on,
-regenerating their trajectories under a different seed, so it sees fresh
-noise realisations of systems it has already seen rather than unseen
-systems.
-This is worth checking rather than assuming, because the configuration
-fixes most of $T_2$ on XXZ: the spread of $T_2$ within one configuration
-is $0.25$--$0.53$ against $1.90$ across configurations (on TFIM the two
-are comparable, $0.73$--$1.50$ against $1.46$), so a model that could
-recognise a configuration from its window would recover much of the
-target without generalising.
-We therefore scored each trained model twice, once on its training
-configurations and once on disjoint configurations drawn from a
-different generator seed, with everything else held fixed.
-The difference is nil: $\Delta R^2 = -0.000 \pm 0.009$ on XXZ and
-$+0.015 \pm 0.059$ on TFIM (three seeds, sign mixed on both).
-Configuration overlap does not inflate these numbers, and the
-cross-system results stand as reported.
+Two checks qualify this result.
+First, the model is scored on fresh trajectories of the configurations
+it was trained on; scoring it instead on disjoint configurations from a
+different generator seed changes $R^2$ by $-0.000 \pm 0.009$ on XXZ and
+$+0.015 \pm 0.059$ on TFIM, so configuration overlap does not inflate
+the numbers.
+Second, doubling the training set to 1{,}000 trajectories per scenario
+for \texttt{physics\_lstm} gives paired differences of
+$-0.056 \pm 0.299$ (XXZ) and $-0.066 \pm 0.196$ (TFIM) with the sign
+varying between seeds: no data-size effect is resolved.
 
-\paragraph{Summary of cross-system improvements.}
-Two different baselines are relevant here, and we state each explicitly
-to avoid conflating them.
-Relative to the \emph{100-trajectory pilot} (D $R^2 = 0.523$,
-E $R^2 = -0.381$), the combined improvements deliver
-XXZ $R^2: 0.523 \to 0.817$ ($\Delta = +0.294$) and
-TFIM $R^2: -0.381 \to 0.566$ ($\Delta = +0.947$).
-Relative to the \emph{500-trajectory \texttt{physics\_lstm}
-cross-system run} (E6c, Table~\ref{tab:e4_2}), the AUROC gains of E11a
-are XXZ $0.758 \to 0.937$ ($\Delta = +0.179$) and TFIM
-$0.692 \to 0.888$ ($\Delta = +0.196$).
-AUROC is not reported for the pilot, so the AUROC deltas are quoted
-against E6c rather than the pilot.
-
-\paragraph{Note on E10b.}
-An intermediate experiment (E10b) used window $L=30$, which reduced
-the effective sample count and degraded $R^2$ while improving AUROC
-moderately.
-E11a supersedes E10b by recovering the sample count and applying
-min-gap control, achieving improvements on both metrics simultaneously.
-
-\subsection{R3 --- controlled replication of the E11 comparisons}
-\label{sec:r3}
-
-Both statements the E11 experiments are read as supporting---that a
-shorter window trades $R^2$ for AUROC, and that \texttt{physics\_lstm}
-degrades with more data---rest on comparing runs that differ in several
-respects at once, each from a single seed.
-R3 re-runs the two comparisons with one factor varied at a time, three
-seeds each, every arm scored through the same evaluation protocol.
-Table~\ref{tab:r3} reports the arms and Table~\ref{tab:r3d} the paired
-differences.
-
-\begin{table}[h]
-\centering
-\caption{R3 arms: mean $\pm$ s.d.\ over seeds $\{42,43,44\}$ at
-  $500$ trajectories ($1{,}000$ for the last arm), $150$ epochs.
-  \texttt{e7a\_w50} applies E7a's window inside E11a's protocol; it
-  isolates the window and does not reproduce E7a's published
-  numbers.\label{tab:r3}}
-\small
-\begin{tabular}{llcc}
-\toprule
-Arm & Scen. & $R^2$ & AUROC \\
-\midrule
-\texttt{e11a\_w20}  & D & $0.814 \pm 0.034$ & $0.931 \pm 0.011$ \\
-\texttt{e11a\_w20}  & E & $0.703 \pm 0.034$ & $0.904 \pm 0.008$ \\
-\texttt{e7a\_w50}   & D & $0.755 \pm 0.015$ & $0.886 \pm 0.023$ \\
-\texttt{e7a\_w50}   & E & $0.505 \pm 0.025$ & $0.803 \pm 0.017$ \\
-\texttt{e11b\_500}  & D & $0.567 \pm 0.209$ & $0.856 \pm 0.047$ \\
-\texttt{e11b\_500}  & E & $0.536 \pm 0.105$ & $0.847 \pm 0.022$ \\
-\texttt{e11b\_1000} & D & $0.511 \pm 0.090$ & $0.853 \pm 0.019$ \\
-\texttt{e11b\_1000} & E & $0.470 \pm 0.119$ & $0.819 \pm 0.007$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{table}[h]
-\centering
-\caption{R3 paired differences, one per seed. The window contrast is
-  consistent in sign across all six comparisons; the data-size contrast
-  is not.\label{tab:r3d}}
-\footnotesize
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{llrr@{\,}r@{\,}r}
-\toprule
-Contrast & Sc. & $\Delta R^2$ & \multicolumn{3}{c}{per seed} \\
-\midrule
-win.\ $50\!\to\!20$ & D & $+0.058 \pm 0.028$ & $+.087$ & $+.031$ & $+.057$ \\
-win.\ $50\!\to\!20$ & E & $+0.199 \pm 0.014$ & $+.215$ & $+.188$ & $+.194$ \\
-data $500\!\to\!1000$ & D & $-0.056 \pm 0.299$ & $-.263$ & $+.287$ & $-.192$ \\
-data $500\!\to\!1000$ & E & $-0.066 \pm 0.196$ & $-.285$ & $+.094$ & $-.008$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The window contrast is unambiguous: the shorter window improves both
-metrics on both scenarios in every seed, by margins two to fourteen
-times the spread ($\Delta\mathrm{AUROC} = +0.045$ and $+0.100$).
-There is no $R^2$/AUROC trade-off to account for.
-
-The data-size contrast is not resolved: the sign reverses between
-seeds, and the mean is several times smaller than the spread.
-The $500$-trajectory arm alone varies by $\pm 0.209$ in $R^2$ on XXZ,
-which is why a single pair of runs appeared to show a large, clean
-degradation.
-
-\subsection{E7b --- Adaptive-prior threshold ($\tau$) sweep}
-\label{sec:e7b}
-
-Table~\ref{tab:e7b} sweeps the gate threshold $\tau \in \{0.0, 0.3,
-0.5, 0.7, 0.9\}$ for \texttt{physics\_lstm} trained separately on
-scenarios D and E (single-scenario, 500 trajs each, window=20 steps).
-
-\begin{table}[h]
-\centering
-\caption{E7b: $\tau$ sweep for \texttt{physics\_lstm} on each
-  scenario. \textbf{Bold} marks the highest-$R^2$ row of this single
-  sweep, not a resolved optimum (see below) and not the per-column
-  maximum: the AUROC maxima fall at different $\tau$ (D: $0.827$ at
-  $\tau=0.3$; E: $0.868$ at $\tau=0.5$).\label{tab:e7b}}
-\small
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{ccrrcrr}
-\toprule
- & \multicolumn{3}{c}{Scen.~D (XXZ)} & & \multicolumn{2}{c}{Scen.~E (TFIM)} \\
-\cmidrule{2-4}\cmidrule{6-7}
-$\tau$ & $R^2$ & MAE & AUROC & & $R^2$ & AUROC \\
-\midrule
-0.0 & 0.439 & 0.956 & 0.789 & & \textbf{0.334} & \textbf{0.840} \\
-0.3 & 0.214 & 1.056 & 0.827 & & 0.207 & 0.837 \\
-0.5 & \textbf{0.673} & \textbf{0.684} & \textbf{0.809} & & 0.148 & 0.868 \\
-0.7 & 0.473 & 0.873 & 0.776 & & 0.158 & 0.854 \\
-0.9 & 0.334 & 1.000 & 0.822 & & 0.236 & 0.859 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\columnwidth]{fig10_e7b_tau_sweep}
-  \caption{E7b: R² and AUROC of \texttt{physics\_lstm} vs.\ adaptive prior
-    threshold $\tau$ for XXZ (D) and TFIM (E).
-    Stars mark the per-scenario optimum.}
-  \label{fig:e7b}
-\end{figure}
-
-\paragraph{This sweep does not support a choice of $\tau$.}
-Read at face value the table suggests an optimum at $\tau=0.5$ for XXZ
-($R^2=0.673$ against $0.439$ at $\tau=0$) and at $\tau=0.0$ for TFIM.
-We do not draw that conclusion, for two reasons.
-
-First, the sweep is not a controlled comparison: E7b generates the
-dataset once per scenario and trains every $\tau$ on it, and the
-training path did not seed the ML framework's RNG, so consecutive
-$\tau$ points differ in weight initialisation as much as in $\tau$.
-Adjacent $\tau$ values here differ by up to $0.46$ in $R^2$, which is
-larger than the effect the sweep claims to measure.
-
-Second, we replicated the sweep across three seeds at this table's own
-configuration ($500$~trajectories, $150$~epochs, seeded throughout), and
-it leaves no detectable $\tau$ effect.
-On XXZ the means across $\tau$ span $0.620$--$0.688$, a range of
-$0.068$, against a typical seed-to-seed standard deviation of $0.085$
-at fixed $\tau$: the sweep's entire span is smaller than its own noise,
-and $\tau=0.5$ is the \emph{worst} mean rather than the best.
-On TFIM the means span $0.040$--$0.459$, a range of $0.419$, but the
-standard deviations at fixed $\tau$ average $0.397$ and reach $0.730$
-at $\tau=0.5$, so that ordering is not resolved either.
-Neither scenario reproduces the optimum the single sweep appeared to
-show.
-
-The honest statement is therefore that \emph{the gate threshold is not
-resolved}, now at full size rather than as a provisional caveat.
-The one directional signal surviving both the original sweep and the
-replication is that the risk head tolerates a positive $\tau$ while
-regression does not clearly care; on TFIM the replication mildly favours
-small $\tau$ for regression, but well inside the spread.
-Should a $\tau$ effect exist, it is smaller than the run-to-run
-variation of this pipeline, and resolving it would need more seeds
-rather than a finer grid.
-
-\subsection{E7c --- TFIM $J$-coupling sweep across the phase diagram}
+\subsection{TFIM coupling sweep}
 \label{sec:e7c}
 
-With $h = 1$ fixed (Table~\ref{tab:scenarios2}), the quantum phase
-transition of the corresponding chain occurs at $J = h = 1$.
-Table~\ref{tab:e7c} sweeps $J \in \{0.2, 0.5, 0.8, 1.0, 1.2, 1.5,
-2.0\}$ and trains a Transformer separately on each $J$-bucket (200
-trajs per bucket).
+With $h = 1$, the infinite TFIM chain has its quantum phase transition
+at $J = h$ \cite{Pfeuty1970,Sachdev2011}.
+We train a Transformer separately at each
+$J \in \{0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0\}$ (200 trajectories each;
+Table~\ref{tab:r5}).
 
 \begin{table}[h]
 \centering
-\caption{E7c: Transformer trained and evaluated at each fixed $J$
-  value.\label{tab:e7c}}
-\small
-\begin{tabular}{rrrr}
+\caption{Transformer trained and scored at fixed $J$ (mean $\pm$ s.d.\
+  over three seeds).\label{tab:r5}}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{rccc}
 \toprule
-$J$ (J/h) & $R^2$ & MAE & AUROC \\
+$J$ & $R^2$ & MAE & AUROC \\
 \midrule
-0.2 & 0.876 & 0.470 & 0.959 \\
-0.5 & 0.770 & 0.612 & 0.863 \\
-0.8 & 0.469 & 1.270 & 0.784 \\
-1.0 & 0.497 & 1.231 & 0.763 \\
-1.2 & 0.319 & 2.780 & 0.555 \quad $\leftarrow$ worst \\
-1.5 & 0.836 & 0.757 & 0.942 \\
-2.0 & 0.614 & 1.315 & 0.770 \\
+0.2 & $0.715 \pm 0.032$ & $0.58 \pm 0.07$ & $0.895 \pm 0.049$ \\
+0.5 & $0.650 \pm 0.173$ & $0.71 \pm 0.08$ & $0.907 \pm 0.009$ \\
+0.8 & $0.456 \pm 0.071$ & $0.83 \pm 0.06$ & $0.834 \pm 0.045$ \\
+1.0 & $0.535 \pm 0.133$ & $0.93 \pm 0.25$ & $0.836 \pm 0.020$ \\
+1.2 & $0.577 \pm 0.142$ & $1.05 \pm 0.62$ & $0.803 \pm 0.097$ \\
+1.5 & $0.548 \pm 0.038$ & $1.12 \pm 0.38$ & $0.774 \pm 0.072$ \\
+2.0 & $0.507 \pm 0.135$ & $1.13 \pm 0.30$ & $0.824 \pm 0.040$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Predictability falls as the coupling grows and then flattens:
+$J = 0.2$ beats $J = 0.8$ in every seed ($+0.258 \pm 0.064$), the
+weak-coupling points average $0.682$ against $0.525$ for $J \ge 0.8$,
+and MAE grows monotonically.
+The transition point is not distinguished: its $z$-score against the
+other points of the same sweep is $-1.31$, $+0.86$ and $-0.66$ in the
+three seeds.
+This is expected for $N = 2$, where the spectrum,
+$E_{P=+1} = \pm\sqrt{J^2+4h^2}$ and $E_{P=-1} = \pm J$, is analytic in
+$J$ and only a smooth crossover remains.
+
+Two dynamical explanations fail direct tests.
+The dissipator does not mix the parity sectors: $L$ enters
+Eq.~\ref{eq:lindblad2} quadratically and $P\sigma_-P = -\sigma_-$, and
+the Liouvillian commutes with the parity superoperator to machine
+precision at every $J$.
+Nor is the decline caused by a generic initial state superposing modes
+from both sectors: preparing the state inside one sector does not reduce
+it (the drop from $J \le 0.5$ to $J \ge 0.8$ changes by
+$+0.011 \pm 0.085$ for $P = +1$ and $+0.116 \pm 0.191$ for $P = -1$,
+paired against generic preparation).
+
+\subsection{The target, not the dynamics}
+\label{sec:r9}
+
+The XXZ Hamiltonian is diagonal on $|00\rangle$ and $|11\rangle$ and
+mixes $|01\rangle$ and $|10\rangle$ maximally for every $J$; only the
+frequency depends on $J$.
+The TFIM mixes $|00\rangle$ and $|11\rangle$ through the block
+$\bigl(\begin{smallmatrix}2h & J\\ J & -2h\end{smallmatrix}\bigr)$, whose
+eigenbasis is rotated from the computational one by
+\begin{equation}
+  \tan 2\theta = J/2h ,
+  \label{eq:theta}
+\end{equation}
+an angle that grows with $J$ and saturates at $\pi/4$.
+Since $T_2$ is defined through coherence \emph{in the computational
+basis}, unitary evolution modulates $C(t)$ with a depth set by $\theta$,
+and the first $1/e$ crossing depends on the phase of that modulation when
+the decaying envelope reaches the threshold
+(Fig.~\ref{fig:r9ex}).
+The $\ell_1$-coherence in the eigenbasis of $H$ is insensitive to this:
+there unitary evolution only rotates the phases of $\rho_{ij}$.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.9\columnwidth]{fig_r9_example}
+  \caption{One TFIM trajectory at $J = 1.5$. In the energy eigenbasis
+    (dashed) coherence decays smoothly; in the computational basis
+    (solid) it is modulated, first crosses $1/e$ at $t = 7.0$ and is
+    last above it at $t = 10.3$ (shaded).}
+  \label{fig:r9ex}
+\end{figure}
+
+We measured this without training, on 150 trajectories per point drawn
+as in the experiments (Table~\ref{tab:r9}): the fraction of
+trajectories whose coherence returns above the threshold after first
+crossing it, the mean time between the first crossing and the last
+moment above threshold, and the correlation between $T_2$ and $T_2^E$,
+the same crossing computed in the energy eigenbasis.
+
+\begin{table}[h]
+\centering
+\caption{Target modulation (simulation only; 150 trajectories per
+  point). ``Re-cross'': fraction with $C$ back above threshold after the
+  first crossing; ``gap'': mean time from first crossing to last time
+  above threshold; ``corr'': Pearson correlation of $T_2$ with
+  $T_2^E$.\label{tab:r9}}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{rcccccc}
+\toprule
+ & \multicolumn{2}{c}{re-cross} & \multicolumn{2}{c}{gap} & \multicolumn{2}{c}{corr} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+$J$ & XXZ & TFIM & XXZ & TFIM & XXZ & TFIM \\
+\midrule
+0.2 & 0.00 & 0.13 & 0.00 & 0.16 & 0.977 & 0.973 \\
+0.5 & 0.11 & 0.30 & 0.10 & 0.45 & 0.979 & 0.927 \\
+0.8 & 0.31 & 0.56 & 0.22 & 0.82 & 0.980 & 0.890 \\
+1.0 & 0.34 & 0.61 & 0.23 & 0.98 & 0.975 & 0.830 \\
+1.2 & 0.48 & 0.57 & 0.37 & 1.09 & 0.954 & 0.811 \\
+1.5 & 0.47 & 0.71 & 0.32 & 1.29 & 0.967 & 0.674 \\
+2.0 & 0.56 & 0.75 & 0.30 & 1.28 & 0.971 & 0.676 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\columnwidth]{fig11_e7c_J_sweep}
-  \caption{E7c: Transformer R² and AUROC trained and evaluated at fixed $J$
-    values across the TFIM phase diagram ($h=1.0$ fixed).
-    Shaded regions: paramagnetic ($J<h$, blue) and ferromagnetic ($J>h$,
-    orange).  The dashed red line marks the quantum phase transition.
-    This is the single published run; Table~\ref{tab:r5} gives the
-    three-seed replication, in which the structure near $J=h$ does not
-    survive.}
-  \label{fig:e7c}
+  \includegraphics[width=0.9\columnwidth]{fig_r5_r9_J}
+  \caption{$R^2$ of the per-$J$ Transformer (Table~\ref{tab:r5}) and
+    the re-crossing fraction of Table~\ref{tab:r9}.}
+  \label{fig:r9J}
 \end{figure}
 
-Read alone, this single sweep suggests a dip localised at the
-transition: best far from it (paramagnetic $J = 0.2$, $R^2 = 0.876$;
-deep ferromagnetic $J = 1.5$, $R^2 = 0.836$), worst just past it
-($J = 1.2$, $R^2 = 0.319$), with an asymmetry pointing at the onset of
-long-range order.
-Each of those points rests on 81--94 evaluation samples from one run, so
-we replicated the whole sweep across three seeds, varying the sampled
-configurations and training together (Table~\ref{tab:r5}).
+On TFIM the re-crossing fraction and the gap grow with $J$ and saturate,
+and the correlation with the envelope falls from $0.97$ to $0.67$: at
+$J \ge 1.5$ the envelope explains less than half of the variance of
+$T_2$, and the gap ($\approx 1.3$) is about a third of the mean $T_2$
+($\approx 4.2$).
+On XXZ the correlation stays above $0.95$ at every $J$ and the gaps are
+four times smaller.
+Across the seven $J$ values the re-crossing fraction correlates with the
+trained models' $R^2$ at $r = -0.85$ ($p \approx 0.015$; Spearman
+$-0.61$; Fig.~\ref{fig:r9J}).
+Without dissipation the modulation alone almost never takes $C$ below
+threshold ($\le 0.3\%$ of random states), so the target is set by
+dissipation but its \emph{timing} is shifted by the unitary part.
 
-\begin{table}[h]
-\centering
-\caption{R5: the E7c sweep across seeds $\{42,43,44\}$, mean $\pm$ s.d.,
-  against the single published run. $r(J)$ is the parity-splitting ratio
-  of Eq.~\ref{eq:ratio}.\label{tab:r5}}
-\footnotesize
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{rrrr}
-\toprule
-$J$ & $r(J)$ & $R^2$ (3 seeds) & published \\
-\midrule
-0.2 & 0.100 & $0.715 \pm 0.032$ & 0.876 \\
-0.5 & 0.243 & $0.650 \pm 0.173$ & 0.770 \\
-0.8 & 0.371 & $0.456 \pm 0.071$ & 0.469 \\
-1.0 & 0.447 & $0.535 \pm 0.133$ & 0.497 \\
-1.2 & 0.514 & $0.577 \pm 0.142$ & 0.319 \\
-1.5 & 0.600 & $0.548 \pm 0.038$ & 0.836 \\
-2.0 & 0.707 & $0.507 \pm 0.135$ & 0.614 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The localisation does not survive.
-$J = 1.2$ is not the worst point under replication---it is better than
-$J = 0.8$ by $+0.120$ on average, with the sign varying between
-seeds---and the minimum wanders ($J = 1.0$, $2.0$ and $0.8$ for the
-three seeds).
-The recovery the single run showed at $J = 1.5$ does not appear either:
-paired against $J = 1.2$ the difference is $+0.029 \pm 0.133$ with mixed
-sign, and $J = 2.0$ stays at $0.507$ rather than recovering.
-The transition point itself is unremarkable: its $z$-score against the
-other points in the same sweep is $-1.31$, $+0.86$ and $-0.66$ across
-the three seeds.
-
-What does survive is a decline with coupling strength, which then
-flattens.
-$J = 0.2$ beats $J = 0.8$ in every seed ($+0.258 \pm 0.064$), and the
-weak-coupling points average $0.682$ against $0.525$ for
-$J \geq 0.8$; $R^2$ correlates negatively with $r(J)$ in every seed
-(Spearman $-0.39$, $-0.43$, $-0.46$).
-The honest statement is therefore a monotone loss of predictability as
-the coupling grows, not a critical-point phenomenon.
+This evidence is correlational: seven points, and the modulation grows
+with $J$ together with the overall energy scale $\sqrt{J^2+4h^2}$.
+The decisive test is to repeat the coupling sweep with $T_2^E$ as the
+target; if the mechanism is right, the $J$-dependence of $R^2$ should
+largely disappear.
+We have not yet run it.
 
 % --------------------------------------------------------------------------
 \section{Discussion}
 \label{sec:discussion}
 
-\paragraph{Status of the claims carried over from the single-qubit study.}
-The single-qubit work \cite{Paper1Brusnikin} advanced four claims that
-transfer to the two-qubit setting.
-We state their outcome here explicitly, including where they fail.
-\begin{itemize}
-  \item \textbf{Residual architecture (refuted for two qubits).}
-    In the single-qubit case the physics-informed residual dominated
-    both a pure-LSTM and a physics-only baseline.
-    Here it does not: the Transformer beats \texttt{physics\_lstm} on
-    both scenarios, and by a wide margin ($0.897$ vs.\ $0.636$ on XXZ,
-    $0.689$ vs.\ $0.455$ on TFIM).
-    Its standing against \texttt{lstm\_only} is less clear-cut: the
-    tabulated gaps ($0.636$ vs.\ $0.673$ on XXZ, $0.455$ vs.\ $0.377$
-    on TFIM) are of order $0.04$--$0.08$, whereas a three-seed
-    replication puts the seed-to-seed standard deviation of
-    \texttt{physics\_lstm} at $0.31$ (XXZ) and $0.76$ (TFIM); we
-    therefore do not claim a difference in either direction there.
-    The negative result that does survive replication is against the
-    Transformer, and the reason---a structurally wrong prior on
-    non-exponential coherence---is analysed below.
-  \item \textbf{Early-window warning (holds for XXZ only).}
-    The target was risk AUROC $\geq 0.92$.
-    E11a reaches $0.937$ on XXZ but $0.888$ on TFIM, so the claim holds
-    for XXZ and falls short for TFIM.
-  \item \textbf{Noise robustness (stability yes, absolute level no).}
-    Noise up to $\sigma = 0.10$ does not systematically degrade $R^2$
-    ($-0.008 \pm 0.069$ paired within seeds, sign varying), a milder
-    degradation than the single-qubit case ($\Delta R^2 = 0.23$),
-    though not the near-perfect flatness a single run suggested.
-    The absolute AUROC of the D+E mixture model sits at
-    $0.813$--$0.826$ in that run and $0.70$--$0.84$ across seeds, below
-    the $\geq 0.90$ bar the single-qubit study met.
-    Robust, but not yet accurate enough.
-  \item \textbf{Cross-system generalisation (partially confirmed).}
-    A single E11a checkpoint does serve both Hamiltonians without
-    retraining, and XXZ reaches $R^2 = 0.817$; but TFIM stalls at
-    $R^2 = 0.566$, short of the $0.70$ target set for this work.
-    The finite-size analysis below argues this ceiling is structural
-    rather than a training deficiency; that argument is consistent with
-    the replicated $J$-sweep but is not tested by it.
-\end{itemize}
+\paragraph{The physics prior on two qubits.}
+In the single-qubit case the residual model improves on the bare formula
+and the network without the prior fails \cite{Paper1Brusnikin}.
+On two qubits the formula is not merely imprecise but structurally
+wrong: oscillating coherence breaks the assumption that $\log C$ is
+linear over the window.
+Unlike a PINN \cite{Raissi2019}, where a physics term is a soft penalty,
+our prior is part of the output; when it is wrong, the network has to
+undo it through $\delta T$.
+The gate removes it on the worst windows, and the residual model ends up
+no better and no worse than the same network without the prior
+(Table~\ref{tab:e1_2}).
+The recommended model for two qubits is the Transformer: it is the most
+accurate and the most stable across seeds.
 
-\paragraph{When does the physics prior help vs.\ hurt in 2-qubit systems?}
-The E6a results reveal that for 2-qubit systems, the Transformer
-consistently outperforms \texttt{physics\_lstm} (D: $0.897$ vs.\ $0.636$;
-E: $0.689$ vs.\ $0.455$).
-This is the opposite of the single-qubit finding from \cite{Paper1Brusnikin},
-where the physics prior provided a decisive advantage.
-The reason is that 2-qubit coherence---even for XXZ---is not well
-approximated by a simple exponential, so the OLS prior provides a
-biased starting point that the LSTM residual must overcome rather than
-simply correct.
-Unlike standard PINNs~\cite{Raissi2019}, where a physics term enters as
-a soft loss penalty the network can learn to down-weight, our residual
-prior is a hard architectural constraint (Eq.~\ref{eq:residual}): when
-it is structurally wrong, as it is for oscillatory 2-qubit coherence,
-the network cannot simply ignore it, and can only partially compensate
-through $\delta T_\mathrm{LSTM}$.
-For 2-qubit systems, \emph{the pure Transformer is the recommended
-architecture}.
+\paragraph{What limits TFIM.}
+If the mechanism of Sec.~\ref{sec:r9} holds, part of the TFIM ceiling is
+not a property of the model or of the data size but of the target: the
+first crossing of a basis-dependent quantity is partly a matter of
+oscillation phase.
+The practical lesson is to define the decoherence time through a
+quantity that the Hamiltonian does not modulate---the coherence in the
+energy eigenbasis, or a basis-independent measure---whenever the
+Hamiltonian is not diagonal in the measurement basis.
+Whether the remaining modulation could be predicted from the window is
+open; the oscillation phase is fixed by the initial state, but the model
+does not see two-body correlators.
 
-\paragraph{Role of the adaptive prior.}
-Despite the Transformer's superiority in E6a, the adaptive
-\texttt{physics\_lstm} remains valuable for interpretability.
-The adaptive gate isolates the regime where the OLS prior
-\emph{does} apply (linear window, e.g., late-stage XXZ decay) from the
-regime where it does not (oscillatory TFIM), enabling interpretable
-predictions.
-E11b appears to show that \texttt{physics\_lstm} does not benefit from
-more training data (D: $0.740 \to 0.491$ on doubling to 1{,}000
-trajectories), which would invite explaining it by the richer diversity
-of $\gamma(t)$ profiles overwhelming the inductive bias of the OLS
-prior.
-That comparison was not controlled---E11b and its $500$-trajectory
-baseline also differ in window length, early-stopping patience and
-inference codes---so we re-ran the $500$- and $1{,}000$-trajectory
-configurations against each other across three seeds, changing nothing
-but the trajectory count.
-The effect does not survive: paired differences are $-0.263$, $+0.287$,
-$-0.192$ on XXZ and $-0.285$, $+0.094$, $-0.008$ on TFIM, giving
-$\Delta R^2 = -0.056 \pm 0.299$ and $-0.066 \pm 0.196$.
-The sign is not even consistent---on one seed the extra data helps
-markedly---and the mean is several times smaller than the spread.
-The $500$-trajectory arm is itself extremely noisy
-($R^2 = 0.567 \pm 0.209$ on XXZ), which is what made a single pair of
-runs look decisive.
-We therefore withdraw the data-scaling claim: these experiments do not
-establish that \texttt{physics\_lstm} degrades with more data, and the
-Transformer recommendation rests on its accuracy and its much smaller
-run-to-run spread, not on a scaling asymmetry.
+\paragraph{Limitations.}
+All data are simulated, with $\gamma(t)$ drawn from a smooth polynomial
+family; real devices add non-Markovian noise and correlated readout
+errors.
+With $N = 2$ no statement about phase transitions is possible.
+Test sets are small (about 40 trajectories per scenario, 18 per $J$),
+which limits the resolution of every comparison to the replicated
+spreads quoted.
 
-\paragraph{Transformer architecture recommendations.}
-Taken together, E6a (single-scenario ablation), E7a (cross-system),
-and E7b ($\tau$ sweep) point to a clear deployment strategy:
-\begin{itemize}
-  \item \textit{For XXZ (D):} use the Transformer when accuracy is
-    paramount ($R^2 = 0.897$ single-scenario, $0.758$ cross-system);
-    \texttt{physics\_lstm} remains the option when an interpretable
-    single model is needed, but we cannot recommend a specific gate
-    threshold (Sec.~\ref{sec:e7b}).
-  \item \textit{For TFIM (E):} use a pure Transformer.
-    The gate threshold is again unresolved; the only consistent
-    directional signal is that the risk head tolerates a positive
-    $\tau$ while regression does not clearly prefer one.
-  \item \textit{Mixed deployment:} the Transformer trained on D+E
-    with window $L=20$ and min-gap overlap control (E11a) achieves
-    $R^2 = 0.817$ (XXZ) and AUROC $= 0.937$ (XXZ) / $0.888$ (TFIM)
-    from a single checkpoint.
-    This is the recommended configuration for systems where both
-    regression accuracy and early-warning reliability are required.
-\end{itemize}
-
-\paragraph{Phase-transition anomaly.}
-The E7c $J$-sweep shows predictability falling as the coupling grows.
-A single run had placed that loss as a dip localised at the transition,
-worst just past $J = h$ and recovering beyond it, but replication across
-seeds leaves only the monotone part: weak coupling is the predictable
-regime ($R^2 = 0.715 \pm 0.032$ at $J = 0.2$), everything from
-$J = 0.8$ upward sits near $0.5$, and $J = h$ is not distinguishable
-from its neighbours.
-The practical reading changes accordingly: it is strong coupling
-relative to the transverse field, not proximity to the transition, that
-predicts unreliable early warning, and that is what should be factored
-into error-correction scheduling policies~\cite{Lidar2013}.
-
-\paragraph{Why does predictability fall with coupling? Two finite-size
-accounts, both tested.}
-In the thermodynamic limit ($N\to\infty$) the 1D transverse-field
-Ising chain has a genuine quantum critical point at $J=h$, where the
-excitation gap closes as $\Delta\sim|J-h|^{z\nu}$ ($z=\nu=1$) and the
-correlation length diverges~\cite{Pfeuty1970,Sachdev2011}.
-Our system is the $N=2$ instance of this Hamiltonian, so no true
-non-analyticity can occur---finite systems never exhibit sharp phase
-transitions, only smooth crossovers that sharpen into the transition
-as $N\to\infty$.
-We can nonetheless identify the finite-size precursor of the
-transition \emph{exactly}, since the simulated Hamiltonian
-$H_{\mathrm{TFIM}} = J\,\sigma_x\!\otimes\!\sigma_x
-+ h(\sigma_z\otimes I + I\otimes\sigma_z)$ block-diagonalises under the
-global-flip parity $P=\sigma_z\otimes\sigma_z$ (which commutes with
-$H_{\mathrm{TFIM}}$) into two exactly solvable $2\times2$ sectors:
-\begin{equation}
-  E_{P=+1} = \pm\sqrt{J^2+4h^2}, \qquad
-  E_{P=-1} = \pm J.
-  \label{eq:tfim-spectrum}
-\end{equation}
-Both branches are smooth (analytic) functions of $J$ for all $J>0$---
-confirming explicitly, for this exact model, that finite $N$ washes out
-the non-analyticity, as finite-size scaling theory predicts.
-What \emph{does} change qualitatively with $J$ is the ratio of the two
-sectors' level splittings,
-\begin{equation}
-  r(J) \;=\; \frac{2J}{2\sqrt{J^2+4h^2}} \;=\; \frac{J}{\sqrt{J^2+4h^2}},
-  \label{eq:ratio}
-\end{equation}
-which grows monotonically from $r\to0$ (deep paramagnetic, $J\ll h$:
-the $P{=}{+}1$ sector's splitting dominates, so coherent dynamics is
-governed by essentially one frequency) through $r(h)=1/\sqrt5\approx
-0.447$ at the nominal transition to $r\to1$ (deep ferromagnetic,
-$J\gg h$: both splittings again scale together, $\propto2J$).
-It is tempting to conclude here that the amplitude-damping dissipator,
-which does not commute with $P$ ($\sigma_x\sigma_-\sigma_x=\sigma_+$),
-therefore couples the two parity sectors. For the system simulated here
-that conclusion is wrong.
-The jump operator $L$ enters the dissipator quadratically,
-$\mathcal{D}[L]\rho = L\rho L^\dagger - \tfrac12\{L^\dagger L,\rho\}$,
-so whenever $PLP^\dagger=\pm L$ the sign cancels and the parity
-symmetry survives; in this basis $\sigma_-\mapsto-\sigma_-$, which is
-exactly that case.
-Checked numerically on the simulator itself, the Liouvillian commutes
-with the parity superoperator $\rho\mapsto P\rho P^\dagger$ to machine
-precision at every $J$ in the sweep, for amplitude damping and for
-dephasing alike, while deliberately asymmetric jump operators (whose
-image is not proportional to $L$) give commutator norms of order $30$.
-The sectors do not mix.
-
-A second, weaker account remains available at this point, and we tested it
-rather than adopting it.
-Parity is conserved, but a generic initial state populates both
-sectors---over random pure states, $98\%$ carry more than $5\%$ of
-their weight in each---so the observed coherence superposes modes at
-both sectors' frequencies, whose ratio is $r(J)$.
-Where one frequency dominates ($r\approx0$) the signal is effectively
-single-mode; in the band $r(J)\in[0.37,0.60]$ neither dominates, and an
-$\ell_1$-coherence trajectory with two comparably weighted, comparably
-fast channels is harder to extrapolate from a short early window than
-one---the same information limit as the single-exponential case in
-\cite{Paper1Brusnikin}, with two competing modes instead of one.
-Since $r(J)$ rises monotonically and is smooth at $J=h$, this predicts a
-monotone decline with no feature at the transition, which is what the
-replicated sweep shows.
-
-That agreement is not evidence, because the prediction is falsifiable
-directly: confine the initial state to a single parity sector and the
-signal carries one frequency instead of two, so the $J$-dependence
-should largely disappear.
-We ran that test (Table~\ref{tab:r6}), preparing initial states by
-projection onto $P=+1$ and onto $P=-1$, with the Hamiltonian,
-dissipator and integration unchanged.
-
-\begin{table}[h]
-\centering
-\caption{R6: mean $R^2$ over seeds $\{42,43,44\}$ under generic and
-  single-sector state preparation. ``Drop'' is the mean at $J\leq0.5$
-  minus the mean at $J\geq0.8$.\label{tab:r6}}
-\footnotesize
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{rrrrr}
-\toprule
-$J$ & $r(J)$ & generic & $P={+}1$ & $P={-}1$ \\
-\midrule
-0.2 & 0.100 & $0.625$ & $0.831$ & $0.862$ \\
-0.5 & 0.243 & $0.650$ & $0.585$ & $0.660$ \\
-0.8 & 0.371 & $0.456$ & $0.634$ & $0.535$ \\
-1.0 & 0.447 & $0.535$ & $0.652$ & $0.489$ \\
-1.2 & 0.514 & $0.577$ & $0.560$ & $0.584$ \\
-1.5 & 0.600 & $0.548$ & $0.497$ & $0.566$ \\
-2.0 & 0.707 & $0.507$ & $0.582$ & $0.489$ \\
-\midrule
-\multicolumn{2}{l}{Drop} & $+0.113$ & $+0.123$ & $+0.229$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The prediction fails.
-The decline does not shrink under single-sector preparation: paired
-against the generic arm on the same seed, the drop changes by
-$+0.011 \pm 0.085$ for $P={+}1$ and $+0.116 \pm 0.191$ for $P={-}1$,
-with mixed sign---markedly negative values were required.
-Whatever costs predictability as $J$ grows survives having only one
-sector populated, so it is not the superposition of the two.
-We therefore withdraw this account as well.
-
-What the test does show is that sector purity matters at weak coupling
-and stops mattering as $J$ grows: at $J=0.2$ the single-sector arms
-reach $0.831$ and $0.862$ against $0.625$ for generic preparation, and
-with a quarter of the spread ($\pm0.06$, $\pm0.04$ against $\pm0.26$),
-while by $J\geq0.8$ the three arms are indistinguishable.
-Something else dominates at strong coupling.
-The overall energy scale $\sqrt{J^2+4h^2}$ grows relative to the
-dissipation rate $\gamma(t)$, and the shape of the decay changes with
-it; separating those is beyond a seven-point sweep and we leave it open.
-
-The empirical finding stands on its own: predictability falls with
-coupling strength and then saturates, robustly across seeds, with $J=h$
-carrying no special status.
-Its cause is now an open question rather than a settled one---both
-explanations this paper offered have been tested and neither survived.
-
-\paragraph{Remaining open questions.}
+\paragraph{Open questions.}
 \begin{enumerate}
-  \item \textbf{Entanglement features.}
-    Adding concurrence \cite{Wootters1998} or negativity as explicit
-    features could further improve the model by directly exposing
-    inter-qubit correlations---particularly relevant given that
-    entanglement can terminate in finite time \cite{YuEberly2009}
-    while single-qubit coherence decays only asymptotically.
-  \item \textbf{What drives the loss at strong coupling.}
-    Sector purity helps markedly at $J=0.2$ and not at all by
-    $J\geq0.8$, so the strong-coupling regime is governed by something
-    the spectral picture does not capture---plausibly the growth of the
-    overall energy scale $\sqrt{J^2+4h^2}$ relative to $\gamma(t)$, and
-    the change in decay shape that comes with it.
-  \item \textbf{More seeds before a finer grid.}
-    The replicated sweep leaves a monotone decline whose per-point
-    spread ($\pm 0.03$--$0.17$) is comparable to the differences between
-    neighbouring $J$. Resolving any remaining structure calls for more
-    seeds at the present seven points rather than a denser grid, which
-    would only add points of the same precision.
-  \item \textbf{Extension to $n > 2$ qubits.}
-    The architecture is agnostic to qubit count; scaling to 3--4 qubits
-    is a natural next step.
+  \item The coupling sweep with $T_2^E$ as the target.
+  \item Two-body correlators and entanglement measures (concurrence
+    \cite{Wootters1998}, negativity) as inputs, or entanglement as an
+    alternative target.
+  \item Extension to three and four qubits.
 \end{enumerate}
 
 % --------------------------------------------------------------------------
 \section{Conclusion}
 
-We have extended physics-informed early warning of quantum decoherence
-to two-qubit XXZ and TFIM systems and completed a thorough experimental
-programme (E6--E7).
-Key findings are:
 \begin{enumerate}
-  \item A \emph{learned component} eliminates the catastrophic OLS
-    failure on TFIM: $R^2$ improves from $-4.27$
-    (\texttt{physics\_only}) to $+0.455$ (\texttt{physics\_lstm}) in
-    single-scenario training, an improvement that survives replication
-    across seeds.
-    The gain is not specific to the adaptive prior gate
-    (Eq.~\ref{eq:adaptive}): \texttt{lstm\_only}, which carries neither
-    prior nor gate, does at least as well under replication, so the
-    evidence supports the learned residual rather than the gate.
-  \item Scaling to 500 trajectories and adding improved training
-    (weighted BCE for risk head, noise augmentation, min-gap window
-    sampling) pushes TFIM cross-system $R^2$ from $-0.381$ (pilot) to
-    $+0.575$ ($\Delta = +0.96$) and XXZ cross-system AUROC from $0.758$
-    to $0.789$.
-  \item The \emph{Transformer is the recommended architecture} for
-    2-qubit systems: $R^2 = 0.897$ / $0.689$ (single-scenario D/E) and
-    $R^2 = 0.758$ / $0.599$ (cross-system D/E), outperforming
-    \texttt{physics\_lstm} in all conditions.
-    The physics prior is not advantageous when 2-qubit coherence is
-    non-exponential.
-  \item The \emph{gate threshold $\tau$ is not resolved} by our
-    experiments (E7b). The single sweep suggests Hamiltonian-dependent
-    optima, but it varies weight initialisation along with $\tau$, and a
-    three-seed replication at full size ($500$~trajectories,
-    $150$~epochs) leaves no detectable effect: on XXZ the means span
-    $0.068$ across $\tau$ against a seed-to-seed spread of $0.085$ at
-    fixed $\tau$, and on TFIM the spread across seeds ($0.397$ on
-    average) is as large as the span across $\tau$ ($0.419$).
-    If a $\tau$ effect exists it is below this pipeline's run-to-run
-    variation.
-  \item Decoherence predictability \emph{falls as the TFIM coupling
-    grows and then saturates}: $R^2 = 0.715 \pm 0.032$ at $J = 0.2$
-    against $\approx 0.53$ for $J \geq 0.8$ (E7c, replicated across
-    three seeds). A single sweep had suggested a dip localised at the
-    quantum phase transition with recovery beyond it; neither the
-    location nor the recovery reproduces, and $J = h$ is not
-    distinguishable from its neighbours.
-    The cause is open. This paper offered two explanations and tested
-    both: that the dissipator couples the Hamiltonian's parity sectors
-    (the Liouvillian in fact conserves parity exactly, at every $J$),
-    and that a generic initial state superposes two comparable modes,
-    one per sector (confining the state to a single sector does not
-    reduce the decline---see Table~\ref{tab:r6}). Neither survives, so
-    we report the trend as an empirical result whose mechanism is not
-    established, rather than attach an account we have falsified.
-  \item \emph{Measurement noise up to $\sigma = 0.10$ does not
-    systematically degrade accuracy}: paired within each seed, $R^2$
-    changes by $-0.008 \pm 0.069$ and the sign varies, so noise moves
-    the metric about as much as changing the seed does. This is a
-    milder degradation than the single-qubit case ($\Delta R^2 = 0.23$).
-    The single run's much flatter reading---a total span of $0.007$,
-    with AUROC apparently improving under noise---does not replicate:
-    per-seed spans are $0.072$--$0.148$ and AUROC falls in all three
-    seeds, so that reading and the implicit-regularisation explanation
-    for it are both withdrawn.
+  \item The single-qubit conclusion does not transfer: on two qubits the
+    Transformer is best ($R^2 = 0.843 \pm 0.028$ on XXZ,
+    $0.699 \pm 0.045$ on TFIM), and the residual model is not
+    distinguishable from the same network without the prior.
+  \item A single Transformer with a 20-step window serves both systems
+    at $R^2 = 0.814$ and $0.703$, AUROC $0.931$ and $0.904$; the shorter
+    window beats a longer one on both metrics in every seed.
+  \item Measurement noise up to $\sigma = 0.10$ does not systematically
+    degrade $R^2$.
+  \item On TFIM predictability falls with coupling and saturates; the
+    transition point is not special.
+  \item The decline is consistent with modulation of the target: the
+    computational-basis coherence that defines $T_2$ is modulated by the
+    Hamiltonian with a depth set by $\tan2\theta = J/2h$, and the
+    resulting ambiguity of the crossing time tracks the loss in $R^2$.
+    A sweep with an energy-basis target will test this directly.
 \end{enumerate}
 
 % --------------------------------------------------------------------------
@@ -1195,32 +544,19 @@ All data in this paper are simulated; no experimental data were used.
 Every table is produced by the accompanying code from the trajectory
 generator described in Sec.~\ref{sec:method}, and the result files behind
 each table are retained alongside it.
-Regenerating them requires only the seeds listed below.
 
 \section*{Code availability}
 The simulation, training, evaluation and figure-generating code, together
-with the result files behind every table and every replication reported
-here, is publicly available at
+with the result files behind every table, is publicly available at
 \url{https://github.com/Mobo140/decoherence}.
 
 \section*{Reproducibility}
-All reported runs are seeded end to end: the sampled system
-configurations, the trajectory simulation (including each trajectory's
-random initial pure state), the window sampling and train/validation/test
-split, and the network initialisation and batch order.
-Repeated runs of the experiment suite reproduce byte-identically for a
-given state of the trajectory cache; the cache stores each simulated
-trajectory under a key derived from its configuration, seed and index, so
-a cold cache---the state from which an independent replication
-starts---and a fully populated one are each deterministic, while a
-partially populated one is not, because the initial states are drawn from
-one seeded stream whose position depends on how many trajectories are
-cache hits.
+All runs are seeded end to end: the sampled system configurations, each
+trajectory's initial state, the window sampling and split, and the
+network initialisation and batch order.
+A run started from an empty trajectory cache is deterministic.
 Results were produced with Python~3.12.1, NumPy~2.4.4, SciPy~1.17.1,
-QuTiP~5.2.3 and PyTorch~2.11.0 on CPU.
-Single-run tables use seed~42; every replication reported here uses seeds
-$\{42,43,44\}$ and states its per-seed values so that any comparison can
-be checked against its own spread.
+QuTiP~5.2.3 and PyTorch~2.11.0 on CPU, with seeds $\{42,43,44\}$.
 
 \section*{Competing interests}
 \needspaste{competing-interests declaration --- usually ``The author
