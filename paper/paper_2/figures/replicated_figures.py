@@ -1,9 +1,9 @@
-"""Figures for Paper 2 built from the replicated results (R1, R5, R9).
+"""Figures for Paper 2 built from the replicated results (R1, R5, R10).
 
     python paper/paper_2/figures/replicated_figures.py
 
 Reads experiments/results/{r1_multiseed_ablation_full,r5_multiseed_J_sweep,
-r9_target_modulation}.csv and simulates one illustrative TFIM trajectory.
+r10_energy_target_J_sweep}.csv and simulates one illustrative TFIM trajectory.
 Writes fig_r1_ablation.pdf, fig_r5_r9_J.pdf and fig_r9_example.pdf next to
 this file.
 """
@@ -50,26 +50,20 @@ def fig_ablation() -> None:
 
 
 def fig_J() -> None:
-    r5 = pd.read_csv(RES / "r5_multiseed_J_sweep.csv").groupby("J")["r2"]
-    r9 = pd.read_csv(RES / "r9_target_modulation.csv")
-    r9 = r9[r9.part == 2]
-    fig, ax = plt.subplots(figsize=(3.3, 2.4))
-    J = r5.mean().index.values
-    ax.errorbar(J, r5.mean().values, yerr=r5.std().values, fmt="o-", color="C0",
-                capsize=2, label="$R^2$ (R5)")
-    ax.set_xlabel("$J$  ($h=1$)")
-    ax.set_ylabel("$R^2$", color="C0")
-    ax.set_ylim(0.2, 0.9)
-    ax2 = ax.twinx()
-    for model, style in [("TFIM", "s-"), ("XXZ", "s--")]:
-        sub = r9[r9.model == model]
-        ax2.plot(sub.J, sub.frac_nonmonotone, style, color="C3", ms=3,
-                 label=f"non-monotone, {model}")
-    ax2.set_ylabel("non-monotone fraction", color="C3")
-    ax2.set_ylim(0, 0.9)
-    h1, l1 = ax.get_legend_handles_labels()
-    h2, l2 = ax2.get_legend_handles_labels()
-    ax.legend(h1 + h2, l1 + l2, fontsize=6, loc="lower left")
+    r5 = pd.read_csv(RES / "r5_multiseed_J_sweep.csv")
+    r10 = pd.read_csv(RES / "r10_energy_target_J_sweep.csv")
+    fig, axes = plt.subplots(1, 2, figsize=(6.6, 2.4))
+    for ax, metric, label in zip(axes, ["r2", "mae"], ["$R^2$", "MAE"]):
+        for d, style, name in [(r5, "o-", "computational-basis $T_2$"),
+                               (r10, "s--", "energy-basis $T_2^E$")]:
+            g = d.groupby("J")[metric]
+            ax.errorbar(g.mean().index, g.mean().values, yerr=g.std().values,
+                        fmt=style, ms=3, capsize=2, label=name)
+        ax.set_xlabel("$J$  ($h=1$)")
+        ax.set_ylabel(label)
+    axes[0].set_ylim(0.2, 1.0)
+    axes[1].set_ylim(0, 1.8)
+    axes[1].legend(fontsize=6, loc="upper left")
     fig.tight_layout()
     fig.savefig(OUT / "fig_r5_r9_J.pdf")
 

@@ -86,9 +86,11 @@ def main() -> None:
     p.add_argument("--seeds", type=int, nargs="+", default=[42, 43, 44])
     p.add_argument("--fast", action="store_true")
     p.add_argument("--out", type=str, default="r7_multiseed_1qubit.csv")
+    p.add_argument("--n-per", type=int, default=100,
+                   help="trajectories per scenario (R11 uses 500)")
     a = p.parse_args()
 
-    n_per = 30 if a.fast else 100
+    n_per = 30 if a.fast else a.n_per
     out = RESULTS_DIR / a.out
 
     print(f"R7 | seeds={a.seeds} n_per={n_per} scenarios=A,B,C")

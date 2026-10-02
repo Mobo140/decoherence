@@ -56,6 +56,10 @@ crossing time depend on the oscillation phase. The fraction of
 trajectories whose coherence re-crosses the threshold tracks the loss in
 $R^2$ across $J$ ($r = -0.85$), while the XXZ model, whose mixing angle
 does not depend on $J$, shows neither effect.
+Retraining the coupling sweep with $T_2$ defined in the energy
+eigenbasis confirms it: the error no longer grows with $J$
+(MAE $0.42$ at $J=0.2$ and $0.41$ at $J=2.0$, against $0.58$ and $1.13$
+with the computational-basis target), and $R^2$ rises at every $J$.
 \end{abstract}
 
 % --------------------------------------------------------------------------
@@ -183,8 +187,10 @@ The cross-system and $J$-sweep experiments use a larger Transformer
 
 \subsection{Evaluation and replication}
 
-Regression is scored by $R^2$ and MAE on the remaining time, the alarm
-by the area under the ROC curve (AUROC) \cite{Fawcett2006}.
+Regression is scored by $R^2$ and MAE of the predicted decoherence time
+$t_\mathrm{obs} + \widehat T_{2,\mathrm{rem}}$ against the true $T_2$ over
+all test windows; the alarm by the area under the ROC curve (AUROC)
+\cite{Fawcett2006}.
 Every number reported below is a mean $\pm$ sample standard deviation
 over seeds $\{42, 43, 44\}$; a seed fixes the sampled configurations,
 the initial states, the window sampling, the split and the network
@@ -437,13 +443,6 @@ $J$ & XXZ & TFIM & XXZ & TFIM & XXZ & TFIM \\
 \end{tabular}
 \end{table}
 
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=0.9\columnwidth]{fig_r5_r9_J}
-  \caption{$R^2$ of the per-$J$ Transformer (Table~\ref{tab:r5}) and
-    the re-crossing fraction of Table~\ref{tab:r9}.}
-  \label{fig:r9J}
-\end{figure}
 
 On TFIM the re-crossing fraction and the gap grow with $J$ and saturate,
 and the correlation with the envelope falls from $0.97$ to $0.67$: at
@@ -454,17 +453,62 @@ On XXZ the correlation stays above $0.95$ at every $J$ and the gaps are
 four times smaller.
 Across the seven $J$ values the re-crossing fraction correlates with the
 trained models' $R^2$ at $r = -0.85$ ($p \approx 0.015$; Spearman
-$-0.61$; Fig.~\ref{fig:r9J}).
+$-0.61$).
 Without dissipation the modulation alone almost never takes $C$ below
 threshold ($\le 0.3\%$ of random states), so the target is set by
 dissipation but its \emph{timing} is shifted by the unitary part.
 
 This evidence is correlational: seven points, and the modulation grows
 with $J$ together with the overall energy scale $\sqrt{J^2+4h^2}$.
-The decisive test is to repeat the coupling sweep with $T_2^E$ as the
-target; if the mechanism is right, the $J$-dependence of $R^2$ should
-largely disappear.
-We have not yet run it.
+The direct test is to repeat the coupling sweep with $T_2^E$ as the
+target and everything else unchanged---same configurations, seeds, model
+and training, inputs still in the computational basis
+(Table~\ref{tab:r10}, Fig.~\ref{fig:r9J}).
+
+\begin{table}[h]
+\centering
+\caption{Coupling sweep with the computational-basis target ($T_2$,
+  Table~\ref{tab:r5}) and the energy-basis target ($T_2^E$); mean
+  $\pm$ s.d.\ over the same three seeds.\label{tab:r10}}
+\footnotesize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{rcccc}
+\toprule
+ & \multicolumn{2}{c}{$R^2$} & \multicolumn{2}{c}{MAE} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+$J$ & $T_2$ & $T_2^E$ & $T_2$ & $T_2^E$ \\
+\midrule
+0.2 & $0.715 \pm 0.032$ & $0.864 \pm 0.029$ & $0.58 \pm 0.07$ & $0.42 \pm 0.07$ \\
+0.5 & $0.650 \pm 0.173$ & $0.791 \pm 0.163$ & $0.71 \pm 0.08$ & $0.44 \pm 0.13$ \\
+0.8 & $0.456 \pm 0.071$ & $0.693 \pm 0.212$ & $0.83 \pm 0.06$ & $0.56 \pm 0.18$ \\
+1.0 & $0.535 \pm 0.133$ & $0.840 \pm 0.032$ & $0.93 \pm 0.25$ & $0.43 \pm 0.07$ \\
+1.2 & $0.577 \pm 0.142$ & $0.718 \pm 0.100$ & $1.05 \pm 0.62$ & $0.51 \pm 0.11$ \\
+1.5 & $0.548 \pm 0.038$ & $0.773 \pm 0.034$ & $1.12 \pm 0.38$ & $0.48 \pm 0.12$ \\
+2.0 & $0.507 \pm 0.135$ & $0.841 \pm 0.060$ & $1.13 \pm 0.30$ & $0.41 \pm 0.16$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{fig_r5_r9_J}
+  \caption{Coupling sweep with the two targets of Table~\ref{tab:r10};
+    whiskers are one standard deviation over three seeds.}
+  \label{fig:r9J}
+\end{figure}
+
+With the energy-basis target the error no longer depends on the
+coupling: MAE stays between $0.41$ and $0.56$ across all $J$, while with
+the computational-basis target it doubles, from $0.58$ to $1.13$.
+$R^2$ rises at every $J$ (in 18 of 21 seed--$J$ pairs), and the drop
+from weak ($J \le 0.5$) to strong coupling ($J \ge 0.8$) shrinks from
+$0.157$ to $0.055$ on average; per seed the shrinkage is
+$-0.232$, $+0.039$ and $-0.115$, so the residual $R^2$ trend is not
+resolved with three seeds, but the MAE trend is gone.
+The loss of predictability with coupling is thus mostly a property of
+the target: what the model cannot predict at strong coupling is the
+phase of the unitary modulation at the threshold crossing, not the
+dissipative decay.
 
 % --------------------------------------------------------------------------
 \section{Discussion}
@@ -486,10 +530,10 @@ The recommended model for two qubits is the Transformer: it is the most
 accurate and the most stable across seeds.
 
 \paragraph{What limits TFIM.}
-If the mechanism of Sec.~\ref{sec:r9} holds, part of the TFIM ceiling is
-not a property of the model or of the data size but of the target: the
-first crossing of a basis-dependent quantity is partly a matter of
-oscillation phase.
+Most of the TFIM ceiling is not a property of the model or of the data
+size but of the target (Sec.~\ref{sec:r9}): the first crossing of a
+basis-dependent quantity is partly a matter of oscillation phase, and
+with an energy-basis target the error stops growing with the coupling.
 The practical lesson is to define the decoherence time through a
 quantity that the Hamiltonian does not modulate---the coherence in the
 energy eigenbasis, or a basis-independent measure---whenever the
@@ -509,7 +553,8 @@ spreads quoted.
 
 \paragraph{Open questions.}
 \begin{enumerate}
-  \item The coupling sweep with $T_2^E$ as the target.
+  \item More seeds for the residual $R^2$ trend under the energy-basis
+    target, and the same target for XXZ and the cross-system model.
   \item Two-body correlators and entanglement measures (concurrence
     \cite{Wootters1998}, negativity) as inputs, or entanglement as an
     alternative target.
@@ -535,7 +580,9 @@ spreads quoted.
     computational-basis coherence that defines $T_2$ is modulated by the
     Hamiltonian with a depth set by $\tan2\theta = J/2h$, and the
     resulting ambiguity of the crossing time tracks the loss in $R^2$.
-    A sweep with an energy-basis target will test this directly.
+    With the decoherence time defined in the energy eigenbasis the error
+    no longer grows with coupling (MAE $0.41$--$0.56$ at all $J$, against
+    $0.58$--$1.13$).
 \end{enumerate}
 
 % --------------------------------------------------------------------------
@@ -549,6 +596,11 @@ each table are retained alongside it.
 The simulation, training, evaluation and figure-generating code, together
 with the result files behind every table, is publicly available at
 \url{https://github.com/Mobo140/decoherence}.
+In the repository the ablation and noise runs are experiment E6, the
+coupling sweep E7 and the cross-system runs E11; their three-seed
+replications are R1, R8, R5 and R3, the configuration-overlap check R4,
+the parity-sector test R6, the target-modulation probe R9 and the
+coupling sweep with the energy-basis target R10.
 
 \section*{Reproducibility}
 All runs are seeded end to end: the sampled system configurations, each

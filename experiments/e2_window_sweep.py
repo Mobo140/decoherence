@@ -42,12 +42,13 @@ from src.application.run_window_sweep import WindowSweepCommand, WindowSweepUseC
 from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
 
 
-def main(scenarios: list | None = None, suffix: str = "") -> None:
+def main(scenarios: list | None = None, suffix: str = "",
+         *, seed: int = 42, out_path=None) -> list:
     results_dir = Path(__file__).parent / "results"
     results_dir.mkdir(exist_ok=True)
 
     simulator = QuTipSimulator()
-    groups = build_configs(n_per_scenario=120, seed=42)
+    groups = build_configs(n_per_scenario=120, seed=seed)
 
     # Default: B+C (1-qubit time-dependent γ)
     if scenarios is None:
@@ -63,14 +64,14 @@ def main(scenarios: list | None = None, suffix: str = "") -> None:
         batch_size=32,
         lr=1e-3,
         regression_loss="huber",
-        seed=42,
+        seed=seed,
         verbose=True,
     )
 
     results = WindowSweepUseCase(simulator, store=trajectory_store()).execute(cmd)
 
     fname = f"e2_window_sweep{suffix}.csv" if suffix else "e2_window_sweep.csv"
-    out_path = results_dir / fname
+    out_path = out_path or results_dir / fname
     fieldnames = ["name", "variant", "window_fraction", "noise_sigma",
                   "mae", "rmse", "r2", "mape", "auroc", "n_samples"]
     with open(out_path, "w", newline="") as f:
@@ -92,6 +93,7 @@ def main(scenarios: list | None = None, suffix: str = "") -> None:
         print(f"\nMinimum window fraction f* (AUROC≥0.92): {f_star:.2f}")
     else:
         print("\nAUROC≥0.92 not achieved at any window fraction.")
+    return [r.as_dict() for r in results]
 
 
 if __name__ == "__main__":

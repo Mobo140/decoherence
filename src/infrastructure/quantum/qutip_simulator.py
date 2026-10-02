@@ -126,7 +126,11 @@ class QuTipSimulator(ISimulator):
             system, initial_state, times, observables_keys
         )
 
-        t_decoh, censored = self._compute_t_decoh(config, times, obs_dict)
+        if config.decoherence_criterion == DecoherenceCriterion.COHERENCE_ENERGY:
+            t_decoh, censored = self._energy_basis_t_decoh(
+                config, times, system.H.full(), obs_dict["density_matrices"])
+        else:
+            t_decoh, censored = self._compute_t_decoh(config, times, obs_dict)
         obs_dict.pop("density_matrices", None)
 
         return TrajectoryResult(
@@ -136,6 +140,29 @@ class QuTipSimulator(ISimulator):
             system_config=config,
             censored=censored,
         )
+
+    @staticmethod
+    def _energy_basis_t_decoh(config, times, H, rhos) -> tuple[float, bool]:
+        """1/e crossing of the l1-coherence in the eigenbasis of H.
+
+        Unitary evolution only rotates the phases of rho_ij in that basis, so
+        the crossing is set by dissipation alone. Only the target changes:
+        the observables fed to the model stay in the computational basis.
+        """
+        U = np.linalg.eigh(H)[1]
+        vals = []
+        for r in rhos:
+            m = r.full() if hasattr(r, "full") else np.asarray(r)
+            e = U.conj().T @ m @ U
+            vals.append(float(np.abs(e).sum() - np.abs(np.diag(e)).sum()))
+        initial = vals[0]
+        thr = config.decoherence_threshold
+        abs_threshold = thr * initial if initial > 1e-10 else thr
+        for i, v in enumerate(vals):
+            if v < abs_threshold:
+                return QuTipSimulator._interpolate_crossing(
+                    times, vals, i, abs_threshold), False
+        return float(times[-1]), True
 
     # ------------------------------------------------------------------
     # Helpers
