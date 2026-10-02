@@ -187,7 +187,8 @@ def run_e7b(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
 # ---------------------------------------------------------------------------
 
 def _make_tfim_configs_fixed_J(
-    n: int, J: float, rng: np.random.Generator
+    n: int, J: float, rng: np.random.Generator,
+    criterion: DecoherenceCriterion = DecoherenceCriterion.COHERENCE,
 ) -> List[SystemConfig]:
     """Generate TFIM configs with a fixed coupling constant J."""
     shapes = ["random", "peak", "step_up", "step_down", "monotone_increasing",
@@ -205,14 +206,15 @@ def _make_tfim_configs_fixed_J(
             interaction_type=InteractionType.TFIM,
             t_max=20.0,
             dt=0.1,
-            decoherence_criterion=DecoherenceCriterion.COHERENCE,
+            decoherence_criterion=criterion,
         ))
     return configs
 
 
 def run_e7c(simulator, n_per_J: int, n_epochs: int, verbose: bool = True,
             *, seed: int = 42, config_seed: int = 123, out_path=None,
-            J_values=None, store=_UNSET) -> list:
+            J_values=None, store=_UNSET,
+            criterion=DecoherenceCriterion.COHERENCE) -> list:
     """Sweep TFIM coupling J ∈ {0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0}.
 
     Phase transition at J = h_field = 1.0 (hardcoded in TwoQubitSystem).
@@ -236,7 +238,7 @@ def run_e7c(simulator, n_per_J: int, n_epochs: int, verbose: bool = True,
 
     for J in J_values:
         print(f"\n{'='*60}\nTFIM J={J:.1f}  (J/h = {J:.1f})\n{'='*60}")
-        configs = _make_tfim_configs_fixed_J(n_per_J, J, rng)
+        configs = _make_tfim_configs_fixed_J(n_per_J, J, rng, criterion)
 
         dataset = gen_uc.execute(GenerateDatasetCommand(
             configs=configs,

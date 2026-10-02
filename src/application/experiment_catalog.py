@@ -46,14 +46,14 @@ CATALOG: List[ExperimentEntry] = [
                     ("e7a_transformer_cross.csv", "e7b_tau_sweep.csv", "e7c_J_sweep.csv"),
                     status="cited"),
     ExperimentEntry("E8c", "Improved 2q training", "experiments.e8_improved_2qubit", "2", "C4, C5", "D, E",
-                    ("e8c_cross_system.csv",), status="cited"),
+                    ("e8c_cross_system.csv",), status="superseded"),
     ExperimentEntry("E9", "Context codes", "experiments.e9_context_injection", "-", "C5", "D, E",
                     ("e9a_cross_system.csv", "e9b_ablation.csv"), status="negative"),
     # The papers' "E10b" is the window-30 cross-system run produced by
     # e10_fixed_context.py -- not e10_tfim_specialized.py, which this catalog
     # used to label E10b. Ids now match what the papers cite.
     ExperimentEntry("E10a/E10b", "Fixed context (E10b cited)", "experiments.e10_fixed_context", "2", "C5", "D, E",
-                    ("e10a_cross_system.csv", "e10b_cross_system.csv"), status="cited"),
+                    ("e10a_cross_system.csv", "e10b_cross_system.csv"), status="superseded"),
     ExperimentEntry("E10-TFIM", "TFIM specialized", "experiments.e10_tfim_specialized", "-", "C2", "E",
                     ("e10_tfim_c.csv",), status="negative"),
     ExperimentEntry("E11", "Scaling (E11a/E11b)", "experiments.e11_scaling", "2", "C5", "D, E",
@@ -86,6 +86,14 @@ CATALOG: List[ExperimentEntry] = [
                     ("r7_multiseed_1qubit.csv",), status="replication"),
     ExperimentEntry("R8", "Noise sweep and scaling across seeds (checks E6b/E8c)", "experiments.r8_noise_and_scaling", "-", "-", "D, E",
                     ("r8_noise_and_scaling.csv",), status="replication"),
+    ExperimentEntry("R9", "Target modulation by H (simulation only)", "experiments.r9_target_modulation", "-", "-", "D, E",
+                    ("r9_target_modulation.csv",), status="replication"),
+    ExperimentEntry("R10", "J sweep with energy-basis T2 target (tests R9)", "experiments.r10_energy_target_J_sweep", "-", "-", "E",
+                    ("r10_energy_target_J_sweep.csv",), status="replication"),
+    ExperimentEntry("R11", "Paper 1 ablation at 500 trajectories (checks lstm_only vs data size)", "experiments.r7_multiseed_1qubit", "-", "-", "A-C",
+                    ("r11_1qubit_500traj.csv",), supports_fast=False, status="replication"),
+    ExperimentEntry("R12", "Window sweep across seeds (checks E2)", "experiments.r12_multiseed_window_sweep", "-", "-", "B/C",
+                    ("r12_multiseed_window_sweep.csv",), supports_fast=False, status="replication"),
 ]
 
 
@@ -95,8 +103,8 @@ CHAMPIONS = [
     {"scenario": "A", "label": "1q σ₋ const", "r2": 0.9998, "model": "physics_only", "run": "E1", "auroc": 1.000, "goal": 0.999},
     {"scenario": "B", "label": "1q σ₋ γ(t)", "r2": 0.945, "model": "physics_lstm", "run": "E1", "auroc": 0.965, "goal": 0.97},
     {"scenario": "C", "label": "1q σz γ(t)", "r2": 0.981, "model": "physics_lstm", "run": "E1", "auroc": 0.891, "goal": 0.97},
-    {"scenario": "D", "label": "2q XXZ", "r2": 0.817, "model": "transformer w20", "run": "E11a", "auroc": 0.937, "goal": 0.80},
-    {"scenario": "E", "label": "2q TFIM", "r2": 0.575, "model": "physics_lstm", "run": "E8c", "auroc": 0.759, "goal": 0.70},
+    {"scenario": "D", "label": "2q XXZ", "r2": 0.814, "model": "transformer w20", "run": "E11a (R3 mean)", "auroc": 0.931, "goal": 0.80},
+    {"scenario": "E", "label": "2q TFIM", "r2": 0.703, "model": "transformer w20", "run": "E11a (R3 mean)", "auroc": 0.904, "goal": 0.70},
 ]
 
 

@@ -17,7 +17,7 @@ def test_index_has_sidebar_and_screens():
 def test_meta_has_tfim_champion():
     data = _client().get("/api/meta").json()
     e = next(c for c in data["champions"] if c["scenario"] == "E")
-    assert e["r2"] == 0.575
+    assert e["r2"] == 0.703
     assert data["cache"]["n_csv"] >= 1
 
 

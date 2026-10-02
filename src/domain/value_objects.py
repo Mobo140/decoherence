@@ -34,6 +34,10 @@ class InteractionType(str, Enum):
 class DecoherenceCriterion(str, Enum):
     COHERENCE = "coherence"
     PURITY = "purity"
+    # l1-coherence in the eigenbasis of H (two qubits): insensitive to the
+    # unitary modulation that the computational-basis measure picks up when
+    # H is not diagonal there (see experiments/r9_target_modulation.py).
+    COHERENCE_ENERGY = "coherence_energy"
 
 
 # ---------------------------------------------------------------------------

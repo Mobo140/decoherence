@@ -35,22 +35,26 @@ of a single-qubit system from a short, partial observation window of Pauli
 expectation values, \emph{without} any prior knowledge of the dissipation
 rate $\gamma(t)$.
 For constant $\gamma$ and amplitude-damping noise, the OLS-slope formula
-recovers the exact analytical result ($R^2 = 0.9995$, MAE $= 0.056$) with
-no machine learning required.
+recovers the exact analytical result ($R^2 = 1.000$) with no machine
+learning required.
 For unknown, time-dependent $\gamma(t)$---the realistic regime on every
 physical qubit platform---we propose a physics-informed residual BiLSTM
 that embeds the OLS-slope estimate as a structural prior and predicts only
 the correction $\delta T$ to it.
 On three single-qubit scenarios (constant $\gamma$, time-dependent
 amplitude damping $\sigma_-$, and time-dependent dephasing $\sigma_z$),
-the residual model achieves $R^2 = 0.94$--$0.98$.
-A network given the same data without the prior does not work at all
-($R^2 \in \{-0.45, 0.01, -0.03\}$), a gap of order $1.0$ that holds in
-every seed we ran; the narrower margin over a classical fit is smaller
-than that headline suggests, and we report a three-seed replication
-that resolves it on dephasing and leaves it open on amplitude damping.
+the residual model reaches $R^2 = 0.980 \pm 0.011$ on dephasing and
+$0.856 \pm 0.182$ on amplitude damping (three seeds), and beats the bare
+formula on dephasing in every seed.
+The same BiLSTM without the prior fails, but a Transformer without any
+prior does not: it matches the residual model at 100 trajectories per
+scenario, and at 500 it is the best model on amplitude damping
+($0.956 \pm 0.017$), while on dephasing all learned and classical models
+are level. The prior rescues one architecture; it is not what makes
+learning possible.
 The risk alarm (binary: decoherence within horizon $\Delta t$) reaches
-AUROC $\geq 0.93$ using as little as $5\%$ of the trajectory, and the
+AUROC $0.964 \pm 0.006$ with an observation window as short as $5\%$ of
+the median $T_2$, and the
 system outperforms a two-step inverse approach by $3$--$9\times$ in MAE
 across all tested observation windows ($f=0.10$--$0.50$), the inverse
 baseline never achieving a positive $R^2$.
@@ -94,7 +98,7 @@ decays as $C(t) = C_0\,e^{-\gamma t/2}$, so $\log C$ is linear:
   \label{eq:ols}
 \end{equation}
 A simple OLS fit to $\log C(t)$ over any pre-decoherence window
-recovers $T_2$ with $R^2 = 0.9995$ (see Sec.~\ref{sec:e1}).
+recovers $T_2$ exactly ($R^2 = 1.000$ in every seed, Sec.~\ref{sec:e1}).
 Machine learning is \emph{unnecessary} in this regime.
 Figure~\ref{fig:physics-validation} illustrates this on 60 independent
 constant-$\gamma$ trajectories: predicted and true $T_2$ lie essentially on
@@ -105,9 +109,8 @@ the diagonal.
   \includegraphics[width=\columnwidth]{fig_physics_validation}
   \caption{Illustrative validation of the OLS-slope formula
     (Eq.~\ref{eq:ols}) on 60 fresh constant-$\gamma$ trajectories,
-    independent of the E1 test set (scenario A, Table~\ref{tab:e1}
-    reports $R^2=0.9995$ on the held-out E1 split; this demonstration
-    set gives $R^2\approx1.0000$).}
+    independent of the E1 test set ($R^2\approx1.000$, as on the E1
+    test splits, Table~\ref{tab:e1}).}
   \label{fig:physics-validation}
 \end{figure}
 
@@ -255,106 +258,27 @@ arXiv:2505.06928 applied to the $T_2$ task.
 % --------------------------------------------------------------------------
 \section{Experiments}
 
+Regression is scored by $R^2$ and MAE of the predicted decoherence time
+$\widehat T_2 = t_\mathrm{obs} + \widehat T_{2,\text{rem}}$ against the
+true $T_2$ over all test windows; the alarm by AUROC~\cite{Fawcett2006}.
+The ablation (E1) and the window sweep (E2) are reported as mean $\pm$
+s.d.\ over seeds $\{42,43,44\}$; a seed fixes the sampled
+configurations, the split and the network initialisation, and
+comparisons are made as paired differences within a seed.
+E3--E5 are single runs.
+With 100 trajectories per scenario the test split holds 10 trajectories
+(50 windows), so even predicting the training mean gives $R^2$ between
+$-2.0$ and $0.0$ depending on the seed; differences of a few hundredths
+are not resolved at this size.
+
 \subsection{E1 --- Ablation study}
 \label{sec:e1}
-
-Table~\ref{tab:e1} reports $R^2$, MAE, and risk
-AUROC~\cite{Fawcett2006} for all four variants on the three
-single-qubit scenarios.
-
-\begin{table}[h]
-\centering
-\caption{E1 ablation: $R^2$ (MAE) per scenario and variant; risk AUROC
-  (scenario B). Best per scenario in \textbf{bold}.
-  $N=50$ test samples per cell.\label{tab:e1}}
-\footnotesize
-\setlength{\tabcolsep}{0.5pt}
-\begin{tabular}{lcccc}
-\toprule
-Variant & Scen.~A & Scen.~B & Scen.~C & AUROC \\
-\midrule
-\texttt{physics\_only}
-  & \textbf{0.999} (0.056)
-  & 0.753 (0.646)
-  & 0.965 (0.113)
-  & 0.957 \\
-\texttt{lstm\_only}
-  & $-0.446$ (2.74)
-  & 0.009 (1.92)
-  & $-0.029$ (0.808)
-  & 0.968 \\
-\texttt{physics\_lstm}
-  & 0.976 (0.176)
-  & \textbf{0.945} (0.356)
-  & \textbf{0.976} (0.151)
-  & 0.965 \\
-\texttt{transformer}
-  & 0.799 (0.631)
-  & 0.902 (0.595)
-  & \textbf{0.981} (0.136)
-  & \textbf{0.970} \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{figure}[h]
-  \centering
-  \includegraphics[width=\columnwidth]{fig1_ablation}
-  \caption{E1 ablation: $R^2$, MAE, and risk AUROC for all four variants
-    across the three single-qubit scenarios. \texttt{physics\_lstm}
-    dominates on the time-dependent scenarios B and C; \texttt{lstm\_only}
-    fails on all three, confirming the physics prior is essential.}
-  \label{fig:e1}
-\end{figure}
-
-Key observations:
-\begin{itemize}
-  \item \textbf{Claim C1 confirmed.}
-    \texttt{physics\_only} achieves $R^2 = 0.9995$ on scenario~A,
-    validating the OLS formula for constant-$\gamma$ amplitude damping.
-    No ML is needed in this regime.
-  \item \textbf{Claim C2 confirmed, with one qualification.}
-    \texttt{lstm\_only} fails on all three scenarios
-    ($R^2 \in \{-0.45, 0.01, -0.03\}$) against roughly $0.95$ for
-    \texttt{physics\_lstm}: a network given the same data but no physics
-    prior does not merely do worse, it does not work.
-    That margin is of order $1.0$ in $R^2$ and is the claim this paper
-    rests on.
-    The narrower comparison against the formula---$+0.19$ on~B
-    ($0.945$ vs.\ $0.753$) and $+0.01$ on~C ($0.976$ vs.\
-    $0.965$)---is weaker than it looks, and Sec.~\ref{sec:r7} reports
-    what survives replication.
-  \item \textbf{Transformer competitiveness.}
-    The pure Transformer achieves $R^2 = 0.981$ on scenario~C and
-    $0.902$ on~B---competitive with, but not superior to,
-    \texttt{physics\_lstm}; across seeds the ordering on~C is in fact
-    the other way round (Sec.~\ref{sec:r7}).
-    The residual architecture is preferred because it is guaranteed to
-    recover the exact analytical solution in the constant-$\gamma$ limit
-    (scenario~A: $0.976$ vs.\ $0.799$ for the Transformer).
-  \item \textbf{A stronger classical baseline belongs here.}
-    \texttt{physics\_only} fits a pure exponential, so it is the weakest
-    classical comparison available. A stretched-exponential fit,
-    $C(t)=C_0\exp(-(t/\tau)^\beta)$, is the honest one, and it beats
-    \texttt{physics\_only} on both time-dependent scenarios
-    (Sec.~\ref{sec:r7}). We report it because the interesting question
-    is not whether a network beats one particular formula but whether
-    learning is needed at all.
-\end{itemize}
-
-\subsection{R7 --- the ablation across seeds}
 \label{sec:r7}
 
-Every number in Table~\ref{tab:e1} comes from one run. We replicated the
-ablation across three seeds, varying the sampled configurations and
-training together, and report the comparisons as paired differences
-within each seed.
-
 \begin{table}[h]
 \centering
-\caption{R7: mean $R^2$ $\pm$ s.d.\ over seeds $\{42,43,44\}$, including
-  the stretched-exponential baseline that Table~\ref{tab:e1} omits.
-  \label{tab:r7}}
+\caption{Ablation, 100 trajectories per scenario: $R^2$, mean $\pm$
+  s.d.\ over three seeds.\label{tab:e1}\label{tab:r7}}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{lccc}
@@ -363,105 +287,111 @@ Variant & A & B & C \\
 \midrule
 \texttt{physics\_only}  & $1.000 \pm 0.000$ & $0.719 \pm 0.030$ & $0.905 \pm 0.056$ \\
 \texttt{stretched\_exp} & $1.000 \pm 0.000$ & $0.883 \pm 0.060$ & $0.954 \pm 0.021$ \\
-\texttt{lstm\_only}     & $-0.133 \pm 0.94$ & $0.328 \pm 0.259$ & $-0.729 \pm 1.364$ \\
+\texttt{lstm\_only}     & $-0.13 \pm 0.94$ & $0.33 \pm 0.26$ & $-0.73 \pm 1.36$ \\
 \texttt{physics\_lstm}  & $0.881 \pm 0.182$ & $0.856 \pm 0.182$ & $0.980 \pm 0.011$ \\
 \texttt{transformer}    & $0.825 \pm 0.153$ & $0.836 \pm 0.185$ & $0.959 \pm 0.030$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\paragraph{What holds.}
-The claim the paper rests on is unaffected: \texttt{physics\_lstm} beats
-\texttt{lstm\_only} in every seed on every scenario, by $+1.014$ (A),
-$+0.528$ (B) and $+1.709$ (C).
-\texttt{lstm\_only} is not merely worse but erratic---on~C its three
-seeds give $-2.275$, $+0.309$ and $-0.221$---which is itself the point:
-without the prior the model is unreliable, not just less accurate.
-\texttt{physics\_only} returns $1.000$ on~A in all three seeds (C1), the
-residual beats the Transformer on~A in all three ($+0.056 \pm 0.042$),
-and---contrary to what its published margin of $+0.011$ suggested---
-\texttt{physics\_lstm} beats \texttt{physics\_only} on~C in all three
-($+0.075 \pm 0.045$).
+\begin{itemize}
+  \item \textbf{Constant $\gamma$ (A).} \texttt{physics\_only} returns
+    $R^2 = 1.000$ in every seed; any learned correction only adds error.
+  \item \textbf{Residual model vs.\ the formula.} On dephasing (C)
+    \texttt{physics\_lstm} beats \texttt{physics\_only} in every seed
+    ($+0.075 \pm 0.045$). On amplitude damping (B) the advantage is
+    $+0.137 \pm 0.157$ with the sign varying between seeds
+    ($+0.201$, $+0.253$, $-0.042$): not resolved.
+  \item \textbf{Classical baseline.} A stretched-exponential fit
+    $C(t)=C_0\exp(-(t/\tau)^\beta)$ beats \texttt{physics\_only} in every
+    seed ($+0.164$ on B, $+0.049$ on C) and is indistinguishable from
+    \texttt{physics\_lstm} on B ($+0.027 \pm 0.231$); on C
+    \texttt{physics\_lstm} wins by $0.026$.
+  \item \textbf{Networks without the prior.} The BiLSTM without the
+    prior (\texttt{lstm\_only}) fails in every seed, at the level of
+    predicting a constant. A Transformer given the same inputs and no
+    prior does not fail: it is level with \texttt{physics\_lstm} on all
+    three scenarios.
+\end{itemize}
 
-\paragraph{What does not.}
-Two entries of Table~\ref{tab:e1} do not survive.
-The advantage of \texttt{physics\_lstm} over \texttt{physics\_only} on~B,
-published as a comfortable $+0.19$, is $+0.137 \pm 0.157$ across seeds
-with the sign varying ($+0.201$, $+0.253$, $-0.042$); we report it as
-unresolved.
-The Transformer's edge on~C reverses: paired per seed it is
-$-0.021 \pm 0.029$ ($-0.002$, $-0.054$, $-0.006$), so
-\texttt{physics\_lstm} is the better model there, not the worse one.
-The hedge in Table~\ref{tab:e1}'s discussion was right; its direction
-was not.
+\subsection{E1 at 500 trajectories}
+\label{sec:r11}
 
-\paragraph{The stretched-exponential baseline.}
-Table~\ref{tab:e1} compares against \texttt{physics\_only}, a pure
-exponential fit, which is the weakest classical baseline available.
-Against the stronger one the picture is different: the stretched
-exponential beats \texttt{physics\_only} in every seed, by $+0.164$
-on~B and $+0.049$ on~C, and against \texttt{physics\_lstm} on~B it is
-indistinguishable ($+0.027 \pm 0.231$, sign varying).
-On~C \texttt{physics\_lstm} still wins in every seed, but by $0.026$.
-
-This bounds what the ablation establishes.
-That a network needs the physics prior is settled, with a margin of
-order~$1$.
-That \emph{learning} is needed---rather than a two-parameter curve
-fit---is settled on~C only, and on~B our experiments do not settle it.
-We state this explicitly because the alternative reading, that the
-residual architecture is required wherever $\gamma$ varies, is not what
-these data show.
-
-\subsection{E2 --- Minimum observation window}
-\label{sec:e2}
-
-Table~\ref{tab:e2} shows \texttt{physics\_lstm} trained separately for
-each window fraction $f \in \{0.05, 0.10, 0.15, 0.20, 0.30, 0.50\}$
-on a mixture of scenarios B and C ($N = 120$ each).
+To separate the role of the prior from the amount of data we repeated
+the ablation with 500 trajectories per scenario (Table~\ref{tab:r11}).
 
 \begin{table}[h]
 \centering
-\caption{E2 window sweep on scenarios B+C.
-  ``*'' marks AUROC $\geq 0.93$.\label{tab:e2}}
-\small
-\begin{tabular}{rrrr}
+\caption{Ablation, 500 trajectories per scenario: $R^2$, mean $\pm$
+  s.d.\ over three seeds.\label{tab:r11}}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lccc}
 \toprule
-$f$ & $R^2$ & MAE & AUROC \\
+Variant & A & B & C \\
 \midrule
-0.05 & 0.711 & 0.825 & $0.933^*$ \\
-0.10 & 0.723 & 0.813 & $0.950^*$ \\
-0.15 & 0.735 & 0.773 & $0.947^*$ \\
-0.20 & 0.736 & 0.702 & 0.872 \\
-0.30 & 0.734 & 0.677 & $0.969^*$ \\
-0.50 & 0.697 & 0.674 & $0.990^*$ \\
+\texttt{physics\_only}  & $1.000 \pm 0.000$ & $0.521 \pm 0.208$ & $0.960 \pm 0.012$ \\
+\texttt{stretched\_exp} & $1.000 \pm 0.000$ & $0.875 \pm 0.055$ & $0.972 \pm 0.007$ \\
+\texttt{lstm\_only}     & $-0.12 \pm 0.42$ & $-0.44 \pm 0.92$ & $-1.92 \pm 0.50$ \\
+\texttt{physics\_lstm}  & $0.469 \pm 0.451$ & $0.858 \pm 0.074$ & $0.965 \pm 0.018$ \\
+\texttt{transformer}    & $0.745 \pm 0.040$ & $\mathbf{0.956 \pm 0.017}$ & $0.965 \pm 0.021$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\begin{figure}[h]
-  \centering
-  \includegraphics[width=\columnwidth]{fig2_window_sweep}
-  \caption{E2 window sweep on scenarios B+C: $R^2$ (left) plateaus near
-    $0.70$--$0.74$ regardless of window length, while risk AUROC (right)
-    already exceeds $0.93$ at $f=0.05$.}
-  \label{fig:e2}
-\end{figure}
+\texttt{lstm\_only} still fails, and it fails on its own training set as
+well, so the failure is not a matter of data size or overfitting but of
+this network's optimisation without the prior.
+With more data the Transformer, which has no prior at all, becomes the
+best model on amplitude damping: it beats \texttt{physics\_lstm}
+($+0.099 \pm 0.088$) and the stretched exponential
+($+0.081 \pm 0.042$) in every seed.
+On dephasing the formula, the stretched exponential, the residual model
+and the Transformer are level (all within $0.012$).
 
-Two observations deserve note.
-First, $R^2$ is approximately constant across all window lengths
-($0.70$--$0.74$), indicating that the bottleneck is training capacity
-rather than observation length.
-This is consistent with the E1 finding that a \emph{single-scenario}
-model (scenario~B alone) achieves $R^2 = 0.945$ at the same
-$W = 20$ steps: mixing B with C reduces per-regime accuracy.
-Second, and more importantly, the risk alarm (AUROC) already exceeds
-$0.93$ at $f = 0.05$---meaning the binary decoherence warning is
-reliable when only $5\%$ of the trajectory has elapsed.
-\textbf{Claim C3 confirmed.} Risk AUROC $\geq 0.93$ is achievable using
-as little as $5\%$--$15\%$ of the trajectory ($0.933$--$0.947$); $R^2$
-plateaus near $0.70$--$0.74$ and should \emph{not} be claimed to reach
-$0.95$ in this window-sweep setting.
+The prior is therefore not what makes learning possible: it rescues one
+architecture, and with 100 trajectories it gives that architecture a
+model as good as the best alternative. What it guarantees in addition is
+the analytic limit, which only the formula itself attains exactly
+(scenario~A).
+
+\subsection{E2 --- Minimum observation window}
+\label{sec:e2}
+
+\texttt{physics\_lstm} is trained on a mixture of scenarios B and C
+(120 trajectories each) for window lengths set by
+$f = L\,dt/\mathrm{median}(T_2)$ (Table~\ref{tab:e2}).
+The window end $t_\mathrm{obs}$ is drawn uniformly over
+$[L\,dt, T_2)$, so $f$ controls how much history the model sees, not
+how early the prediction is made.
+
+\begin{table}[h]
+\centering
+\caption{Window sweep on B+C, mean $\pm$ s.d.\ over three
+  seeds.\label{tab:e2}}
+\small
+\begin{tabular}{rccc}
+\toprule
+$f$ & $R^2$ & MAE & AUROC \\
+\midrule
+0.05 & $0.867 \pm 0.120$ & $0.575 \pm 0.247$ & $0.964 \pm 0.006$ \\
+0.10 & $0.868 \pm 0.119$ & $0.573 \pm 0.244$ & $0.966 \pm 0.011$ \\
+0.15 & $0.866 \pm 0.123$ & $0.567 \pm 0.257$ & $0.971 \pm 0.016$ \\
+0.20 & $0.875 \pm 0.119$ & $0.520 \pm 0.243$ & $0.964 \pm 0.020$ \\
+0.30 & $0.871 \pm 0.111$ & $0.503 \pm 0.189$ & $0.978 \pm 0.011$ \\
+0.50 & $0.880 \pm 0.157$ & $0.408 \pm 0.264$ & $0.988 \pm 0.013$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+$R^2$ does not depend on the window length within its spread; MAE
+falls slowly as the window grows. The alarm reaches AUROC $0.964$ with a
+window of $5\%$ of the median $T_2$, in every seed above $0.96$.
+Its rise at large $f$ is partly a population effect: larger windows
+exclude trajectories with $T_2 < L\,dt$ and move the admissible windows
+towards the end of the trajectory, where the alarm is easier.
+How the alarm degrades with $t_\mathrm{obs}/T_2$---how early it can
+fire---is a separate question this sweep does not answer.
 
 \subsection{E3 --- Measurement noise robustness}
 \label{sec:e3}
@@ -504,7 +434,7 @@ the OLS slope is computed over a full window of $W = 20$ steps,
 averaging out i.i.d.\ noise by $\sim\!\sqrt{W}$.
 At $\sigma = 0.10$, AUROC drops to $0.865$; we consider this the
 effective noise-tolerance ceiling of the current architecture.
-\textbf{Claim C4 confirmed.} MAE degrades sub-linearly with
+MAE degrades sub-linearly with
 $\sigma_\mathrm{noise}$ up to the realistic $\sigma=0.05$ level, and
 risk AUROC remains $\geq 0.90$ throughout this range ($0.942$ at
 $\sigma=0.05$).
@@ -551,7 +481,7 @@ For deployment, a lightweight regime classifier can select
 between \texttt{physics\_only} (constant $\gamma$) and
 \texttt{physics\_lstm} (time-dependent $\gamma$) based on the linearity
 of $\log C$ over the window.
-\textbf{Claim C5 partially confirmed.} A single model trained on the
+A single model trained on the
 A+B+C mixture generalises well to \emph{both} time-dependent regimes
 (B: $R^2=0.867$; C: $R^2=0.936$; AUROC $\geq 0.98$ throughout) without
 per-regime retraining, but underperforms on the constant-$\gamma$
@@ -627,19 +557,19 @@ broader trend of embedding physical structure into ML models of
 quantum systems~\cite{Carleo2017}.
 
 \paragraph{Risk score as a practical interface.}
-The AUROC values in Tables~\ref{tab:e1}--\ref{tab:e4} suggest that the
+The AUROC values in Tables~\ref{tab:e2}--\ref{tab:e4} suggest that the
 binary risk score $p_\mathrm{risk}$ is a reliable alarm even when the
 regression accuracy ($R^2$) is moderate.
 This decoupling matters for deployment: a quantum error-correction
 scheduler only needs a calibrated probability estimate to decide whether
 to reset a qubit, not a precise $T_2$ value.
-The alarm is operational from the very first $5\%$ of the trajectory
-(AUROC $= 0.933$, $f = 0.05$), making it suitable for real-time
-integration.
+The alarm needs only a short window (AUROC $0.964$ with a window of
+$5\%$ of the median $T_2$), which suits real-time integration.
 
 \paragraph{Limitations.}
 The experiments were conducted on simulated data with 100 trajectories
-per scenario.
+per scenario (500 in Sec.~\ref{sec:r11}); test splits of 10 trajectories
+limit the resolution of every comparison to the spreads quoted.
 Validation on real hardware (where $\gamma(t)$ is not parameterisable
 by Bernstein polynomials and readout errors are correlated) is left for
 future work, as is extension to multi-qubit systems, where entanglement
@@ -653,20 +583,18 @@ We have presented a physics-informed residual BiLSTM for online early
 warning of quantum decoherence in single-qubit systems.
 The key contributions are:
 \begin{enumerate}
-  \item A precise characterisation of when the prior is necessary: the
-    OLS formula suffices for constant-$\gamma$ amplitude damping
-    ($R^2 = 0.9995$), and for time-dependent $\gamma(t)$ a network
-    without the prior fails outright, in every seed.
-    Whether \emph{learning} is needed at all is a narrower question: a
-    stretched-exponential fit matches the residual model on
-    time-dependent amplitude damping and loses to it by $0.026$ on
-    dephasing (Sec.~\ref{sec:r7}), so we claim the prior, not the
-    network, as what these data establish.
+  \item A characterisation of when learning helps: the OLS formula is
+    exact for constant-$\gamma$ amplitude damping; for time-dependent
+    dephasing the residual model beats it in every seed; for
+    time-dependent amplitude damping a stretched-exponential fit is as
+    good as the residual model, and with 500 trajectories a Transformer
+    without any prior beats both (Sec.~\ref{sec:r11}).
   \item A residual architecture~(\ref{eq:residual}) that embeds the OLS
     prior structurally, guaranteeing recovery of the analytical solution
-    and achieving $R^2 = 0.94$--$0.98$ for time-dependent scenarios.
-  \item A risk alarm with AUROC $\geq 0.93$ from the first $5\%$ of the
-    trajectory, suitable for real-time integration in quantum
+    and reaching $R^2 = 0.980 \pm 0.011$ (dephasing) and
+    $0.856 \pm 0.182$ (amplitude damping) for time-dependent scenarios.
+  \item A risk alarm with AUROC $0.964 \pm 0.006$ from a window of $5\%$
+    of the median $T_2$, suitable for real-time integration in quantum
     error-correction pipelines.
   \item Direct empirical evidence that inverse $\gamma$-reconstruction
     followed by simulation is ill-conditioned at short windows, while
