@@ -116,6 +116,11 @@ class LSTMPredictor(IPredictor):
     # Early-stopping patience in epochs. Increase for large datasets (>2000 samples)
     # where each epoch carries more gradient signal and convergence is slower.
     early_stopping_patience: int = 25
+    # True (default): the network learns the correction to the physics
+    # estimate, remaining = T_phys + dT. False: T_phys is only an input
+    # scalar and the network predicts the whole remaining time (ablation
+    # that separates "useful feature" from "residual output").
+    residual_output: bool = True
 
     _net: Optional[_ResidualNet] = field(default=None, init=False, repr=False)
     _feature_mean: Optional[np.ndarray] = field(default=None, init=False, repr=False)
@@ -182,7 +187,7 @@ class LSTMPredictor(IPredictor):
             )
 
             residual = float(residual_norm.item()) * self._residual_std + self._residual_mean
-            remaining = max(0.0, phys_rem + residual)
+            remaining = max(0.0, (phys_rem if self.residual_output else 0.0) + residual)
             t_decoh_pred = float(np.clip(t_obs + remaining, 0.0, self.t_max))
             risk = remaining_to_risk(remaining, horizon)
 
@@ -239,6 +244,7 @@ class LSTMPredictor(IPredictor):
             "adaptive_prior_r2_threshold":  self.adaptive_prior_r2_threshold,
             "risk_pos_weight":              self.risk_pos_weight,
             "augment_sigma":                self.augment_sigma,
+            "residual_output":              self.residual_output,
             "inference_interaction_code":   self.inference_interaction_code,
             "inference_dissipator_code":    self.inference_dissipator_code,
             "use_J_scalar":                 self.use_J_scalar,
@@ -260,6 +266,7 @@ class LSTMPredictor(IPredictor):
             adaptive_prior_r2_threshold=ckpt.get("adaptive_prior_r2_threshold", 0.0),
             risk_pos_weight=ckpt.get("risk_pos_weight", 1.0),
             augment_sigma=ckpt.get("augment_sigma", 0.0),
+            residual_output=ckpt.get("residual_output", True),
             inference_interaction_code=ckpt.get("inference_interaction_code", 0.0),
             inference_dissipator_code=ckpt.get("inference_dissipator_code", 0.0),
             use_J_scalar=ckpt.get("use_J_scalar", False),
