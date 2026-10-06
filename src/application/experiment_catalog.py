@@ -94,15 +94,19 @@ CATALOG: List[ExperimentEntry] = [
                     ("r11_1qubit_500traj.csv",), supports_fast=False, status="replication"),
     ExperimentEntry("R12", "Window sweep across seeds (checks E2)", "experiments.r12_multiseed_window_sweep", "-", "-", "B/C",
                     ("r12_multiseed_window_sweep.csv",), supports_fast=False, status="replication"),
+    ExperimentEntry("R13", "Paper 1 ablation on 400 independent test trajectories, bootstrap CIs; T_phys-as-feature variant", "experiments.r13_independent_test", "-", "-", "A-C",
+                    ("r13_independent_test.csv",), status="replication"),
+    ExperimentEntry("R15", "Measurement-noise robustness of every model across seeds (replaces E3)", "experiments.r15_noise_variants", "-", "-", "B/C",
+                    ("r15_noise_variants.csv",), status="replication"),
 ]
 
 
 # Paper-cited champions (PROJECT_PLAN / CURRENT_STATUS). Dashboard uses these
 # so the UI does not silently pick a weak row from a mixed CSV.
 CHAMPIONS = [
-    {"scenario": "A", "label": "1q σ₋ const", "r2": 0.9998, "model": "physics_only", "run": "E1", "auroc": 1.000, "goal": 0.999},
-    {"scenario": "B", "label": "1q σ₋ γ(t)", "r2": 0.945, "model": "physics_lstm", "run": "E1", "auroc": 0.965, "goal": 0.97},
-    {"scenario": "C", "label": "1q σz γ(t)", "r2": 0.981, "model": "physics_lstm", "run": "E1", "auroc": 0.891, "goal": 0.97},
+    {"scenario": "A", "label": "1q σ₋ const", "r2": 1.000, "model": "physics_only", "run": "R13 mean", "auroc": 1.000, "goal": 0.999},
+    {"scenario": "B", "label": "1q σ₋ γ(t)", "r2": 0.948, "model": "physics_lstm", "run": "R13 mean", "auroc": 0.984, "goal": 0.97},
+    {"scenario": "C", "label": "1q σz γ(t)", "r2": 0.989, "model": "physics_lstm", "run": "R13 mean", "auroc": 0.997, "goal": 0.97},
     {"scenario": "D", "label": "2q XXZ", "r2": 0.814, "model": "transformer w20", "run": "E11a (R3 mean)", "auroc": 0.931, "goal": 0.80},
     {"scenario": "E", "label": "2q TFIM", "r2": 0.703, "model": "transformer w20", "run": "E11a (R3 mean)", "auroc": 0.904, "goal": 0.70},
 ]

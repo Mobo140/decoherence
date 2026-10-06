@@ -6,6 +6,7 @@ PickleModelStore      – saves/loads any IPredictor via state_bytes + kind side
 from __future__ import annotations
 
 import json
+import os
 import zipfile
 from pathlib import Path
 from typing import Dict, List, Type
@@ -65,12 +66,14 @@ class NumpyTrajectoryStore(ITrajectoryStore):
         # The temporary name must itself end in .npz: savez_compressed
         # appends the extension when it is missing, which would leave the
         # bytes somewhere other than where the rename looks for them.
-        npz_tmp = self._root / f"{name}.tmp.npz"
+        # It also carries the process id: concurrent experiments that save
+        # under the same name must not rename each other's temporary file.
+        npz_tmp = self._root / f"{name}.{os.getpid()}.tmp.npz"
         np.savez_compressed(npz_tmp, **arrays)
         npz_tmp.replace(npz_path)
 
         meta_path = self._root / f"{name}_meta.json"
-        meta_tmp = meta_path.with_suffix(".json.tmp")
+        meta_tmp = meta_path.with_suffix(f".json.{os.getpid()}.tmp")
         with open(meta_tmp, "w") as f:
             json.dump(meta, f, indent=2)
         meta_tmp.replace(meta_path)

@@ -35,17 +35,19 @@ We extend the physics-informed residual BiLSTM of
 Hamiltonians under unknown time-dependent amplitude damping, and ask
 whether its conclusions transfer.
 All results are replicated across three seeds.
-They do not transfer: the slope-based physics estimate is structurally
-wrong when two-qubit coherence oscillates, and a pure Transformer is the
-best model on both systems ($R^2 = 0.843 \pm 0.028$ on XXZ,
-$0.699 \pm 0.045$ on TFIM, single-scenario training), while the residual
-model is not distinguishable from the same network without the prior.
+The slope-based physics estimate is structurally wrong when two-qubit
+coherence oscillates. A pure Transformer is the best model on both
+systems ($R^2 = 0.843 \pm 0.028$ on XXZ, $0.699 \pm 0.045$ on TFIM,
+single-scenario training) and beats both BiLSTM variants in every seed,
+by $0.01$--$0.06$; the residual model does not improve on the same BiLSTM
+without the prior, and on TFIM it is worse in every seed.
 A single Transformer trained on both systems with a 20-step window
 reaches $R^2 = 0.814 \pm 0.034$ and $0.703 \pm 0.034$, with alarm AUROC
 $0.931$ and $0.904$; a shorter window beats a longer one on both metrics
 in every seed.
-Measurement noise up to $\sigma = 0.10$ does not systematically degrade
-$R^2$ ($-0.008 \pm 0.069$, paired within seeds).
+Measurement noise of $\sigma = 0.10$ lowers the alarm AUROC in every seed
+($-0.078 \pm 0.037$), while its effect on $R^2$ is not resolved
+($-0.074 \pm 0.126$).
 On TFIM, predictability falls as the coupling $J$ grows and then
 saturates, with no feature at the nominal transition $J = h$.
 We trace this decline to the target rather than the dynamics: $T_2$ is
@@ -54,12 +56,12 @@ basis, which the TFIM Hamiltonian rotates by an angle
 $\tan 2\theta = J/2h$; the resulting unitary modulation makes the
 crossing time depend on the oscillation phase. The fraction of
 trajectories whose coherence re-crosses the threshold tracks the loss in
-$R^2$ across $J$ ($r = -0.85$), while the XXZ model, whose mixing angle
+$R^2$ across $J$ ($r = -0.78$), while the XXZ model, whose mixing angle
 does not depend on $J$, shows neither effect.
 Retraining the coupling sweep with $T_2$ defined in the energy
-eigenbasis confirms it: the error no longer grows with $J$
-(MAE $0.42$ at $J=0.2$ and $0.41$ at $J=2.0$, against $0.58$ and $1.13$
-with the computational-basis target), and $R^2$ rises at every $J$.
+eigenbasis confirms it: over eight seeds the drop in $R^2$ from weak to
+strong coupling falls from $0.158 \pm 0.066$ (positive in every seed) to
+$0.020 \pm 0.072$, and the error no longer grows with $J$.
 \end{abstract}
 
 % --------------------------------------------------------------------------
@@ -68,8 +70,9 @@ with the computational-basis target), and $R^2$ rises at every $J$.
 In \cite{Paper1Brusnikin} we showed that, for a single qubit under
 unknown time-dependent dissipation, a residual model that adds a learned
 correction $\delta T$ to the slope-based estimate of the decoherence
-time recovers the analytic limit at constant dissipation and improves on
-the bare formula when the rate varies.
+time recovers the analytic limit at constant dissipation and, when the
+rate varies, improves both on the bare formula and on the same network
+without the estimate.
 Here we ask whether this carries over to two qubits.
 Three things change.
 
@@ -184,6 +187,12 @@ the model used in \cite{TransformerLindblad2025} for the inverse
 $\gamma(t)$-reconstruction task.
 The cross-system and $J$-sweep experiments use a larger Transformer
 (128-dimensional, 4 heads, 3 layers, feed-forward 512).
+At prediction time the alarm score of every model is a logistic function
+of its predicted remaining time,
+$p = 1/\bigl(1+e^{5(\widehat T_{2,\mathrm{rem}}-1)}\bigr)$; the
+classification head of the networks enters only the training loss, as an
+auxiliary term. AUROC therefore measures how well the predicted remaining
+time ranks the windows with respect to the event $T_2 - t_\mathrm{obs}\le1$.
 
 \subsection{Evaluation and replication}
 
@@ -221,8 +230,8 @@ Variant & \multicolumn{2}{c}{D (XXZ)} & \multicolumn{2}{c}{E (TFIM)} \\
         & $R^2$ & AUROC & $R^2$ & AUROC \\
 \midrule
 \texttt{physics\_only} & $-3.98 \pm 4.31$ & $.829 \pm .089$ & $-5.98 \pm 4.09$ & $.698 \pm .071$ \\
-\texttt{lstm\_only}    & $.633 \pm .060$ & $.863 \pm .035$ & $.422 \pm .171$ & $.775 \pm .024$ \\
-\texttt{physics\_lstm} & $.599 \pm .120$ & $.885 \pm .037$ & $.245 \pm .356$ & $.760 \pm .061$ \\
+\texttt{lstm\_only}    & $.818 \pm .018$ & $.921 \pm .032$ & $.686 \pm .034$ & $.840 \pm .018$ \\
+\texttt{physics\_lstm} & $.816 \pm .022$ & $.915 \pm .028$ & $.644 \pm .060$ & $.815 \pm .033$ \\
 \texttt{transformer}   & $\mathbf{.843 \pm .028}$ & $\mathbf{.930 \pm .032}$ & $\mathbf{.699 \pm .045}$ & $\mathbf{.841 \pm .036}$ \\
 \bottomrule
 \end{tabular}
@@ -236,12 +245,15 @@ Variant & \multicolumn{2}{c}{D (XXZ)} & \multicolumn{2}{c}{E (TFIM)} \\
   \label{fig:e6a}
 \end{figure}
 
-The Transformer is the best model on both scenarios and has the smallest
-spread (Table~\ref{tab:e1_2}, Fig.~\ref{fig:e6a}).
-Every learned variant beats \texttt{physics\_only} by a wide margin.
-The residual model and the same network without the prior are not
-distinguishable: their means differ by $0.03$ on XXZ and $0.18$ on TFIM,
-within the spread of either.
+The Transformer is the best model on both scenarios
+(Table~\ref{tab:e1_2}, Fig.~\ref{fig:e6a}) and beats both BiLSTM variants
+in every seed: by $0.026 \pm 0.021$ and $0.028 \pm 0.007$ on XXZ, and by
+$0.013 \pm 0.011$ and $0.055 \pm 0.018$ on TFIM (against the BiLSTM
+without and with the prior). Every learned variant beats
+\texttt{physics\_only} by a wide margin.
+The physics prior does not help the BiLSTM: on XXZ the residual model and
+the same network without the prior are level ($-0.002 \pm 0.020$), on
+TFIM the residual model is worse in every seed ($-0.042 \pm 0.027$).
 
 The large negative $R^2$ of \texttt{physics\_only} reflects the form of
 the estimator rather than the physics: $-1/\hat s$ diverges as
@@ -266,23 +278,20 @@ Gaussian noise of standard deviation $\sigma$ added to every observable
 \toprule
 $\sigma$ & $R^2$ & MAE & AUROC \\
 \midrule
-0.00 & $0.496 \pm 0.168$ & $0.624 \pm 0.143$ & $0.796 \pm 0.020$ \\
-0.01 & $0.528 \pm 0.132$ & $0.621 \pm 0.143$ & $0.793 \pm 0.014$ \\
-0.02 & $0.489 \pm 0.170$ & $0.625 \pm 0.156$ & $0.784 \pm 0.046$ \\
-0.05 & $0.544 \pm 0.107$ & $0.605 \pm 0.141$ & $0.786 \pm 0.058$ \\
-0.10 & $0.488 \pm 0.119$ & $0.644 \pm 0.118$ & $0.737 \pm 0.046$ \\
+0.00 & $0.493 \pm 0.121$ & $0.587 \pm 0.064$ & $0.775 \pm 0.033$ \\
+0.01 & $0.529 \pm 0.101$ & $0.583 \pm 0.079$ & $0.774 \pm 0.046$ \\
+0.02 & $0.489 \pm 0.064$ & $0.589 \pm 0.087$ & $0.770 \pm 0.036$ \\
+0.05 & $0.498 \pm 0.058$ & $0.585 \pm 0.104$ & $0.758 \pm 0.064$ \\
+0.10 & $0.420 \pm 0.164$ & $0.630 \pm 0.083$ & $0.697 \pm 0.064$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Paired within each seed, going from $\sigma = 0$ to $\sigma = 0.10$
-changes $R^2$ by $-0.008 \pm 0.069$ (per seed $-0.072$, $-0.017$,
-$+0.065$): noise at this level moves $R^2$ about as much as changing the
-seed does, and does not degrade it systematically.
-AUROC falls in every seed ($-0.059 \pm 0.050$).
-The degradation is milder than in the single-qubit case
-($\Delta R^2 = 0.23$ in \cite{Paper1Brusnikin}), plausibly because more
-observable channels average the noise.
+Up to $\sigma = 0.05$ neither metric changes beyond the seed-to-seed
+spread. Paired within each seed, going from $\sigma = 0$ to
+$\sigma = 0.10$ changes $R^2$ by $-0.074 \pm 0.126$ (per seed $-0.175$,
+$-0.112$, $+0.065$), so the effect on $R^2$ is not resolved, and lowers
+AUROC in every seed ($-0.078 \pm 0.037$).
 
 \subsection{One model for both systems}
 \label{sec:e11a}
@@ -321,10 +330,11 @@ it was trained on; scoring it instead on disjoint configurations from a
 different generator seed changes $R^2$ by $-0.000 \pm 0.009$ on XXZ and
 $+0.015 \pm 0.059$ on TFIM, so configuration overlap does not inflate
 the numbers.
-Second, doubling the training set to 1{,}000 trajectories per scenario
-for \texttt{physics\_lstm} gives paired differences of
-$-0.056 \pm 0.299$ (XXZ) and $-0.066 \pm 0.196$ (TFIM) with the sign
-varying between seeds: no data-size effect is resolved.
+Second, for the residual model trained on the same mixture, doubling
+the training set to 1{,}000 trajectories per scenario raises $R^2$ by
+$+0.023 \pm 0.025$ on XXZ (in every seed) and by $+0.010 \pm 0.028$ on
+TFIM (sign varying); at 1{,}000 trajectories it reaches
+$0.815 \pm 0.015$ and $0.673 \pm 0.018$.
 
 \subsection{TFIM coupling sweep}
 \label{sec:e7c}
@@ -338,31 +348,32 @@ Table~\ref{tab:r5}).
 \begin{table}[h]
 \centering
 \caption{Transformer trained and scored at fixed $J$ (mean $\pm$ s.d.\
-  over three seeds).\label{tab:r5}}
+  over eight seeds).\label{tab:r5}}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{rccc}
 \toprule
 $J$ & $R^2$ & MAE & AUROC \\
 \midrule
-0.2 & $0.715 \pm 0.032$ & $0.58 \pm 0.07$ & $0.895 \pm 0.049$ \\
-0.5 & $0.650 \pm 0.173$ & $0.71 \pm 0.08$ & $0.907 \pm 0.009$ \\
-0.8 & $0.456 \pm 0.071$ & $0.83 \pm 0.06$ & $0.834 \pm 0.045$ \\
-1.0 & $0.535 \pm 0.133$ & $0.93 \pm 0.25$ & $0.836 \pm 0.020$ \\
-1.2 & $0.577 \pm 0.142$ & $1.05 \pm 0.62$ & $0.803 \pm 0.097$ \\
-1.5 & $0.548 \pm 0.038$ & $1.12 \pm 0.38$ & $0.774 \pm 0.072$ \\
-2.0 & $0.507 \pm 0.135$ & $1.13 \pm 0.30$ & $0.824 \pm 0.040$ \\
+0.2 & $0.793 \pm 0.094$ & $0.54 \pm 0.12$ & $0.93 \pm 0.04$ \\
+0.5 & $0.642 \pm 0.124$ & $0.83 \pm 0.17$ & $0.87 \pm 0.06$ \\
+0.8 & $0.561 \pm 0.104$ & $0.87 \pm 0.22$ & $0.84 \pm 0.03$ \\
+1.0 & $0.461 \pm 0.215$ & $1.02 \pm 0.30$ & $0.83 \pm 0.06$ \\
+1.2 & $0.628 \pm 0.214$ & $0.94 \pm 0.40$ & $0.83 \pm 0.11$ \\
+1.5 & $0.549 \pm 0.121$ & $1.14 \pm 0.35$ & $0.77 \pm 0.05$ \\
+2.0 & $0.596 \pm 0.148$ & $1.06 \pm 0.25$ & $0.80 \pm 0.07$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 Predictability falls as the coupling grows and then flattens:
-$J = 0.2$ beats $J = 0.8$ in every seed ($+0.258 \pm 0.064$), the
-weak-coupling points average $0.682$ against $0.525$ for $J \ge 0.8$,
-and MAE grows monotonically.
-The transition point is not distinguished: its $z$-score against the
-other points of the same sweep is $-1.31$, $+0.86$ and $-0.66$ in the
-three seeds.
+$J = 0.2$ beats $J = 0.8$ in every seed ($+0.232 \pm 0.082$), the
+weak-coupling points average $0.718$ against $0.559$ for $J \ge 0.8$,
+and MAE roughly doubles.
+The transition point carries no consistent feature: $J = h$ is the
+minimum in three of eight seeds, and its $z$-score against the other
+points of the same sweep ranges from $-6.8$ to $+0.9$ (median $-0.8$),
+the extremes coming from single outlying runs.
 This is expected for $N = 2$, where the spectrum,
 $E_{P=+1} = \pm\sqrt{J^2+4h^2}$ and $E_{P=-1} = \pm J$, is analytic in
 $J$ and only a smooth crossover remains.
@@ -452,8 +463,8 @@ $T_2$, and the gap ($\approx 1.3$) is about a third of the mean $T_2$
 On XXZ the correlation stays above $0.95$ at every $J$ and the gaps are
 four times smaller.
 Across the seven $J$ values the re-crossing fraction correlates with the
-trained models' $R^2$ at $r = -0.85$ ($p \approx 0.015$; Spearman
-$-0.61$).
+trained models' $R^2$ at $r = -0.78$ ($p \approx 0.04$; Spearman
+$-0.68$).
 Without dissipation the modulation alone almost never takes $C$ below
 threshold ($\le 0.3\%$ of random states), so the target is set by
 dissipation but its \emph{timing} is shifted by the unitary part.
@@ -469,7 +480,7 @@ and training, inputs still in the computational basis
 \centering
 \caption{Coupling sweep with the computational-basis target ($T_2$,
   Table~\ref{tab:r5}) and the energy-basis target ($T_2^E$); mean
-  $\pm$ s.d.\ over the same three seeds.\label{tab:r10}}
+  $\pm$ s.d.\ over the same eight seeds.\label{tab:r10}}
 \footnotesize
 \setlength{\tabcolsep}{2.5pt}
 \begin{tabular}{rcccc}
@@ -478,13 +489,13 @@ and training, inputs still in the computational basis
 \cmidrule(lr){2-3}\cmidrule(lr){4-5}
 $J$ & $T_2$ & $T_2^E$ & $T_2$ & $T_2^E$ \\
 \midrule
-0.2 & $0.715 \pm 0.032$ & $0.864 \pm 0.029$ & $0.58 \pm 0.07$ & $0.42 \pm 0.07$ \\
-0.5 & $0.650 \pm 0.173$ & $0.791 \pm 0.163$ & $0.71 \pm 0.08$ & $0.44 \pm 0.13$ \\
-0.8 & $0.456 \pm 0.071$ & $0.693 \pm 0.212$ & $0.83 \pm 0.06$ & $0.56 \pm 0.18$ \\
-1.0 & $0.535 \pm 0.133$ & $0.840 \pm 0.032$ & $0.93 \pm 0.25$ & $0.43 \pm 0.07$ \\
-1.2 & $0.577 \pm 0.142$ & $0.718 \pm 0.100$ & $1.05 \pm 0.62$ & $0.51 \pm 0.11$ \\
-1.5 & $0.548 \pm 0.038$ & $0.773 \pm 0.034$ & $1.12 \pm 0.38$ & $0.48 \pm 0.12$ \\
-2.0 & $0.507 \pm 0.135$ & $0.841 \pm 0.060$ & $1.13 \pm 0.30$ & $0.41 \pm 0.16$ \\
+0.2 & $0.793 \pm 0.094$ & $0.861 \pm 0.038$ & $0.54 \pm 0.12$ & $0.48 \pm 0.10$ \\
+0.5 & $0.642 \pm 0.124$ & $0.811 \pm 0.134$ & $0.83 \pm 0.17$ & $0.47 \pm 0.12$ \\
+0.8 & $0.561 \pm 0.104$ & $0.787 \pm 0.140$ & $0.87 \pm 0.22$ & $0.49 \pm 0.14$ \\
+1.0 & $0.461 \pm 0.215$ & $0.799 \pm 0.085$ & $1.02 \pm 0.30$ & $0.45 \pm 0.06$ \\
+1.2 & $0.628 \pm 0.214$ & $0.804 \pm 0.100$ & $0.94 \pm 0.40$ & $0.47 \pm 0.14$ \\
+1.5 & $0.549 \pm 0.121$ & $0.852 \pm 0.099$ & $1.14 \pm 0.35$ & $0.41 \pm 0.14$ \\
+2.0 & $0.596 \pm 0.148$ & $0.835 \pm 0.048$ & $1.06 \pm 0.25$ & $0.47 \pm 0.13$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -493,18 +504,18 @@ $J$ & $T_2$ & $T_2^E$ & $T_2$ & $T_2^E$ \\
   \centering
   \includegraphics[width=\columnwidth]{fig_r5_r9_J}
   \caption{Coupling sweep with the two targets of Table~\ref{tab:r10};
-    whiskers are one standard deviation over three seeds.}
+    whiskers are one standard deviation over eight seeds.}
   \label{fig:r9J}
 \end{figure}
 
-With the energy-basis target the error no longer depends on the
-coupling: MAE stays between $0.41$ and $0.56$ across all $J$, while with
-the computational-basis target it doubles, from $0.58$ to $1.13$.
-$R^2$ rises at every $J$ (in 18 of 21 seed--$J$ pairs), and the drop
-from weak ($J \le 0.5$) to strong coupling ($J \ge 0.8$) shrinks from
-$0.157$ to $0.055$ on average; per seed the shrinkage is
-$-0.232$, $+0.039$ and $-0.115$, so the residual $R^2$ trend is not
-resolved with three seeds, but the MAE trend is gone.
+With the energy-basis target the predictability no longer depends on
+the coupling. The drop in $R^2$ from weak ($J \le 0.5$) to strong
+coupling ($J \ge 0.8$) is $0.158 \pm 0.066$ with the computational-basis
+target, positive in all eight seeds, and $0.020 \pm 0.072$ with the
+energy-basis target, with the sign varying; it shrinks in seven of eight
+seeds. The rise in MAE over the same range is $0.33 \pm 0.21$ (positive
+in every seed) against $-0.02 \pm 0.13$. $R^2$ is higher with the
+energy-basis target in 49 of 56 seed--$J$ pairs.
 The loss of predictability with coupling is thus mostly a property of
 the target: what the model cannot predict at strong coupling is the
 phase of the unitary modulation at the threshold crossing, not the
@@ -515,8 +526,9 @@ dissipative decay.
 \label{sec:discussion}
 
 \paragraph{The physics prior on two qubits.}
-In the single-qubit case the residual model improves on the bare formula
-and the network without the prior fails \cite{Paper1Brusnikin}.
+In the single-qubit case the slope-based estimate gives the BiLSTM a
+clear advantage over the same network without it, and the residual model
+is the most accurate model there \cite{Paper1Brusnikin}.
 On two qubits the formula is not merely imprecise but structurally
 wrong: oscillating coherence breaks the assumption that $\log C$ is
 linear over the window.
@@ -524,7 +536,7 @@ Unlike a PINN \cite{Raissi2019}, where a physics term is a soft penalty,
 our prior is part of the output; when it is wrong, the network has to
 undo it through $\delta T$.
 The gate removes it on the worst windows, and the residual model ends up
-no better and no worse than the same network without the prior
+level with the same network without the prior on XXZ and worse on TFIM
 (Table~\ref{tab:e1_2}).
 The recommended model for two qubits is the Transformer: it is the most
 accurate and the most stable across seeds.
@@ -553,8 +565,7 @@ spreads quoted.
 
 \paragraph{Open questions.}
 \begin{enumerate}
-  \item More seeds for the residual $R^2$ trend under the energy-basis
-    target, and the same target for XXZ and the cross-system model.
+  \item The energy-basis target for XXZ and for the cross-system model.
   \item Two-body correlators and entanglement measures (concurrence
     \cite{Wootters1998}, negativity) as inputs, or entanglement as an
     alternative target.
@@ -567,22 +578,24 @@ spreads quoted.
 \begin{enumerate}
   \item The single-qubit conclusion does not transfer: on two qubits the
     Transformer is best ($R^2 = 0.843 \pm 0.028$ on XXZ,
-    $0.699 \pm 0.045$ on TFIM), and the residual model is not
-    distinguishable from the same network without the prior.
+    $0.699 \pm 0.045$ on TFIM) and beats both BiLSTM variants in every
+    seed; the residual model is no better than the same BiLSTM without
+    the prior, and on TFIM it is worse.
   \item A single Transformer with a 20-step window serves both systems
     at $R^2 = 0.814$ and $0.703$, AUROC $0.931$ and $0.904$; the shorter
     window beats a longer one on both metrics in every seed.
-  \item Measurement noise up to $\sigma = 0.10$ does not systematically
-    degrade $R^2$.
+  \item Measurement noise up to $\sigma = 0.05$ changes neither metric
+    beyond the seed-to-seed spread; at $\sigma = 0.10$ AUROC falls in
+    every seed.
   \item On TFIM predictability falls with coupling and saturates; the
     transition point is not special.
   \item The decline is consistent with modulation of the target: the
     computational-basis coherence that defines $T_2$ is modulated by the
     Hamiltonian with a depth set by $\tan2\theta = J/2h$, and the
     resulting ambiguity of the crossing time tracks the loss in $R^2$.
-    With the decoherence time defined in the energy eigenbasis the error
-    no longer grows with coupling (MAE $0.41$--$0.56$ at all $J$, against
-    $0.58$--$1.13$).
+    With the decoherence time defined in the energy eigenbasis the
+    dependence on coupling disappears (drop in $R^2$ $0.020 \pm 0.072$
+    against $0.158 \pm 0.066$, eight seeds).
 \end{enumerate}
 
 % --------------------------------------------------------------------------

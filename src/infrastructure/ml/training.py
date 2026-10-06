@@ -15,6 +15,8 @@ import torch.nn as nn
 from .batching import _add_log, _batch_physics, _loader, _ns
 from .residual_net import _ResidualNet
 
+R2_SCALE_FLOOR = 0.05
+
 
 def fit_predictor(predictor, ds, n_epochs, batch_size, lr, verbose, regression_loss: str = "huber"):
     from ...application.generate_dataset import Dataset as DS
@@ -35,7 +37,7 @@ def fit_predictor(predictor, ds, n_epochs, batch_size, lr, verbose, regression_l
         if not predictor.use_physics_prior:
             phys    = np.zeros_like(phys)
             slopes  = np.zeros_like(slopes)
-        residuals = (rem - phys).astype(np.float32)
+        residuals = (rem - phys if predictor.residual_output else rem).astype(np.float32)
         X_aug = _add_log(X, ds.feature_names)
         # Context codes: use dataset arrays if available, else zeros.
         int_codes = (ds.interaction_type_codes[idx]
@@ -59,6 +61,10 @@ def fit_predictor(predictor, ds, n_epochs, batch_size, lr, verbose, regression_l
     # normalisation
     predictor._feature_mean = X_tr.mean(axis=(0,1))
     predictor._feature_std  = X_tr.std(axis=(0,1)) + 1e-8
+    # predict() standardises every window with these statistics (_norm_window);
+    # the training windows must be standardised the same way.
+    X_tr = ((X_tr - predictor._feature_mean) / predictor._feature_std).astype(np.float32)
+    X_va = ((X_va - predictor._feature_mean) / predictor._feature_std).astype(np.float32)
     predictor._t_obs_mean    = float(t_tr.mean())
     predictor._t_obs_std     = float(t_tr.std()) + 1e-8
     predictor._slope_mean    = float(sl_tr.mean())
@@ -68,7 +74,12 @@ def fit_predictor(predictor, ds, n_epochs, batch_size, lr, verbose, regression_l
     predictor._phys_mean     = float(ph_tr.mean())
     predictor._phys_std      = float(ph_tr.std()) + 1e-8
     predictor._r2_mean       = float(r2_tr.mean())
-    predictor._r2_std        = float(r2_tr.std()) + 1e-8
+    # R²_OLS is nearly constant on clean single-qubit windows (s.d. ~1e-3);
+    # standardising by that s.d. turns any measurement noise into inputs of
+    # order -100. Differences below 0.05 in a [0, 1] goodness-of-fit carry no
+    # information, so the scale is floored there (two qubits: s.d. ~0.2,
+    # unaffected).
+    predictor._r2_std        = max(float(r2_tr.std()), R2_SCALE_FLOOR)
     predictor._ic_mean       = float(ic_tr.mean())
     predictor._ic_std        = float(ic_tr.std()) + 1e-8
     predictor._dc_mean       = float(dc_tr.mean())
@@ -123,6 +134,8 @@ def fit_predictor(predictor, ds, n_epochs, batch_size, lr, verbose, regression_l
             pred, target, pos_weight=_pw_tensor.to(pred.device),
         )
 
+    feat_std_t = torch.tensor(predictor._feature_std, dtype=torch.float32).to(predictor._device)
+
     tr_ld = _loader(X_tr, res_tr, t_tr, sl_tr, lc_tr, ph_tr, r2_tr, ic_tr, dc_tr, j_tr, r_tr, rem_tr, c_tr, batch_size, True)
     va_ld = _loader(X_va, res_va, t_va, sl_va, lc_va, ph_va, r2_va, ic_va, dc_va, j_va, r_va, rem_va, c_va, batch_size, False)
 
@@ -140,7 +153,9 @@ def fit_predictor(predictor, ds, n_epochs, batch_size, lr, verbose, regression_l
             cb = cb.to(predictor._device)
             pb = pb.to(predictor._device)
             if predictor.augment_sigma > 0.0:
-                xb = xb + torch.randn_like(xb) * predictor.augment_sigma
+                # augment_sigma is measurement noise in observable units; the
+                # batch is standardised, so scale it channel by channel.
+                xb = xb + torch.randn_like(xb) * (predictor.augment_sigma / feat_std_t)
             yn  = ((yb  - predictor._residual_mean) / predictor._residual_std).to(predictor._device)
             tn  = ((tb  - predictor._t_obs_mean)    / predictor._t_obs_std).to(predictor._device)
             sn  = ((sb  - predictor._slope_mean)    / predictor._slope_std).to(predictor._device)
