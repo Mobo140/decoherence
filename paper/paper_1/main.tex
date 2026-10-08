@@ -49,8 +49,10 @@ trained on clean data inherits this; training on noisy copies of the
 windows removes it: at $\sigma = 0.05$ the residual model keeps
 $R^2 = 0.70$ instead of $0.31$, level with networks that do not use the
 estimate, at a cost of $0.02$ on clean data.
-An alarm for decoherence within one time unit reaches AUROC $\approx0.98$
-with windows as short as five steps, and direct prediction outperforms
+Followed along each trajectory, the residual model predicts $T_2$ within
+10\% for 90\% (amplitude damping) and nearly all (dephasing) trajectories
+from half the lifetime on, and its alarm for decoherence within one time
+unit fires on time for 95--100\% of them; direct prediction outperforms
 reconstruction of $\gamma(t)$ followed by simulation, which gives negative
 $R^2$ at every window length.
 \end{abstract}
@@ -425,9 +427,66 @@ already with the shortest window, five steps ($0.5$ time units, about
 10\% of the median $T_2$). Its rise at long windows is partly a
 population effect: longer windows exclude trajectories with
 $T_2 < L\,dt$ and move the admissible windows towards the end of the
-trajectory, where the alarm is easier. How early the alarm can fire---its
-dependence on $t_\mathrm{obs}/T_2$---is a separate question this sweep
-does not answer.
+trajectory, where the alarm is easier. How early the prediction becomes reliable is
+measured directly in Sec.~\ref{sec:r18}.
+
+\subsection{How early the prediction is reliable}
+\label{sec:r18}
+
+The metrics above average over windows whose end is drawn uniformly
+before $T_2$. To see at which stage of the decay the prediction becomes
+reliable, we train the models as in E1 and follow 200 fresh trajectories
+per scenario step by step: a window ends at every grid point from the
+first full window to $T_2$, and the error of the predicted $T_2$ is
+binned in the elapsed fraction of the lifetime, $t_\mathrm{obs}/T_2$
+(Fig.~\ref{fig:r18}). The alarm of a trajectory fires at the first
+$t_\mathrm{obs}$ where the predicted remaining time is $\le 1$; it is on
+time if $T_2 - t_\mathrm{obs} \in (0, 2]$, early if larger, and missed if it
+never fires (Table~\ref{tab:r18}). Three seeds.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\columnwidth]{fig_r18_timing}
+  \caption{Fraction of trajectories whose predicted $T_2$ is within 10\%
+    of the true value, against the elapsed fraction of the lifetime; mean
+    over three seeds, 200 test trajectories per scenario.}
+  \label{fig:r18}
+\end{figure}
+
+\begin{table}[h]
+\centering
+\caption{Alarm outcome per trajectory (fractions) and median lead time
+  $T_2 - t_\mathrm{alarm}$; mean over three seeds.\label{tab:r18}}
+\scriptsize
+\setlength{\tabcolsep}{1.6pt}
+\begin{tabular}{lcccc|cccc}
+\toprule
+ & \multicolumn{4}{c|}{B} & \multicolumn{4}{c}{C} \\
+Variant & on time & early & missed & lead & on time & early & missed & lead \\
+\midrule
+\texttt{physics\_only}  & $0.82$ & $0.16$ & $0.02$ & $1.25$ & $1.00$ & $0.00$ & $0.00$ & $1.04$ \\
+\texttt{stretched\_exp} & $0.92$ & $0.01$ & $0.07$ & $0.81$ & $0.99$ & $0.00$ & $0.01$ & $0.72$ \\
+\texttt{lstm\_only}     & $0.81$ & $0.10$ & $0.10$ & $1.22$ & $0.96$ & $0.01$ & $0.04$ & $1.04$ \\
+\texttt{physics\_lstm}  & $\mathbf{0.95}$ & $0.03$ & $0.02$ & $1.00$ & $\mathbf{1.00}$ & $0.00$ & $0.00$ & $0.95$ \\
+\texttt{transformer}    & $0.91$ & $0.04$ & $0.04$ & $0.99$ & $0.96$ & $0.00$ & $0.04$ & $0.91$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The first full window ends at about one third of the lifetime on B and at
+40\% on C; no earlier prediction is possible with a window of two time
+units. From there on the residual model is the most accurate learned
+model at every stage: it predicts $T_2$ within 10\% for 59\% of the
+trajectories at $t_\mathrm{obs}/T_2 < 0.4$, 81\% at $0.4$--$0.5$ and
+90\%--94\% from half the lifetime on (B), and for 91\%, 98\% and nearly
+all trajectories on C. The Transformer reaches 90\% on B only near the end
+of the lifetime. The formula is erratic: it is accurate where the rate
+over the window matches the rate over the rest of the trajectory and not
+elsewhere. The alarm of the residual model fires on time for 95\% (B) and
+100\% (C) of the trajectories, with a median lead equal to the one-unit
+horizon. The early warning these models provide is therefore the
+predicted $T_2$ itself, available within 5\% from about half the
+lifetime; the alarm is a short-horizon trigger on top of it.
 
 \subsection{E3 --- Measurement noise}
 \label{sec:e3}
@@ -641,7 +700,10 @@ unknown time-dependent dissipation.
     the window does not cure it; training on noisy windows does: the
     residual model then stays best up to $\sigma = 0.02$ and level with
     networks without the estimate beyond, instead of collapsing.
-  \item The alarm reaches AUROC $\approx 0.98$ with windows of five steps.
+  \item The prediction is reliable early: from half the lifetime on the
+    residual model predicts $T_2$ within 10\% for 90\%--100\% of the
+    trajectories, and its alarm fires on time for 95\%--100\% of them
+    (Sec.~\ref{sec:r18}).
   \item Reconstructing $\gamma(t)$ from a short window and integrating it
     is ill-conditioned ($R^2 < 0$ at every window length); direct
     prediction is not.
