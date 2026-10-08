@@ -195,12 +195,12 @@ def _extract_gamma_targets(trajectories, n_coeffs: int = 5) -> np.ndarray:
     return np.array(targets, dtype=np.float32)
 
 
-def main() -> None:
+def main(*, seed: int = 42, out_path=None) -> None:
     results_dir = Path(__file__).parent / "results"
     results_dir.mkdir(exist_ok=True)
 
     simulator = QuTipSimulator()
-    groups = build_configs(n_per_scenario=80, seed=42)
+    groups = build_configs(n_per_scenario=80, seed=seed)
     configs = groups["B"]  # time-dependent γ only — hardest case for inverse approach
 
     fractions = [0.10, 0.15, 0.20, 0.30, 0.50]
@@ -231,7 +231,7 @@ def main() -> None:
             window_length=window_length,
             horizon=1.0,
             samples_per_trajectory=5,
-            seed=42,
+            seed=seed,
         ))
 
         # --- Direct predictor (physics+LSTM) ---
@@ -241,7 +241,7 @@ def main() -> None:
             n_epochs=100,
             batch_size=32,
             verbose=True,
-            seed=42,
+            seed=seed,
         ))
         m_direct = BacktestUseCase(direct).execute(
             BacktestCommand(dataset=dataset, horizon=1.0)
@@ -309,7 +309,7 @@ def main() -> None:
         print(f"  Inverse: MAE={mae_inv:.4f}  RMSE={rmse_inv:.4f}  R²={r2_inv:.4f}")
 
     # Save results
-    out_path = results_dir / "e5_inverse_baseline.csv"
+    out_path = out_path or results_dir / "e5_inverse_baseline.csv"
     with open(out_path, "w", newline="") as f_:
         writer = csv.DictWriter(f_, fieldnames=["method", "window_fraction", "mae", "rmse", "r2", "auroc"])
         writer.writeheader()
