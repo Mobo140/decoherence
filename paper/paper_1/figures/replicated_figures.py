@@ -1,10 +1,11 @@
-"""Figures for Paper 1 built from the replicated results (R13, R15, R16).
+"""Figures for Paper 1 built from the replicated results (R13, R15, R16, R18).
 
     python paper/paper_1/figures/replicated_figures.py
 
 Reads experiments/results/{r13_independent_test,r15_noise_variants,
-r16_noise_aware_training}.csv and writes fig_r13_independent.pdf,
-fig_r15_noise.pdf and fig_r16_noise_aware.pdf next to this file.
+r16_noise_aware_training,r18_alarm_timing_bins}.csv and writes
+fig_r13_independent.pdf, fig_r15_noise.pdf, fig_r16_noise_aware.pdf and
+fig_r18_timing.pdf next to this file.
 """
 from __future__ import annotations
 
@@ -95,7 +96,30 @@ def fig_r16() -> None:
     fig.savefig(OUT / "fig_r16_noise_aware.pdf")
 
 
+def fig_r18() -> None:
+    d = pd.read_csv(RES / "r18_alarm_timing_bins.csv")
+    g = d.groupby(["scenario", "model", "p_lo"])["frac_within_10pct"].mean()
+    bins = sorted(d.p_lo.unique())
+    labels = ["<0.4"] + [f"{lo:.1f}-{lo + 0.1:.1f}" for lo in bins[1:]]
+    pos = np.arange(len(bins))
+    fig, axes = plt.subplots(1, 2, figsize=(6.6, 2.5), sharey=True)
+    for ax, sc, title in zip(axes, "BC", ["B: amplitude damping", "C: dephasing"]):
+        for m, style in [("physics_only", "o-"), ("stretched_exp", "v-"), ("lstm_only", "s-"),
+                         ("physics_lstm", "D-"), ("transformer", "^-")]:
+            ax.plot(pos, [g[(sc, m, b)] for b in bins], style, ms=3, label=m)
+        ax.set_xticks(pos)
+        ax.set_xticklabels(labels, rotation=45, fontsize=7)
+        ax.set_xlabel(r"elapsed fraction $t_\mathrm{obs}/T_2$")
+        ax.set_title(title, fontsize=8)
+        ax.set_ylim(0, 1.02)
+    axes[0].set_ylabel("trajectories within 10%")
+    axes[1].legend(fontsize=6, loc="lower right")
+    fig.tight_layout()
+    fig.savefig(OUT / "fig_r18_timing.pdf")
+
+
 if __name__ == "__main__":
     fig_r13()
     fig_r15()
     fig_r16()
+    fig_r18()
