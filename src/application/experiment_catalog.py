@@ -98,6 +98,10 @@ CATALOG: List[ExperimentEntry] = [
                     ("r13_independent_test.csv",), status="replication"),
     ExperimentEntry("R15", "Measurement-noise robustness of every model across seeds (replaces E3)", "experiments.r15_noise_variants", "-", "-", "B/C",
                     ("r15_noise_variants.csv",), status="replication"),
+    ExperimentEntry("R16", "Noise-aware training (noisy copies of training windows, scalars recomputed)", "experiments.r16_noise_aware_training", "-", "-", "B/C",
+                    ("r16_noise_aware_training.csv",), status="replication"),
+    ExperimentEntry("R17", "Smoothing-based slope estimators under noise (no training)", "experiments.r17_slope_estimators", "-", "-", "B/C",
+                    ("r17_slope_estimators.csv",), supports_fast=False, status="replication"),
 ]
 
 
