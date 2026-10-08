@@ -347,6 +347,15 @@ and $0.011$ (C).
 The network without the estimate does learn the task, but clearly less
 well.
 
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\columnwidth]{fig_r13_independent}
+  \caption{$R^2$ on 400 independent test trajectories per scenario, mean
+    over three seeds; whiskers are the mean 95\% trajectory-bootstrap
+    intervals (Table~\ref{tab:r13}).}
+  \label{fig:r13}
+\end{figure}
+
 \subsection{E1 at 500 trajectories}
 \label{sec:r11}
 
@@ -454,6 +463,17 @@ the clean window while the window itself is noisy, the same model is
 essentially unaffected, so the degradation enters through the estimate,
 not through the network. The networks that do not use the estimate lose
 $0.06$--$0.15$ at $\sigma = 0.10$.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.85\columnwidth]{fig_r15_noise}
+  \caption{$R^2$ under measurement noise (mean over three seeds; points
+    are equally spaced, $\sigma$ is not). \texttt{physics\_only} at
+    $\sigma = 0.10$ ($-1.43$) lies below the axis. Seed-to-seed spreads
+    are large because the seeds differ in their trajectories; comparisons
+    in the text are paired within seeds.}
+  \label{fig:e3}
+\end{figure}
 
 \subsection{E4 --- One model for all three scenarios}
 \label{sec:e4}
