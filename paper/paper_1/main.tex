@@ -44,8 +44,11 @@ dephasing, ahead in every seed of the same network without the estimate
 stretched-exponential fit (by $0.02$--$0.05$).
 Nearly all of the gain comes from the estimate as an input feature; the
 residual output structure adds at most $0.01$.
-The estimate is, however, sensitive to measurement noise: from
-$\sigma = 0.02$ on, networks that do not use it are more accurate.
+The estimate is sensitive to measurement noise, and a residual model
+trained on clean data inherits this; training on noisy copies of the
+windows removes it: at $\sigma = 0.05$ the residual model keeps
+$R^2 = 0.70$ instead of $0.31$, level with networks that do not use the
+estimate, at a cost of $0.02$ on clean data.
 An alarm for decoherence within one time unit reaches AUROC $\approx0.98$
 with windows as short as five steps, and direct prediction outperforms
 reconstruction of $\gamma(t)$ followed by simulation, which gives negative
@@ -475,6 +478,62 @@ $0.06$--$0.15$ at $\sigma = 0.10$.
   \label{fig:e3}
 \end{figure}
 
+\paragraph{Noise-aware training.}
+A better estimate of the slope from the same window does not help:
+weighted least squares of $\log C$, a nonlinear exponential fit, SSA
+denoising and Holt's exponential smoothing all collapse like the plain
+OLS estimate at $\sigma \ge 0.05$ (experiment R17, no training). The
+problem is the estimator $-1/\hat s$ itself: on slowly decaying windows the
+change of $\log C$ is comparable to the noise, and dividing by a small
+slope amplifies any error.
+During training the physics scalars are computed from clean windows, so
+the network never learns how far to trust $T_\text{physics}$ on a noisy
+window. We therefore extend the training and validation sets with two
+noisy copies of every window ($\sigma$ drawn log-uniformly from
+$[0.005, 0.12]$) and compute every input---the window and the slope, OLS
+$R^2$ and $T_\text{physics}$ derived from it---from the noisy copy.
+The standard error of the slope is a function of the slope and the OLS
+$R^2$, so the network already has it. Test windows are as in
+Table~\ref{tab:e3} (Table~\ref{tab:r16}, Fig.~\ref{fig:r16}).
+
+\begin{table}[h]
+\centering
+\caption{$R^2$ under measurement noise with clean and noise-aware
+  training, mean over three seeds.\label{tab:r16}}
+\footnotesize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{lccccc}
+\toprule
+Model, training & 0 & 0.01 & 0.02 & 0.05 & 0.10 \\
+\midrule
+\texttt{physics\_lstm}, clean & $\mathbf{0.833}$ & $0.777$ & $0.688$ & $0.312$ & $0.246$ \\
+\texttt{physics\_lstm}, noise-aware & $0.816$ & $\mathbf{0.810}$ & $\mathbf{0.793}$ & $0.701$ & $0.628$ \\
+\texttt{transformer}, clean & $0.758$ & $0.756$ & $0.751$ & $\mathbf{0.723}$ & $0.615$ \\
+\texttt{transformer}, noise-aware & $0.713$ & $0.710$ & $0.706$ & $0.685$ & $\mathbf{0.629}$ \\
+\texttt{lstm\_only}, noise-aware & $0.683$ & $0.686$ & $0.688$ & $0.685$ & $\mathbf{0.691}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.85\columnwidth]{fig_r16_noise_aware}
+  \caption{$R^2$ under measurement noise with clean (dashed) and
+    noise-aware (solid) training, mean over three seeds
+    (Table~\ref{tab:r16}).}
+  \label{fig:r16}
+\end{figure}
+
+Noise-aware training removes the collapse: the residual model improves
+in every seed from $\sigma = 0.02$ on ($+0.105 \pm 0.105$, then
+$+0.389 \pm 0.137$ and $+0.382 \pm 0.103$ at $\sigma = 0.05$ and
+$0.10$), and AUROC at $\sigma = 0.05$ rises from $0.76$ to $0.89$. The
+price is $0.017 \pm 0.017$ in $R^2$ on clean data, lower in every seed.
+Against networks trained the same way it is better in every seed up to
+$\sigma = 0.02$ (by $0.09$--$0.13$), and level with them at
+$\sigma \ge 0.05$, where the slope carries little information and all
+models fall back on the raw window.
+
 \subsection{E4 --- One model for all three scenarios}
 \label{sec:e4}
 
@@ -533,8 +592,10 @@ limit---a correction that can be zero---but a network trained on a mixture
 of regimes does not reliably learn to make it zero (Sec.~\ref{sec:e4}).
 Unlike a PINN~\cite{Raissi2019}, where physics enters as a soft penalty,
 the estimate here enters as an input and as part of the output; the
-price is that its errors propagate, which is what makes the model
-sensitive to measurement noise (Sec.~\ref{sec:e3}).
+price is that its errors propagate, which makes a model trained on clean
+data sensitive to measurement noise (Sec.~\ref{sec:e3}). Training on noisy
+windows teaches the network how far to trust the estimate and removes
+this sensitivity at a small cost on clean data.
 
 \paragraph{Risk score as a practical interface.}
 The alarm score is a monotone function of the predicted remaining time,
@@ -576,10 +637,10 @@ unknown time-dependent dissipation.
     estimate, of a Transformer and of a stretched-exponential fit.
   \item Nearly all of this gain comes from the estimate as an input
     feature; the residual output structure adds at most $0.01$.
-  \item The estimate is sensitive to measurement noise; from
-    $\sigma = 0.02$ on, networks that do not use it are more accurate,
-    which calls for a noise-robust estimate before deployment on
-    hardware.
+  \item The estimate is sensitive to measurement noise, and smoothing
+    the window does not cure it; training on noisy windows does: the
+    residual model then stays best up to $\sigma = 0.02$ and level with
+    networks without the estimate beyond, instead of collapsing.
   \item The alarm reaches AUROC $\approx 0.98$ with windows of five steps.
   \item Reconstructing $\gamma(t)$ from a short window and integrating it
     is ill-conditioned ($R^2 < 0$ at every window length); direct

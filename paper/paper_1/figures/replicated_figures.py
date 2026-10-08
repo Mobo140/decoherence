@@ -1,9 +1,10 @@
-"""Figures for Paper 1 built from the replicated results (R13, R15).
+"""Figures for Paper 1 built from the replicated results (R13, R15, R16).
 
     python paper/paper_1/figures/replicated_figures.py
 
-Reads experiments/results/{r13_independent_test,r15_noise_variants}.csv and
-writes fig_r13_independent.pdf and fig_r15_noise.pdf next to this file.
+Reads experiments/results/{r13_independent_test,r15_noise_variants,
+r16_noise_aware_training}.csv and writes fig_r13_independent.pdf,
+fig_r15_noise.pdf and fig_r16_noise_aware.pdf next to this file.
 """
 from __future__ import annotations
 
@@ -70,6 +71,31 @@ def fig_r15() -> None:
     fig.savefig(OUT / "fig_r15_noise.pdf")
 
 
+def fig_r16() -> None:
+    d = pd.read_csv(RES / "r16_noise_aware_training.csv")
+    g = d.groupby(["arm", "sigma"])["r2"].mean()
+    sig = sorted(d.sigma.unique())
+    pos = np.arange(len(sig))
+    fig, ax = plt.subplots(figsize=(3.3, 2.5))
+    for arm, style, label in [
+        ("physics_lstm", "D--", "physics_lstm, clean training"),
+        ("physics_lstm_aug", "D-", "physics_lstm, noise-aware"),
+        ("transformer", "^--", "transformer, clean training"),
+        ("transformer_aug", "^-", "transformer, noise-aware"),
+        ("lstm_only_aug", "s-", "lstm_only, noise-aware"),
+    ]:
+        ax.plot(pos, g[arm].values, style, ms=3, label=label)
+    ax.set_xticks(pos)
+    ax.set_xticklabels([f"{x:g}" for x in sig])
+    ax.set_xlabel(r"noise $\sigma$")
+    ax.set_ylabel("$R^2$")
+    ax.set_ylim(0.2, 0.9)
+    ax.legend(fontsize=5.5, loc="lower left")
+    fig.tight_layout()
+    fig.savefig(OUT / "fig_r16_noise_aware.pdf")
+
+
 if __name__ == "__main__":
     fig_r13()
     fig_r15()
+    fig_r16()
