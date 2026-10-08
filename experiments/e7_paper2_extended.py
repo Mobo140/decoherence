@@ -189,8 +189,9 @@ def run_e7b(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
 def _make_tfim_configs_fixed_J(
     n: int, J: float, rng: np.random.Generator,
     criterion: DecoherenceCriterion = DecoherenceCriterion.COHERENCE,
+    interaction: InteractionType = InteractionType.TFIM,
 ) -> List[SystemConfig]:
-    """Generate TFIM configs with a fixed coupling constant J."""
+    """Generate two-qubit configs (TFIM by default) with a fixed coupling J."""
     shapes = ["random", "peak", "step_up", "step_down", "monotone_increasing",
               "monotone_decreasing"]
     shape_cycle = itertools.cycle(shapes)
@@ -203,7 +204,7 @@ def _make_tfim_configs_fixed_J(
             omega=float(rng.uniform(0.5, 2.0)),
             J=J,
             dissipator=DissipatorConfig.time_dependent(coeffs, DissipatorType.SIGMA_MINUS),
-            interaction_type=InteractionType.TFIM,
+            interaction_type=interaction,
             t_max=20.0,
             dt=0.1,
             decoherence_criterion=criterion,
@@ -214,7 +215,8 @@ def _make_tfim_configs_fixed_J(
 def run_e7c(simulator, n_per_J: int, n_epochs: int, verbose: bool = True,
             *, seed: int = 42, config_seed: int = 123, out_path=None,
             J_values=None, store=_UNSET,
-            criterion=DecoherenceCriterion.COHERENCE) -> list:
+            criterion=DecoherenceCriterion.COHERENCE,
+            interaction=InteractionType.TFIM) -> list:
     """Sweep TFIM coupling J ∈ {0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0}.
 
     Phase transition at J = h_field = 1.0 (hardcoded in TwoQubitSystem).
@@ -222,7 +224,9 @@ def run_e7c(simulator, n_per_J: int, n_epochs: int, verbose: bool = True,
 
     The keyword-only arguments default to the published run; R5 varies
     them to replicate the sweep across seeds without duplicating its
-    configuration (see experiments/r5_multiseed_J_sweep.py).
+    configuration (see experiments/r5_multiseed_J_sweep.py). R20 passes
+    ``interaction=InteractionType.XXZ`` to run the same sweep on the
+    Heisenberg model.
     """
     from src.infrastructure.ml.transformer_predictor import TransformerPredictor
 
@@ -237,8 +241,8 @@ def run_e7c(simulator, n_per_J: int, n_epochs: int, verbose: bool = True,
     rows = []
 
     for J in J_values:
-        print(f"\n{'='*60}\nTFIM J={J:.1f}  (J/h = {J:.1f})\n{'='*60}")
-        configs = _make_tfim_configs_fixed_J(n_per_J, J, rng, criterion)
+        print(f"\n{'='*60}\n{interaction.value} J={J:.1f}\n{'='*60}")
+        configs = _make_tfim_configs_fixed_J(n_per_J, J, rng, criterion, interaction)
 
         dataset = gen_uc.execute(GenerateDatasetCommand(
             configs=configs,
