@@ -43,12 +43,13 @@ from src.application.run_cross_system import CrossSystemCommand, CrossSystemUseC
 from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
 
 
-def main(train_scenarios: list | None = None, eval_scenarios: list | None = None, suffix: str = "") -> None:
+def main(train_scenarios: list | None = None, eval_scenarios: list | None = None, suffix: str = "",
+         *, seed: int = 42, out_path=None) -> None:
     results_dir = Path(__file__).parent / "results"
     results_dir.mkdir(exist_ok=True)
 
     simulator = QuTipSimulator()
-    groups = build_configs(n_per_scenario=100, seed=42)
+    groups = build_configs(n_per_scenario=100, seed=seed)
 
     # Defaults: train on all, eval on all individual scenarios
     if train_scenarios is None:
@@ -70,14 +71,14 @@ def main(train_scenarios: list | None = None, eval_scenarios: list | None = None
         batch_size=32,
         lr=1e-3,
         regression_loss="huber",
-        seed=42,
+        seed=seed,
         verbose=True,
     )
 
     results = CrossSystemUseCase(simulator, store=trajectory_store()).execute(cmd)
 
     fname = f"e4_cross_system{suffix}.csv" if suffix else "e4_cross_system.csv"
-    out_path = results_dir / fname
+    out_path = out_path or results_dir / fname
     fieldnames = ["name", "variant", "window_fraction", "noise_sigma",
                   "mae", "rmse", "r2", "mape", "auroc", "n_samples"]
     with open(out_path, "w", newline="") as f:

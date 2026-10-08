@@ -103,7 +103,8 @@ CATALOG: List[ExperimentEntry] = [
     ExperimentEntry("R17", "Smoothing-based slope estimators under noise (no training)", "experiments.r17_slope_estimators", "-", "-", "B/C",
                     ("r17_slope_estimators.csv",), supports_fast=False, status="replication"),
     ExperimentEntry("R18", "Accuracy and alarm timing along each trajectory (vs t_obs/T2)", "experiments.r18_alarm_timing", "-", "-", "B/C",
-                    ("r18_alarm_timing_bins.csv", "r18_alarm_timing_alarm.csv"), status="replication"),
+                    ("r18_alarm_timing_bins.csv", "r18_alarm_timing_alarm.csv"), status="replication"),    ExperimentEntry("R19", "E4 and E5 across seeds", "experiments.r19_replicate_e4_e5", "-", "-", "A-C",
+                    ("r19_e4.csv", "r19_e5.csv"), supports_fast=False, status="replication"),
 ]
 
 

@@ -269,8 +269,7 @@ task.
 Regression is scored by $R^2$ and MAE of the predicted decoherence time
 $\widehat T_2 = t_\mathrm{obs} + \widehat T_{2,\text{rem}}$ against the
 true $T_2$ over all test windows; the alarm by AUROC~\cite{Fawcett2006}.
-Unless marked as single runs, results are mean $\pm$ s.d.\ over seeds
-$\{42,43,44\}$; a seed fixes the sampled configurations, the split and the
+All results are mean $\pm$ s.d.\ over seeds $\{42,43,44\}$; a seed fixes the sampled configurations, the split and the
 network initialisation, and comparisons are made as paired differences
 within a seed.
 With 100 trajectories per scenario the test split holds 10 trajectories
@@ -596,9 +595,9 @@ models fall back on the raw window.
 \subsection{E4 --- One model for all three scenarios}
 \label{sec:e4}
 
-A single \texttt{physics\_lstm} trained on A+B+C (single run) reaches
-$R^2 = 0.919$ on B and $0.980$ on C, but only $0.546$ on A, where the
-formula is exact: the correct correction there is zero, and the
+A single \texttt{physics\_lstm} trained on A+B+C reaches
+$R^2 = 0.835 \pm 0.101$ on B and $0.978 \pm 0.004$ on C, but only
+$0.452 \pm 0.082$ on A, where the formula is exact: the correct correction there is zero, and the
 mixture-trained network applies a non-zero one. A regime classifier
 selecting \texttt{physics\_only} when $\log C$ is linear over the window
 would remove this loss.
@@ -610,28 +609,31 @@ We compare direct prediction with the two-step inverse approach of
 arXiv:2505.06928 operationalised for the $T_2$ task: (1) an MLP
 reconstructs the Bernstein coefficients of $\gamma(t)$ from the window;
 (2) the Lindblad equation is integrated with the reconstructed rate to
-read off $T_2$. Both use the same windows of scenario~B (single run,
-Table~\ref{tab:e5}).
+read off $T_2$. Both use the same windows of scenario~B
+(Table~\ref{tab:e5}).
 
 \begin{table}[h]
 \centering
 \caption{E5: direct \texttt{physics\_lstm} vs.\ inverse $\gamma$
-  reconstruction on scenario~B (single run).\label{tab:e5}}
+  reconstruction on scenario~B, mean $\pm$ s.d.\ over three
+  seeds.\label{tab:e5}}
 \small
 \begin{tabular}{rcc}
 \toprule
 $f$ & Direct $R^2$ & Inverse $R^2$ \\
 \midrule
-0.10 & \textbf{0.946} & $-1.150$ \\
-0.15 & \textbf{0.934} & $-0.726$ \\
-0.20 & \textbf{0.934} & $-0.963$ \\
-0.30 & \textbf{0.969} & $-0.808$ \\
-0.50 & \textbf{0.939} & $-2.671$ \\
+0.10 & $\mathbf{0.955 \pm 0.015}$ & $-0.58 \pm 0.50$ \\
+0.15 & $\mathbf{0.954 \pm 0.021}$ & $-0.50 \pm 0.20$ \\
+0.20 & $\mathbf{0.955 \pm 0.020}$ & $-0.44 \pm 0.46$ \\
+0.30 & $\mathbf{0.970 \pm 0.011}$ & $-0.50 \pm 0.39$ \\
+0.50 & $\mathbf{0.952 \pm 0.019}$ & $-2.18 \pm 0.67$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The inverse baseline gives $R^2 < 0$ at every window length. This is not a
+The inverse baseline gives $R^2 < 0$ at every window length, and
+direct prediction is ahead by more than $1.0$ in every seed and at every
+length. This is not a
 failure of the MLP but an ill-posedness: many $\gamma(t)$ profiles are
 compatible with a short window, and $T_2$ computed from a reconstructed
 $\gamma$ inherits that ambiguity. Direct prediction does not try to
