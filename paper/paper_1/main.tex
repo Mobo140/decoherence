@@ -52,7 +52,11 @@ estimate, at a cost of $0.02$ on clean data.
 Followed along each trajectory, the residual model predicts $T_2$ within
 10\% for 90\% (amplitude damping) and nearly all (dephasing) trajectories
 from half the lifetime on, and its alarm for decoherence within one time
-unit fires on time for 95--100\% of them; direct prediction outperforms
+unit fires on time for 95--100\% of them.
+With a fluctuating dissipation rate it remains the most accurate model
+for moderate fluctuations; time-correlated measurement noise removes its
+lead over a Transformer.
+Direct prediction outperforms
 reconstruction of $\gamma(t)$ followed by simulation, which gives negative
 $R^2$ at every window length.
 \end{abstract}
@@ -592,6 +596,104 @@ $\sigma = 0.02$ (by $0.09$--$0.13$), and level with them at
 $\sigma \ge 0.05$, where the slope carries little information and all
 models fall back on the raw window.
 
+\subsection{Correlated noise and a fluctuating dissipation rate}
+\label{sec:r21}
+
+Two assumptions behind the results above are relaxed here (experiment
+R21; training as in Sec.~\ref{sec:e3}, three seeds).
+
+\paragraph{Correlated measurement noise.}
+Drifts in readout calibration make noise correlated in time. We replace
+the independent noise by a stationary AR(1) process with the same
+marginal $\sigma$ and lag-one correlation $\varphi \in \{0, 0.5, 0.9\}$;
+one realisation per seed is filtered for every $\varphi$, so the
+comparison is paired, and $\varphi = 0$ reproduces Table~\ref{tab:e3}.
+Over a window of $n = 50$ points AR(1) errors inflate the variance of the
+OLS slope by a factor of $2.8$ ($\varphi = 0.5$) and $9.6$
+($\varphi = 0.9$), against $(1+\varphi)/(1-\varphi) = 3$ and $19$ for
+$n \to \infty$: the noise is low-frequency and looks like a trend
+(Fig.~\ref{fig:r21}a).
+At $\varphi = 0.5$ every model changes by less than $0.04$.
+At $\varphi = 0.9$ and $\sigma = 0.05$ every trained network loses in
+every seed: the Transformer $0.091 \pm 0.044$, the noise-aware residual
+model $0.109 \pm 0.083$, \texttt{lstm\_only} $0.022 \pm 0.024$.
+Noise-aware training with white noise still transfers in part: it keeps
+the residual model $0.145 \pm 0.066$ above the same model trained on
+clean data, in every seed. Its lead over the Transformer, however, is
+gone (from $+0.042$ to $+0.016 \pm 0.023$ at $\sigma = 0.02$; from
+$-0.021$ to $-0.040 \pm 0.048$ at $\sigma = 0.05$, sign varying).
+The residual model trained on clean data gains from correlation
+($+0.135 \pm 0.072$ at $\sigma = 0.05$, every seed), but remains far
+below the noise-aware one; correlated noise changes less from step to
+step (increments have standard deviation $\sigma\sqrt{2(1-\varphi)}$), so
+the window looks smoother to a network that has seen only clean data.
+
+\paragraph{Stochastic dissipation rate.}
+A real bath fluctuates. We multiply the Bernstein rate by a log-normal
+factor,
+\begin{equation}
+  \gamma(t) = \gamma_B(t)\, e^{s\,x(t) - s^2/2},
+  \label{eq:ou}
+\end{equation}
+where $x$ is a stationary Ornstein--Uhlenbeck process with unit variance
+and correlation time $\tau$; the factor has mean one, so the mean rate is
+unchanged. Models are evaluated on 200 independent trajectories per seed
+for $s \in \{0, 0.3, 0.6\}$ and $\tau \in \{0.5, 2\}$, with the same
+initial states and driving noise at every setting, so $s = 0$ is a
+paired control. A further arm trains the residual model and the
+Transformer on trajectories with $s \sim U[0, 0.6]$ and
+$\tau \in \{0.5, 2\}$ (Table~\ref{tab:r21}, Fig.~\ref{fig:r21}b).
+
+\begin{table}[h]
+\centering
+\caption{$R^2$ with a stochastic dissipation rate,
+  Eq.~\ref{eq:ou}; mean over three seeds.
+  ``sto'': trained on stochastic $\gamma$.\label{tab:r21}}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lccccc}
+\toprule
+$s$ & 0 & 0.3 & 0.3 & 0.6 & 0.6 \\
+$\tau$ & --- & 0.5 & 2 & 0.5 & 2 \\
+\midrule
+\texttt{physics\_only} & $0.399$ & $0.243$ & $0.314$ & $-0.32$ & $-0.37$ \\
+\texttt{lstm\_only} & $0.671$ & $0.665$ & $0.643$ & $0.601$ & $0.489$ \\
+\texttt{physics\_lstm} & $\mathbf{0.924}$ & $\mathbf{0.829}$ & $\mathbf{0.797}$ & $0.661$ & $0.560$ \\
+\texttt{physics\_lstm}, sto & $0.892$ & $0.819$ & $0.789$ & $0.677$ & $0.573$ \\
+\texttt{transformer} & $0.838$ & $0.796$ & $0.775$ & $\mathbf{0.699}$ & $\mathbf{0.578}$ \\
+\texttt{transformer}, sto & $0.761$ & $0.741$ & $0.715$ & $0.651$ & $0.554$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.85\textwidth]{fig_r21_correlated_noise}
+  \caption{(a) $R^2$ at $\sigma = 0.05$ against the lag-one correlation
+    of the noise; \texttt{physics\_only} ($-0.17$ to $-0.98$) lies below
+    the axis. (b) $R^2$ against the strength of the rate fluctuations,
+    Eq.~\ref{eq:ou}; solid $\tau = 0.5$, dashed $\tau = 2$. Mean over
+    three seeds.}
+  \label{fig:r21}
+\end{figure*}
+
+Every model loses accuracy, the more so the larger $s$ and the longer
+$\tau$: at $s = 0.3$ the residual model loses $0.095 \pm 0.027$
+($\tau = 0.5$) and $0.128 \pm 0.027$ ($\tau = 2$), the Transformer
+$0.041$ and $0.063$, all in every seed. The dependence on $\tau$ is
+expected: what decides $T_2$ is the rate integrated over the remaining
+lifetime $T$, and the variance of $\int_0^T x\,dt$,
+$2\tau T - 2\tau^2(1 - e^{-T/\tau})$, grows with $\tau$ while
+$\tau \lesssim T$; fast fluctuations average out, slow ones do not.
+The residual model stays best at $s = 0.3$ ($+0.033 \pm 0.022$ and
+$+0.022 \pm 0.017$ over the Transformer, every seed, against $+0.087$ at
+$s = 0$) and is level with it at $s = 0.6$ (sign varying).
+Training on stochastic trajectories does not help: the change is
+$-0.010$ to $+0.017$ for the residual model (sign varying) and negative
+in every seed for the Transformer. The loss is therefore not a shift
+between training and test distributions but a limit on predictability:
+the window does not contain the future fluctuations of the rate.
+
 \subsection{E4 --- One model for all three scenarios}
 \label{sec:e4}
 
@@ -674,11 +776,14 @@ The experiments were conducted on simulated data with 100 trajectories
 per scenario (500 in Sec.~\ref{sec:r11}); the built-in test splits of 10
 trajectories resolve only the larger differences, which is why the main
 comparison is made on an independent test set. Measurement noise is
-modelled as independent Gaussian noise on every channel, whereas on
-hardware the coherence and purity would be computed from the noisy
-expectations and their errors would be correlated.
-Validation on real hardware (where $\gamma(t)$ is not parameterisable
-by Bernstein polynomials and readout errors are correlated) is left for
+modelled as Gaussian noise added to every channel separately, white or
+correlated in time (Sec.~\ref{sec:r21}), whereas on hardware the coherence
+and purity would be computed from the noisy expectations and their errors
+would be correlated across channels. Noise-aware training used white
+noise only; training with noise of the expected correlation is the
+natural next step.
+Validation on real hardware, where $\gamma(t)$ is neither a Bernstein
+polynomial nor the log-normal process of Eq.~\ref{eq:ou}, is left for
 future work, as is extension to multi-qubit systems, where entanglement
 and non-exponential coherence decay pose qualitatively different
 challenges.
@@ -706,6 +811,13 @@ unknown time-dependent dissipation.
     residual model predicts $T_2$ within 10\% for 90\%--100\% of the
     trajectories, and its alarm fires on time for 95\%--100\% of them
     (Sec.~\ref{sec:r18}).
+  \item With a fluctuating dissipation rate all models lose accuracy, the
+    more so for slow fluctuations; the residual model stays best at
+    moderate strength, and training on fluctuating rates does not help,
+    because the window does not contain the future fluctuations. Noise
+    correlated in time costs every network up to $0.1$ in $R^2$ at
+    $\sigma = 0.05$ and removes the residual model's lead over a
+    Transformer (Sec.~\ref{sec:r21}).
   \item Reconstructing $\gamma(t)$ from a short window and integrating it
     is ill-conditioned ($R^2 < 0$ at every window length); direct
     prediction is not.
@@ -724,6 +836,8 @@ The simulation, training, evaluation and figure-generating code, together
 with the result files behind every table and every replication reported
 here, is publicly available at
 \url{https://github.com/Mobo140/decoherence}.
+Correlated noise and the stochastic dissipation rate are experiment R21
+there.
 
 \section*{Reproducibility}
 All reported runs are seeded end to end: the sampled system
