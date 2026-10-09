@@ -68,6 +68,11 @@ With the energy-basis target a single Transformer trained on both
 systems reaches $R^2 = 0.906 \pm 0.010$ on XXZ and $0.886 \pm 0.011$ on
 TFIM, against $0.814$ and $0.703$ with the computational-basis target,
 and the gap between the two systems shrinks from $0.11$ to $0.02$.
+Adding the two-body correlators, which make the input a full tomography
+of the state, does not remove the decline with $J$: the
+computational-basis crossing time jumps between oscillation periods under
+a $2\%$ change of the rate for $3$--$8\%$ of trajectories, and no
+input can predict that.
 \end{abstract}
 
 % --------------------------------------------------------------------------
@@ -92,7 +97,8 @@ Three things change.
   \item \textbf{Partial observation.}
     The model sees the six single-qubit Pauli expectations, coherence
     and purity, but no two-body correlators; the two local Bloch vectors
-    do not determine the two-qubit state.
+    do not determine the two-qubit state. Section~\ref{sec:r23} adds the
+    missing correlators.
   \item \textbf{Entanglement.}
     Two-qubit entanglement can vanish in finite time under purely local
     damping \cite{YuEberly2009}, so the joint decay need not follow the
@@ -595,6 +601,102 @@ target is better posed, not that the same model has become more
 accurate; MAE, measured in units of time, is comparable between the
 two.
 
+\subsection{Two-body correlators}
+\label{sec:r23}
+
+The models see the two local Bloch vectors, coherence and purity: eight
+of the fifteen real parameters of a two-qubit state. The other seven
+enter only through the two-body correlators
+$\langle\sigma_a\otimes\sigma_b\rangle$; in particular the populations of
+$|00\rangle$, $|11\rangle$ and the coherence between them, which the
+TFIM Hamiltonian rotates, are visible only through
+$\langle ZZ\rangle$, $\langle XX\rangle - \langle YY\rangle$ and
+$\langle XY\rangle + \langle YX\rangle$. If the TFIM ceiling were missing
+information, adding the nine correlators---which with the single-qubit
+expectations make the window a full tomography of $\rho(t)$---should
+lift it. Experiment R23 takes both feature sets from one simulation (the
+base set is the full set without the correlator columns), so every
+comparison is paired on identical windows; three seeds.
+
+\begin{table}[h]
+\centering
+\caption{Single-scenario models (500 trajectories, window 20) without and
+  with the two-body correlators, scored on 200 independent trajectories
+  per scenario. Mean $\pm$ s.d.\ over three seeds.\label{tab:r23}}
+\footnotesize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{llcccc}
+\toprule
+ & & \multicolumn{2}{c}{$R^2$} & \multicolumn{2}{c}{MAE} \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-6}
+Sc. & Model & base & $+$corr. & base & $+$corr. \\
+\midrule
+D & Transformer & $\mathbf{0.844 \pm 0.019}$ & $0.825 \pm 0.025$ & $0.52$ & $0.55$ \\
+D & \texttt{lstm\_only} & $0.826 \pm 0.021$ & $0.800 \pm 0.034$ & $0.55$ & $0.60$ \\
+E & Transformer & $0.687 \pm 0.087$ & $\mathbf{0.718 \pm 0.078}$ & $0.79$ & $0.73$ \\
+E & \texttt{lstm\_only} & $0.690 \pm 0.079$ & $0.699 \pm 0.097$ & $0.80$ & $0.77$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The correlators do not help much (Table~\ref{tab:r23}). On XXZ they cost
+the Transformer $0.019 \pm 0.008$ in $R^2$ and raise MAE in every seed;
+the BiLSTM loses $0.025 \pm 0.031$. On TFIM they lower the Transformer's
+MAE in every seed ($-0.059 \pm 0.027$), with $R^2$ up by
+$+0.031 \pm 0.061$ and AUROC from $0.84$ to $0.86$; for the BiLSTM the
+change is not resolved.
+Nor do they remove the decline with coupling: repeating the TFIM sweep
+(R5 protocol) with both feature sets, the drop in $R^2$ from
+$J \le 0.5$ to $J \ge 0.8$ is $0.113 \pm 0.028$ without and
+$0.181 \pm 0.082$ with the correlators (positive in every seed in both
+cases, paired difference $+0.068 \pm 0.099$ with the sign varying), and
+the correlators raise $R^2$ in only 8 of 21 seed--$J$ pairs.
+
+The information about the state is therefore in the window, yet the
+crossing time is still not predictable. The reason is that $T_2$ in the
+computational basis is not a smooth function of the dissipation, which
+is the part of the future the window cannot fix. We simulated 100
+trajectories per system and coupling twice, with $\gamma(t)$ and with
+$1.02\,\gamma(t)$, from the same initial state, and compared the targets
+(Table~\ref{tab:r23c}).
+
+\begin{table}[h]
+\centering
+\caption{Response of the two targets to a 2\% increase of the rate
+  (simulation only, 100 trajectories per row): median relative change and
+  fraction of trajectories that change by more than 5\%.\label{tab:r23c}}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lrcccc}
+\toprule
+ & & \multicolumn{2}{c}{$T_2$} & \multicolumn{2}{c}{$T_2^E$} \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-6}
+ & $J$ & median & $>5\%$ & median & $>5\%$ \\
+\midrule
+TFIM & 0.2 & 0.9\% & 0.06 & 1.7\% & 0.00 \\
+TFIM & 0.8 & 0.5\% & 0.04 & 1.3\% & 0.01 \\
+TFIM & 1.5 & 0.4\% & 0.08 & 1.1\% & 0.03 \\
+XXZ & 0.2 & 1.5\% & 0.00 & 1.7\% & 0.00 \\
+XXZ & 0.8 & 0.9\% & 0.08 & 1.7\% & 0.00 \\
+XXZ & 1.5 & 0.6\% & 0.06 & 1.7\% & 0.00 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+$T_2^E$ responds smoothly: it shortens by $1$--$2\%$, close to the
+$2\%$ of a pure rescaling, and rarely by more than $5\%$. $T_2$ responds
+in two ways. Most trajectories change by less than $1\%$, because the
+crossing is pinned to a steep flank of the oscillation; but $3$--$8\%$
+of them change by more than $5\%$ and up to $40\%$, when the envelope
+moves the first crossing to another oscillation period. A target that
+jumps under a $2\%$ change of an unobserved rate cannot be predicted
+from the window, however complete the window is. The fraction of jumps
+at this one perturbation size does not by itself track the decline of
+$R^2$ with $J$ (it is similar on XXZ at $J \ge 0.8$, with 100
+trajectories per row); what it shows is the mechanism by which the
+computational-basis target limits any model, which R10 and R20 removed
+by changing the target.
+
 % --------------------------------------------------------------------------
 \section{Discussion}
 \label{sec:discussion}
@@ -626,9 +728,10 @@ The practical lesson is to define the decoherence time through a
 quantity that the Hamiltonian does not modulate---the coherence in the
 energy eigenbasis, or a basis-independent measure---whenever the
 Hamiltonian is not diagonal in the measurement basis.
-Whether the remaining modulation could be predicted from the window is
-open; the oscillation phase is fixed by the initial state, but the model
-does not see two-body correlators.
+Giving the model the full state through the two-body correlators does
+not remove the ceiling (Sec.~\ref{sec:r23}): the first crossing in the
+computational basis jumps between oscillation periods under small
+changes of the unobserved rate, so it is ill-conditioned for any model.
 
 \paragraph{Limitations.}
 All data are simulated, with $\gamma(t)$ drawn from a smooth polynomial
@@ -641,8 +744,7 @@ spreads quoted.
 
 \paragraph{Open questions.}
 \begin{enumerate}
-  \item Two-body correlators and entanglement measures (concurrence
-    \cite{Wootters1998}, negativity) as inputs, or entanglement as an
+  \item Entanglement (concurrence \cite{Wootters1998}, negativity) as an
     alternative target.
   \item Extension to three and four qubits.
 \end{enumerate}
@@ -675,6 +777,10 @@ spreads quoted.
   \item With the energy-basis target a single Transformer reaches
     $R^2 = 0.906$ on XXZ and $0.886$ on TFIM, AUROC $0.98$ and $0.97$;
     the gap between the systems shrinks from $0.11$ to $0.02$.
+  \item The two-body correlators, which complete the state, do not lift
+    the TFIM ceiling: the computational-basis $T_2$ jumps between
+    oscillation periods under a $2\%$ change of the rate for $3$--$8\%$
+    of trajectories, while $T_2^E$ changes smoothly.
 \end{enumerate}
 
 % --------------------------------------------------------------------------
@@ -693,13 +799,22 @@ coupling sweep E7 and the cross-system runs E11; their three-seed
 replications are R1, R8, R5 and R3, the configuration-overlap check R4,
 the parity-sector test R6, the target-modulation probe R9 and the
 coupling sweep with the energy-basis target R10, and the energy-basis
-target on XXZ and on the cross-system model R20.
+target on XXZ and on the cross-system model R20, and the two-body
+correlators R23.
 
 \section*{Reproducibility}
 All runs are seeded end to end: the sampled system configurations, each
 trajectory's initial state, the window sampling and split, and the
 network initialisation and batch order.
-A run started from an empty trajectory cache is deterministic.
+A run started from an empty trajectory cache is deterministic; a
+partially filled cache shifts the stream of initial states. In R5 the
+first 30 of 200 trajectories at $J = 0.2$ for two seeds came from a cache
+filled by a short test run, so R23, which simulates without the cache,
+reproduces R5 to $10^{-3}$ at 19 of 21 seed--$J$ points but not at those
+two; $R^2$ there differs by $0.09$ and $0.36$, which shows how far a test
+set of 18 trajectories can move. Transformer training on CPU also depends
+on the number of threads through the order of floating-point summation;
+reruns with a different thread count differ by up to $0.02$ in $R^2$.
 Results were produced with Python~3.12.1, NumPy~2.4.4, SciPy~1.17.1,
 QuTiP~5.2.3 and PyTorch~2.11.0 on CPU, with seeds $\{42,43,44\}$.
 

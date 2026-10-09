@@ -61,6 +61,15 @@ class QuTipSimulator(ISimulator):
         """
         return system
 
+    def _extra_observables(self, density_matrices) -> dict:
+        """Additional observables per time step, computed from rho(t).
+
+        They are inserted before purity and coherence_l1, which must stay the
+        last two feature columns. R23 overrides this to add the two-body
+        Pauli correlators; by default nothing is added.
+        """
+        return {}
+
     # ------------------------------------------------------------------
     # Single-qubit path
     # ------------------------------------------------------------------
@@ -135,6 +144,11 @@ class QuTipSimulator(ISimulator):
         obs_dict = simulate_two_qubit(
             system, initial_state, times, observables_keys
         )
+
+        extra = self._extra_observables(obs_dict["density_matrices"])
+        if extra:
+            tail = {k: obs_dict.pop(k) for k in ("purity", "coherence_l1", "density_matrices")}
+            obs_dict = {**obs_dict, **extra, **tail}
 
         if config.decoherence_criterion == DecoherenceCriterion.COHERENCE_ENERGY:
             t_decoh, censored = self._energy_basis_t_decoh(
