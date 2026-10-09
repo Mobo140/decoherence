@@ -47,7 +47,7 @@ $0.931$ and $0.904$; a shorter window beats a longer one on both metrics
 in every seed.
 Measurement noise of $\sigma = 0.10$ lowers the alarm AUROC in every seed
 ($-0.078 \pm 0.037$), while its effect on $R^2$ is not resolved
-($-0.074 \pm 0.126$).
+($-0.074 \pm 0.124$).
 On TFIM, predictability falls as the coupling $J$ grows and then
 saturates, with no feature at the nominal transition $J = h$.
 We trace this decline to the target rather than the dynamics: $T_2$ is
@@ -225,8 +225,8 @@ the initial states, the window sampling, the split and the network
 initialisation.
 Comparisons between two arms are made as paired differences within a
 seed and are called resolved only when the sign agrees across seeds.
-Test sets hold about 40 trajectories per scenario in the ablation, about
-18 per $J$ value in the coupling sweep and about 230 in the cross-system
+Test sets hold about 40 trajectories per scenario in the ablation, 12--18
+per $J$ value in the coupling sweep and about 230 in the cross-system
 runs; with three seeds, differences of order $0.05$ in $R^2$ are below
 the resolution of the smaller experiments.
 
@@ -308,7 +308,7 @@ $\sigma$ & $R^2$ & MAE & AUROC \\
 
 Up to $\sigma = 0.05$ neither metric changes beyond the seed-to-seed
 spread. Paired within each seed, going from $\sigma = 0$ to
-$\sigma = 0.10$ changes $R^2$ by $-0.074 \pm 0.126$ (per seed $-0.175$,
+$\sigma = 0.10$ changes $R^2$ by $-0.074 \pm 0.124$ (per seed $-0.175$,
 $-0.112$, $+0.065$), so the effect on $R^2$ is not resolved, and lowers
 AUROC in every seed ($-0.078 \pm 0.037$).
 
@@ -346,8 +346,8 @@ $R^2 \geq 0.70$ and AUROC $\geq 0.90$.
 Two checks qualify this result.
 First, the model is scored on fresh trajectories of the configurations
 it was trained on; scoring it instead on disjoint configurations from a
-different generator seed changes $R^2$ by $-0.000 \pm 0.009$ on XXZ and
-$+0.015 \pm 0.059$ on TFIM, so configuration overlap does not inflate
+different generator seed changes $R^2$ by $+0.000 \pm 0.009$ on XXZ and
+$-0.015 \pm 0.059$ on TFIM (sign varying), so configuration overlap does not inflate
 the numbers.
 Second, for the residual model trained on the same mixture, doubling
 the training set to 1{,}000 trajectories per scenario raises $R^2$ by
@@ -387,7 +387,7 @@ $J$ & $R^2$ & MAE & AUROC \\
 
 Predictability falls as the coupling grows and then flattens:
 $J = 0.2$ beats $J = 0.8$ in every seed ($+0.232 \pm 0.082$), the
-weak-coupling points average $0.718$ against $0.559$ for $J \ge 0.8$,
+weak-coupling points average $0.717$ against $0.559$ for $J \ge 0.8$,
 and MAE roughly doubles.
 The transition point carries no consistent feature: $J = h$ is the
 minimum in three of eight seeds, and its $z$-score against the other
@@ -959,7 +959,7 @@ All data are simulated, with $\gamma(t)$ drawn from a smooth polynomial
 family; real devices add non-Markovian noise and correlated readout
 errors.
 With $N = 2$ no statement about phase transitions is possible.
-Test sets are small (about 40 trajectories per scenario, 18 per $J$),
+Test sets are small (about 40 trajectories per scenario, 12--18 per $J$),
 which limits the resolution of every comparison to the replicated
 spreads quoted.
 
@@ -1044,7 +1044,7 @@ first 30 of 200 trajectories at $J = 0.2$ for two seeds came from a cache
 filled by a short test run, so R23, which simulates without the cache,
 reproduces R5 to $10^{-3}$ at 19 of 21 seed--$J$ points but not at those
 two; $R^2$ there differs by $0.09$ and $0.36$, which shows how far a test
-set of 18 trajectories can move. Transformer training on CPU also depends
+set of about 17 trajectories can move. Transformer training on CPU also depends
 on the number of threads through the order of floating-point summation;
 reruns with a different thread count differ by up to $0.02$ in $R^2$.
 Results were produced with Python~3.12.1, NumPy~2.4.4, SciPy~1.17.1,
