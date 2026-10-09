@@ -27,6 +27,24 @@ from ...physics.simulate_qutip import simulate_single_qubit, simulate_two_qubit
 from ...physics.decoherence_time import calculate_decoherence_time
 
 
+_SYSY = np.kron(np.array([[0, -1j], [1j, 0]]), np.array([[0, -1j], [1j, 0]]))
+
+
+def wootters_lambda(rho) -> float:
+    """l1 - l2 - l3 - l4, where l_i are the square roots of the eigenvalues of
+    rho (sy x sy) rho* (sy x sy) in decreasing order. Negative for separable
+    states; it changes sign smoothly where the concurrence reaches zero."""
+    m = rho.full() if hasattr(rho, "full") else np.asarray(rho)
+    r = m @ _SYSY @ m.conj() @ _SYSY
+    lam = np.sqrt(np.clip(np.sort(np.linalg.eigvals(r).real)[::-1], 0.0, None))
+    return float(lam[0] - lam[1] - lam[2] - lam[3])
+
+
+def concurrence(rho) -> float:
+    """Wootters concurrence C = max(0, wootters_lambda(rho))."""
+    return max(0.0, wootters_lambda(rho))
+
+
 class QuTipSimulator(ISimulator):
     """Simulate Lindblad master equation using QuTiP.
 
@@ -153,6 +171,12 @@ class QuTipSimulator(ISimulator):
         if config.decoherence_criterion == DecoherenceCriterion.COHERENCE_ENERGY:
             t_decoh, censored = self._energy_basis_t_decoh(
                 config, times, system.H.full(), obs_dict["density_matrices"])
+        elif config.decoherence_criterion == DecoherenceCriterion.CONCURRENCE:
+            t_decoh, censored = self._first_crossing(
+                config, times, [concurrence(r) for r in obs_dict["density_matrices"]])
+        elif config.decoherence_criterion == DecoherenceCriterion.ENTANGLEMENT_DEATH:
+            t_decoh, censored = self._sudden_death_time(
+                times, [wootters_lambda(r) for r in obs_dict["density_matrices"]])
         else:
             t_decoh, censored = self._compute_t_decoh(config, times, obs_dict)
         obs_dict.pop("density_matrices", None)
@@ -179,6 +203,23 @@ class QuTipSimulator(ISimulator):
             m = r.full() if hasattr(r, "full") else np.asarray(r)
             e = U.conj().T @ m @ U
             vals.append(float(np.abs(e).sum() - np.abs(np.diag(e)).sum()))
+        return QuTipSimulator._first_crossing(config, times, vals)
+
+    @staticmethod
+    def _sudden_death_time(times, lam) -> tuple[float, bool]:
+        """First zero of the concurrence, interpolated on the unclipped lambda.
+
+        A state that starts separable gives t = 0 (no usable windows); one
+        that is still entangled at t_max is censored.
+        """
+        for i, v in enumerate(lam):
+            if v <= 0.0:
+                return QuTipSimulator._interpolate_crossing(times, lam, i, 0.0), False
+        return float(times[-1]), True
+
+    @staticmethod
+    def _first_crossing(config, times, vals) -> tuple[float, bool]:
+        """First time vals falls below threshold x vals[0]; censored at t_max."""
         initial = vals[0]
         thr = config.decoherence_threshold
         abs_threshold = thr * initial if initial > 1e-10 else thr

@@ -73,6 +73,9 @@ of the state, does not remove the decline with $J$: the
 computational-basis crossing time jumps between oscillation periods under
 a $2\%$ change of the rate for $3$--$8\%$ of trajectories, and no
 input can predict that.
+With entanglement as the target, the time of its sudden death is predicted
+at $R^2 = 0.43$--$0.66$, and here two-body inputs and the concurrence
+itself help in every seed.
 \end{abstract}
 
 % --------------------------------------------------------------------------
@@ -102,7 +105,8 @@ Three things change.
   \item \textbf{Entanglement.}
     Two-qubit entanglement can vanish in finite time under purely local
     damping \cite{YuEberly2009}, so the joint decay need not follow the
-    asymptotic exponential of either qubit alone.
+    asymptotic exponential of either qubit alone. Section~\ref{sec:r24}
+    takes the time of this sudden death as the target.
 \end{enumerate}
 
 \subsection*{Scenarios}
@@ -697,6 +701,107 @@ trajectories per row); what it shows is the mechanism by which the
 computational-basis target limits any model, which R10 and R20 removed
 by changing the target.
 
+\subsection{Entanglement as the target}
+\label{sec:r24}
+
+What a two-qubit device uses is entanglement, not coherence. We measure
+it by the Wootters concurrence \cite{Wootters1998},
+$C_W = \max(0, \lambda_1 - \lambda_2 - \lambda_3 - \lambda_4)$, where
+$\lambda_i$ are the square roots of the eigenvalues of
+$\rho\,(\sigma_y\otimes\sigma_y)\,\rho^*\,(\sigma_y\otimes\sigma_y)$ in
+decreasing order. Under local damping $C_W$ can reach zero in finite time
+\cite{YuEberly2009}, and the target is the time of this entanglement
+sudden death, $T_\mathrm{ESD}$, interpolated on the unclipped
+$\lambda_1 - \lambda_2 - \lambda_3 - \lambda_4$ (experiment R24).
+The $1/e$ crossing of $C_W$ was considered first and rejected: its median
+is $1.3$ time units, shorter than a 20-step window for two thirds of the
+trajectories, and the interaction drives $C_W$ back above the threshold
+in about half of them.
+Trajectories still entangled at $t_\mathrm{max}$ are censored and
+dropped, as everywhere in this work, so the models predict
+$T_\mathrm{ESD}$ given that it occurs; on XXZ that is about half of the
+trajectories, on TFIM about four in five (Table~\ref{tab:r24b}).
+$C_W$ depends on the full state, so we compare three input sets taken
+from one simulation: the eight base observables, the base plus the nine
+correlators of Sec.~\ref{sec:r23}, and both plus $C_W$ itself, which
+requires the same tomography. Configurations, seeds and initial states are
+those of Table~\ref{tab:r23}, so $T_\mathrm{ESD}$ and $T_2$ are predicted
+on the same systems.
+
+\begin{table}[h]
+\centering
+\caption{Predicting entanglement sudden death: $R^2$ on 200 independent
+  trajectories per scenario for three input sets, mean $\pm$ s.d.\ over
+  three seeds; the last column is $T_2$ with the base inputs
+  (Table~\ref{tab:r23}).\label{tab:r24}}
+\footnotesize
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{llcccc}
+\toprule
+ & & \multicolumn{3}{c}{$T_\mathrm{ESD}$} & $T_2$ \\
+\cmidrule(lr){3-5}
+Sc. & Model & base & $+$corr. & $+$corr.$+C_W$ & base \\
+\midrule
+D & Transformer & $0.429 \pm 0.073$ & $0.479 \pm 0.011$ & $\mathbf{0.556 \pm 0.041}$ & $0.844$ \\
+D & \texttt{lstm\_only} & $0.502 \pm 0.019$ & $0.452 \pm 0.040$ & $0.528 \pm 0.044$ & $0.826$ \\
+E & Transformer & $0.590 \pm 0.009$ & $0.618 \pm 0.007$ & $\mathbf{0.659 \pm 0.025}$ & $0.687$ \\
+E & \texttt{lstm\_only} & $0.558 \pm 0.062$ & $0.648 \pm 0.020$ & $0.644 \pm 0.025$ & $0.690$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+$T_\mathrm{ESD}$ is harder to predict than $T_2$, by $0.3$--$0.4$ in
+$R^2$ on XXZ and $0.03$--$0.13$ on TFIM, and the alarm is weak (AUROC
+$0.57$--$0.81$). Unlike for $T_2$, the inputs matter. On TFIM the
+correlators help both models in every seed ($+0.027 \pm 0.012$ for the
+Transformer, $+0.091 \pm 0.043$ for the BiLSTM, MAE down by $0.07$ and
+$0.11$). On XXZ the correlators alone do not help (the BiLSTM loses
+$0.050$ in every seed), but adding $C_W$ as a channel does: the
+Transformer gains $0.127 \pm 0.093$ over the base inputs and
+$0.077 \pm 0.030$ over the correlators, in every seed, with MAE down from
+$1.54$ to $1.40$. A network can in principle compute $C_W$ from the full
+state, but with 500 trajectories it does not learn to.
+
+\begin{table}[h]
+\centering
+\caption{Entanglement sudden death without training (100 trajectories per
+  row): fraction reaching $C_W = 0$ before $t_\mathrm{max}$, fraction of
+  those in which entanglement revives, median $T_\mathrm{ESD}$, and its
+  response to a $2\%$ increase of the rate (median relative change and
+  fraction changing by more than $5\%$), cf.\
+  Table~\ref{tab:r23c}.\label{tab:r24b}}
+\footnotesize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{lrccccc}
+\toprule
+ & $J$ & ESD & revival & median & $|\Delta T|$ & $>5\%$ \\
+\midrule
+XXZ & 0.2 & 0.56 & 0.68 & 3.9 & 0.3\% & 0.07 \\
+XXZ & 0.8 & 0.53 & 0.89 & 3.1 & 0.1\% & 0.08 \\
+XXZ & 1.5 & 0.53 & 0.91 & 3.1 & 0.1\% & 0.08 \\
+TFIM & 0.2 & 0.84 & 1.00 & 3.8 & 0.3\% & 0.01 \\
+TFIM & 0.8 & 0.75 & 1.00 & 2.4 & 0.2\% & 0.01 \\
+TFIM & 1.5 & 0.80 & 1.00 & 1.7 & 0.2\% & 0.01 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:r24b} qualifies what is predicted. Entanglement revives
+after its first death in $68$--$91\%$ of the XXZ and in all TFIM
+trajectories: the interaction re-entangles the pair, so $T_\mathrm{ESD}$
+marks the first loss of entanglement, not a permanent one. And
+$T_\mathrm{ESD}$ hardly depends on the rate: a $2\%$ increase of
+$\gamma$ moves it by $0.1$--$0.3\%$ (median), against $0.4$--$1.5\%$ for
+$T_2$ and $1.1$--$1.7\%$ for $T_2^E$. The first death is thus set mainly
+by the unitary dynamics, which bring $C_W$ to zero, with dissipation
+deciding only whether it reaches zero exactly. Most of
+$T_\mathrm{ESD}$ is therefore determined by the state and the
+Hamiltonian, which a window with the full state contains; the remaining
+error looks like a learning problem---a nonlinear function of the state
+learned from 500 trajectories---rather than an information limit, but
+larger training sets were not tested. On XXZ $7$--$8\%$ of trajectories
+still jump by more than $5\%$.
+
 % --------------------------------------------------------------------------
 \section{Discussion}
 \label{sec:discussion}
@@ -744,8 +849,8 @@ spreads quoted.
 
 \paragraph{Open questions.}
 \begin{enumerate}
-  \item Entanglement (concurrence \cite{Wootters1998}, negativity) as an
-    alternative target.
+  \item Larger training sets for the entanglement target, and whether the
+    pair stays disentangled after the first sudden death.
   \item Extension to three and four qubits.
 \end{enumerate}
 
@@ -781,6 +886,11 @@ spreads quoted.
     the TFIM ceiling: the computational-basis $T_2$ jumps between
     oscillation periods under a $2\%$ change of the rate for $3$--$8\%$
     of trajectories, while $T_2^E$ changes smoothly.
+  \item Entanglement sudden death is harder to predict than $T_2$
+    ($R^2 = 0.43$--$0.66$). Here inputs matter: the correlators help on
+    TFIM and the concurrence itself as an input on XXZ, in every seed.
+    The first death hardly depends on the rate and is followed by
+    revival in most trajectories.
 \end{enumerate}
 
 % --------------------------------------------------------------------------
@@ -800,7 +910,7 @@ replications are R1, R8, R5 and R3, the configuration-overlap check R4,
 the parity-sector test R6, the target-modulation probe R9 and the
 coupling sweep with the energy-basis target R10, and the energy-basis
 target on XXZ and on the cross-system model R20, and the two-body
-correlators R23.
+correlators R23, and entanglement sudden death R24.
 
 \section*{Reproducibility}
 All runs are seeded end to end: the sampled system configurations, each

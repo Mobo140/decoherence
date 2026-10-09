@@ -114,6 +114,8 @@ CATALOG: List[ExperimentEntry] = [
                     ("r22_ar1_noise_training.csv",), status="replication"),
     ExperimentEntry("R23", "Two-body Pauli correlators as 2q inputs; target sensitivity to a 2% rate change", "experiments.r23_two_body_correlators", "-", "-", "D/E",
                     ("r23_two_body_correlators.csv", "r23c_target_sensitivity.csv"), supports_fast=False, status="replication"),
+    ExperimentEntry("R24", "Entanglement sudden death as the 2q target; ESD/revival statistics", "experiments.r24_entanglement_target", "-", "-", "D/E",
+                    ("r24_entanglement_target.csv", "r24b_esd_statistics.csv"), supports_fast=False, status="replication"),
 ]
 
 
