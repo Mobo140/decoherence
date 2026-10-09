@@ -108,6 +108,8 @@ CATALOG: List[ExperimentEntry] = [
                     ("r19_e4.csv", "r19_e5.csv"), supports_fast=False, status="replication"),
     ExperimentEntry("R20", "Energy-basis T2 target: XXZ J sweep (control) and cross-system Transformer", "experiments.r20_energy_target_xxz", "-", "-", "D/E",
                     ("r20a_xxz_J_sweep.csv", "r20b_cross_energy.csv"), status="replication"),
+    ExperimentEntry("R21", "AR(1) measurement noise and stochastic (log-normal OU) gamma(t)", "experiments.r21_stochastic_gamma_ar1", "-", "-", "B/C",
+                    ("r21_stochastic_gamma_ar1.csv",), status="replication"),
 ]
 
 

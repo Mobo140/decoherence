@@ -118,8 +118,47 @@ def fig_r18() -> None:
     fig.savefig(OUT / "fig_r18_timing.pdf")
 
 
+def fig_r21() -> None:
+    d = pd.read_csv(RES / "r21_stochastic_gamma_ar1.csv")
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(6.6, 2.6), sharey=True)
+    noise = d[d.test == "noise"]
+    styles = {"lstm_only": "s-", "physics_lstm": "D--", "physics_lstm_aug": "D-",
+              "transformer": "^-", "physics_lstm_sto": "D:"}
+    labels = {"lstm_only": "lstm_only", "physics_lstm": "physics_lstm, clean",
+              "physics_lstm_aug": "physics_lstm, noise-aware",
+              "transformer": "transformer", "physics_lstm_sto": "physics_lstm, stochastic-$\\gamma$"}
+    colors = {"lstm_only": "C0", "physics_lstm": "C1", "physics_lstm_aug": "C2",
+              "transformer": "C3", "physics_lstm_sto": "C4"}
+    phis = [0.0, 0.5, 0.9]
+    for arm in ["lstm_only", "physics_lstm", "physics_lstm_aug", "transformer"]:
+        g = noise[(noise.arm == arm) & (noise.sigma == 0.05)].groupby("phi")["r2"].mean()
+        a1.plot(range(3), [g[f] for f in phis], styles[arm], ms=3, label=labels[arm],
+                color=colors[arm])
+    a1.set_xticks(range(3))
+    a1.set_xticklabels([f"{f:g}" for f in phis])
+    a1.set_xlabel(r"noise correlation $\varphi$ ($\sigma = 0.05$)")
+    a1.set_ylabel("$R^2$")
+    a1.set_title("(a) AR(1) measurement noise", fontsize=8)
+    a1.legend(fontsize=5.5, loc="upper right")
+    gam = d[d.test == "gamma"]
+    for arm in ["lstm_only", "physics_lstm", "physics_lstm_sto", "transformer"]:
+        g = gam[gam.arm == arm].groupby(["s", "tau"])["r2"].mean()
+        for tau, ls, lab in [(0.5, "-", labels[arm]), (2.0, "--", None)]:
+            a2.plot(range(3), [g[(0.0, 0.5)], g[(0.3, tau)], g[(0.6, tau)]],
+                    styles[arm][0] + ls, ms=3, label=lab, color=colors[arm])
+    a2.set_xticks(range(3))
+    a2.set_xticklabels(["0", "0.3", "0.6"])
+    a2.set_xlabel(r"fluctuation strength $s$ (solid $\tau = 0.5$, dashed $\tau = 2$)")
+    a2.set_title(r"(b) stochastic $\gamma(t)$", fontsize=8)
+    a2.legend(fontsize=5.5, loc="lower left")
+    a1.set_ylim(0.2, 1.05)
+    fig.tight_layout()
+    fig.savefig(OUT / "fig_r21_correlated_noise.pdf")
+
+
 if __name__ == "__main__":
     fig_r13()
     fig_r15()
     fig_r16()
     fig_r18()
+    fig_r21()

@@ -53,6 +53,14 @@ class QuTipSimulator(ISimulator):
         """
         return sample_random_pure_state(n_qubits=config.n_qubits.value)
 
+    def _prepare_system(self, system, config: SystemConfig):
+        """Adjust the Lindblad system before integration. Override to modify it.
+
+        R21 overrides this to multiply gamma(t) by a random process; nothing
+        else does, so the default behaviour is what every published run used.
+        """
+        return system
+
     # ------------------------------------------------------------------
     # Single-qubit path
     # ------------------------------------------------------------------
@@ -75,6 +83,7 @@ class QuTipSimulator(ISimulator):
             jump_operators=jump_ops,
             gamma_t_max=config.t_max,
         )
+        system = self._prepare_system(system, config)
 
         observables_keys = ["sigma_x", "sigma_y", "sigma_z"]
         obs_dict = simulate_single_qubit(
@@ -117,6 +126,7 @@ class QuTipSimulator(ISimulator):
             gamma_t_max=config.t_max,
             jump_operators=jump_ops,
         )
+        system = self._prepare_system(system, config)
 
         observables_keys = [
             "sigma_x1", "sigma_y1", "sigma_z1",
