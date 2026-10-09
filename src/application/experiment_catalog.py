@@ -112,6 +112,8 @@ CATALOG: List[ExperimentEntry] = [
                     ("r21_stochastic_gamma_ar1.csv",), status="replication"),
     ExperimentEntry("R22", "Noise-aware training with AR(1)-correlated noise (five seeds)", "experiments.r22_ar1_noise_training", "-", "-", "B/C",
                     ("r22_ar1_noise_training.csv",), status="replication"),
+    ExperimentEntry("R23", "Two-body Pauli correlators as 2q inputs; target sensitivity to a 2% rate change", "experiments.r23_two_body_correlators", "-", "-", "D/E",
+                    ("r23_two_body_correlators.csv", "r23c_target_sensitivity.csv"), supports_fast=False, status="replication"),
 ]
 
 
