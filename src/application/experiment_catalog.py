@@ -118,6 +118,8 @@ CATALOG: List[ExperimentEntry] = [
                     ("r24_entanglement_target.csv", "r24b_esd_statistics.csv"), supports_fast=False, status="replication"),
     ExperimentEntry("R25", "Learning curve for the ESD target (250-4000 trajectories, nested)", "experiments.r25_esd_data_scaling", "-", "-", "D/E",
                     ("r25_esd_data_scaling.csv",), supports_fast=False, status="replication"),
+    ExperimentEntry("R26", "Will entanglement die, and will it stay dead? (classification at fixed t_obs)", "experiments.r26_esd_occurrence", "-", "-", "D/E",
+                    ("r26_esd_occurrence.csv",), status="replication"),
 ]
 
 
