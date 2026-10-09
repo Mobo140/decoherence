@@ -38,6 +38,11 @@ class DecoherenceCriterion(str, Enum):
     # unitary modulation that the computational-basis measure picks up when
     # H is not diagonal there (see experiments/r9_target_modulation.py).
     COHERENCE_ENERGY = "coherence_energy"
+    # Wootters concurrence (two qubits): an entanglement measure, invariant
+    # under local unitaries (see experiments/r24_entanglement_target.py).
+    CONCURRENCE = "concurrence"
+    # Entanglement sudden death: first time the concurrence reaches zero.
+    ENTANGLEMENT_DEATH = "entanglement_death"
 
 
 # ---------------------------------------------------------------------------
