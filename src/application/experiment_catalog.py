@@ -116,6 +116,8 @@ CATALOG: List[ExperimentEntry] = [
                     ("r23_two_body_correlators.csv", "r23c_target_sensitivity.csv"), supports_fast=False, status="replication"),
     ExperimentEntry("R24", "Entanglement sudden death as the 2q target; ESD/revival statistics", "experiments.r24_entanglement_target", "-", "-", "D/E",
                     ("r24_entanglement_target.csv", "r24b_esd_statistics.csv"), supports_fast=False, status="replication"),
+    ExperimentEntry("R25", "Learning curve for the ESD target (250-4000 trajectories, nested)", "experiments.r25_esd_data_scaling", "-", "-", "D/E",
+                    ("r25_esd_data_scaling.csv",), supports_fast=False, status="replication"),
 ]
 
 
