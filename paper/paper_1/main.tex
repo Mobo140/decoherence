@@ -54,8 +54,10 @@ Followed along each trajectory, the residual model predicts $T_2$ within
 from half the lifetime on, and its alarm for decoherence within one time
 unit fires on time for 95--100\% of them.
 With a fluctuating dissipation rate it remains the most accurate model
-for moderate fluctuations; time-correlated measurement noise removes its
-lead over a Transformer.
+for moderate fluctuations. Measurement noise correlated in time removes
+its lead over a Transformer unless the training noise is correlated as
+well; with correlated training noise it is again the most accurate model
+up to $\sigma = 0.02$, at no cost on clean data.
 Direct prediction outperforms
 reconstruction of $\gamma(t)$ followed by simulation, which gives negative
 $R^2$ at every window length.
@@ -628,6 +630,53 @@ below the noise-aware one; correlated noise changes less from step to
 step (increments have standard deviation $\sigma\sqrt{2(1-\varphi)}$), so
 the window looks smoother to a network that has seen only clean data.
 
+\paragraph{Training with correlated noise.}
+In experiment R22 the noisy training copies of Sec.~\ref{sec:e3} are made
+AR(1), with $\varphi$ drawn for each window from $U[0, 0.95]$ and
+$\sigma$ as before; five seeds (42--46), all comparisons paired
+(Table~\ref{tab:r22}).
+
+\begin{table}[h]
+\centering
+\caption{$R^2$ after training with white or AR(1) noise; test noise
+  $(\sigma, \varphi)$. Mean over five seeds, so the values differ from the
+  three-seed Tables~\ref{tab:e3} and~\ref{tab:r16}.\label{tab:r22}}
+\footnotesize
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{lcccccc}
+\toprule
+$\sigma$ & 0 & 0.02 & 0.02 & 0.05 & 0.05 & 0.10 \\
+$\varphi$ & --- & 0 & 0.9 & 0 & 0.9 & 0.9 \\
+\midrule
+\texttt{physics\_lstm}, white & $\mathbf{0.845}$ & $\mathbf{0.825}$ & $0.770$ & $0.739$ & $0.576$ & $0.258$ \\
+\texttt{physics\_lstm}, AR(1) & $0.841$ & $0.821$ & $\mathbf{0.775}$ & $\mathbf{0.771}$ & $0.647$ & $0.424$ \\
+\texttt{lstm\_only}, AR(1) & $0.622$ & $0.639$ & $0.642$ & $0.645$ & $0.623$ & $\mathbf{0.547}$ \\
+\texttt{transformer}, clean & $0.787$ & $0.781$ & $0.735$ & $0.751$ & $0.595$ & $0.381$ \\
+\texttt{transformer}, AR(1) & $0.755$ & $0.749$ & $0.735$ & $0.725$ & $\mathbf{0.667}$ & $0.512$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+For the residual model correlated training noise costs nothing on clean
+data ($-0.004 \pm 0.017$, sign varying) or at $\sigma \le 0.02$ (within
+$\pm 0.006$), and helps in every seed from $\sigma = 0.05$: by $+0.031$,
+$+0.034$ and $+0.071$ at $\varphi = 0$, $0.5$ and $0.9$, and by $+0.06$
+to $+0.17$ at $\sigma = 0.10$.
+It is then ahead of the clean-trained Transformer in every seed at
+$\sigma \le 0.02$ for every $\varphi$, and by $+0.052 \pm 0.082$ (four of
+five seeds) at $\sigma = 0.05$, $\varphi = 0.9$, where the white-noise
+version was behind.
+A Transformer trained with the same noise loses $0.03$ on clean data
+(four of five seeds) and gains $+0.072 \pm 0.086$ at $\sigma = 0.05$,
+$\varphi = 0.9$ (every seed). Against it the residual model leads by
+$0.04$--$0.09$ in every seed up to $\sigma = 0.02$, and falls behind
+under the strongest correlated noise ($-0.020 \pm 0.034$ at
+$\sigma = 0.05$ and $-0.087 \pm 0.023$ at $\sigma = 0.10$, $\varphi = 0.9$),
+where the slope carries little information and \texttt{lstm\_only} is
+best. This is the pattern of the white-noise case, now extended to
+correlated noise: training noise should match the expected correlation,
+and for the residual model this has no cost.
+
 \paragraph{Stochastic dissipation rate.}
 A real bath fluctuates. We multiply the Bernstein rate by a log-normal
 factor,
@@ -779,9 +828,9 @@ comparison is made on an independent test set. Measurement noise is
 modelled as Gaussian noise added to every channel separately, white or
 correlated in time (Sec.~\ref{sec:r21}), whereas on hardware the coherence
 and purity would be computed from the noisy expectations and their errors
-would be correlated across channels. Noise-aware training used white
-noise only; training with noise of the expected correlation is the
-natural next step.
+would be correlated across channels. The correlation of the training
+noise has to be chosen in advance; a mismatch with the hardware noise
+costs accuracy (Sec.~\ref{sec:r21}).
 Validation on real hardware, where $\gamma(t)$ is neither a Bernstein
 polynomial nor the log-normal process of Eq.~\ref{eq:ou}, is left for
 future work, as is extension to multi-qubit systems, where entanglement
@@ -816,8 +865,9 @@ unknown time-dependent dissipation.
     moderate strength, and training on fluctuating rates does not help,
     because the window does not contain the future fluctuations. Noise
     correlated in time costs every network up to $0.1$ in $R^2$ at
-    $\sigma = 0.05$ and removes the residual model's lead over a
-    Transformer (Sec.~\ref{sec:r21}).
+    $\sigma = 0.05$; training with white noise does not prevent this,
+    training with correlated noise does, at no cost on clean data
+    (Sec.~\ref{sec:r21}).
   \item Reconstructing $\gamma(t)$ from a short window and integrating it
     is ill-conditioned ($R^2 < 0$ at every window length); direct
     prediction is not.
@@ -837,7 +887,7 @@ with the result files behind every table and every replication reported
 here, is publicly available at
 \url{https://github.com/Mobo140/decoherence}.
 Correlated noise and the stochastic dissipation rate are experiment R21
-there.
+there, and training with correlated noise R22.
 
 \section*{Reproducibility}
 All reported runs are seeded end to end: the sampled system
@@ -855,8 +905,13 @@ cache hits.
 Results were produced with Python~3.12.1, NumPy~2.4.4, SciPy~1.17.1,
 QuTiP~5.2.3 and PyTorch~2.11.0 on CPU.
 Single-run tables use seed~42; every replication reported here uses seeds
-$\{42,43,44\}$ and states its per-seed values so that any comparison can
-be checked against its own spread.
+$\{42,43,44\}$ (R22: $42$--$46$) and states its per-seed values so that
+any comparison can be checked against its own spread.
+BiLSTM training is bit-identical across runs. Transformer training on
+CPU additionally depends on the number of threads through the order of
+floating-point summation; reruns of the same seed with a different
+thread count differ by up to $0.02$ in $R^2$, below the seed-to-seed
+spread of every comparison in which the Transformer enters.
 
 \section*{Competing interests}
 \needspaste{competing-interests declaration --- usually ``The author

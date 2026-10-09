@@ -2,7 +2,8 @@
 import numpy as np
 
 from experiments._config import build_configs
-from experiments.r21_stochastic_gamma_ar1 import StochasticGammaSimulator, ar1
+from experiments.r21_stochastic_gamma_ar1 import StochasticGammaSimulator
+from src.infrastructure.quantum.noise import ar1_filter as ar1
 from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
 
 
@@ -14,6 +15,15 @@ def test_ar1_is_stationary_with_unit_variance_and_lag_one_correlation_phi():
         assert abs(e[:, 0].var() - 1.0) < 0.08          # stationary from t = 0
         r1 = np.mean(e[:, 1:] * e[:, :-1])
         assert abs(r1 - phi) < 0.02
+
+
+def test_ar1_accepts_one_correlation_per_window():
+    eta = np.random.default_rng(1).standard_normal((3000, 100, 2))
+    phi = np.repeat([0.0, 0.9], 1500)
+    e = ar1(eta, phi)
+    np.testing.assert_array_equal(e[:1500], eta[:1500])
+    r1 = np.mean(e[1500:, 1:] * e[1500:, :-1])
+    assert abs(r1 - 0.9) < 0.02 and abs(e[1500:].var() - 1.0) < 0.05
 
 
 def test_zero_strength_reproduces_the_plain_simulator():

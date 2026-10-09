@@ -70,6 +70,7 @@ from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 from src.infrastructure.ml.physics_only_predictor import PhysicsOnlyPredictor
 from src.infrastructure.ml.transformer_predictor import TransformerPredictor
+from src.infrastructure.quantum.noise import ar1_filter as ar1
 from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
 
 RESULTS_DIR = Path(__file__).parent / "results"
@@ -126,18 +127,6 @@ class StochasticGammaSimulator(QuTipSimulator):
         base = system.get_gamma
         system.get_gamma = lambda t: base(t) * float(np.interp(t, grid, factor))
         return system
-
-
-def ar1(eta: np.ndarray, phi: float) -> np.ndarray:
-    """Stationary unit-variance AR(1) along axis 1, driven by eta."""
-    if phi == 0.0:
-        return eta
-    e = np.empty_like(eta)
-    e[:, 0] = eta[:, 0]
-    c = np.sqrt(1.0 - phi * phi)
-    for t in range(1, eta.shape[1]):
-        e[:, t] = phi * e[:, t - 1] + c * eta[:, t]
-    return e
 
 
 def _with_sequences(ds, seqs):
