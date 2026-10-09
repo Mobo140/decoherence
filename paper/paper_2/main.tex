@@ -77,7 +77,8 @@ With entanglement as the target, the time of its sudden death is predicted
 at $R^2 = 0.43$--$0.66$, and here two-body inputs and the concurrence
 itself help in every seed; with 4{,}000 training trajectories and the
 full state as input it reaches $0.81$ on TFIM and $0.69$ on XXZ, and
-whether entanglement dies at all is classified at AUROC $0.93$--$0.97$.
+whether entanglement dies at all is classified at AUROC $0.93$--$0.98$
+and whether the death is permanent at $0.92$.
 \end{abstract}
 
 % --------------------------------------------------------------------------
@@ -870,7 +871,7 @@ each $t_\mathrm{obs}$ on 400 independent ones; three seeds
   AUROC and Brier score averaged over $t_\mathrm{obs}$, mean $\pm$ s.d.\
   over three seeds. ``Rate'': fraction of positive windows; the Brier
   score of always predicting it is $\approx 0.24$, $0.21$ and $0.10$ for
-  the three rows.\label{tab:r26}}
+  the R26 rows and $0.23$ and $0.11$ for the R27 rows.\label{tab:r26}}
 \footnotesize
 \setlength{\tabcolsep}{2pt}
 \begin{tabular}{lcccccc}
@@ -882,6 +883,10 @@ Task & rate & base & $+$corr. & $+C_W$ & base & $+C_W$ \\
 D occurs & 0.39 & $0.851 \pm .031$ & $0.944 \pm .020$ & $\mathbf{0.972 \pm .011}$ & 0.149 & 0.059 \\
 E occurs & 0.69 & $0.876 \pm .025$ & $\mathbf{0.925 \pm .022}$ & $\mathbf{0.927 \pm .023}$ & 0.131 & 0.107 \\
 D permanent & 0.11 & $0.804 \pm .079$ & $0.836 \pm .063$ & $0.844 \pm .050$ & 0.080 & 0.081 \\
+\midrule
+\multicolumn{7}{l}{R27: XXZ, 8{,}000 training and 4{,}000 test trajectories} \\
+D occurs & 0.38 & $0.866 \pm .001$ & $0.959 \pm .004$ & $\mathbf{0.983 \pm .001}$ & 0.138 & 0.047 \\
+D permanent & 0.13 & $0.907 \pm .016$ & $0.915 \pm .017$ & $\mathbf{0.924 \pm .013}$ & 0.065 & 0.060 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -894,10 +899,24 @@ $+0.029 \pm 0.016$ on XXZ (every seed) and nothing on TFIM, as in the
 learning curve. With the full state the Brier score falls to a quarter
 (XXZ) and a half (TFIM) of that of the base rate. Trees beat logistic
 regression in every seed ($+0.03$ and $+0.02$ with the base inputs).
-Permanence is resolved only weakly: AUROC $0.80$--$0.84$, but with $6$ to
-$19$ positive cases per seed and $t_\mathrm{obs}$ the Brier score barely
-improves on the base rate ($0.08$ against $0.10$) and balanced accuracy
-at a threshold of $0.5$ is $0.61$--$0.64$.
+With 2{,}000 training and 400 test trajectories permanence was resolved
+only weakly: AUROC $0.80$--$0.84$, but with $6$ to $19$ positive cases per
+seed and $t_\mathrm{obs}$ the Brier score barely improved on the base
+rate ($0.08$ against $0.10$). Experiment R27 repeats the XXZ part with
+8{,}000 training and 4{,}000 test trajectories per seed, which gives
+$100$--$206$ positive cases per seed and $t_\mathrm{obs}$, and adds a 95\%
+bootstrap interval over test trajectories to every AUROC
+(Table~\ref{tab:r26}, bottom). Permanence is then well predictable:
+AUROC $0.907 \pm 0.016$ from the local observables and
+$0.924 \pm 0.013$ with the full state (interval at $t_\mathrm{obs} = 2$:
+$[0.90, 0.94]$ and $[0.91, 0.95]$), and the Brier score is about half
+that of the base rate ($0.060$ against $0.111$). The weak R26 result was
+a matter of sample size, both for training and for testing. Here the
+local observables already carry most of the information: the
+correlators add $+0.008 \pm 0.003$ and $C_W$ another
+$+0.008 \pm 0.004$, small but in every seed; logistic regression, in
+contrast, needs the correlators ($0.75 \to 0.88$). Occurrence on the same
+sample reaches $0.983 \pm 0.001$ with the full state.
 
 % --------------------------------------------------------------------------
 \section{Discussion}
@@ -946,8 +965,6 @@ spreads quoted.
 
 \paragraph{Open questions.}
 \begin{enumerate}
-  \item Larger test sets for the permanence of sudden death, which here
-    rests on 6--19 positive cases per seed.
   \item Validation on hardware data, where the rate is not a smooth
     polynomial and the dynamics need not be Markovian.
 \end{enumerate}
@@ -991,8 +1008,9 @@ spreads quoted.
     revival in most trajectories. With the full state as input $R^2$
     keeps rising with data, to $0.81$ (TFIM) and $0.69$ (XXZ) at 4{,}000
     trajectories; with local inputs it levels off. Whether entanglement
-    dies at all is classified at AUROC $0.97$ (XXZ) and $0.93$ (TFIM)
-    with the full state as input.
+    dies at all is classified at AUROC $0.98$ (XXZ) and $0.93$ (TFIM)
+    with the full state as input, and whether a death on XXZ is
+    permanent at $0.92$.
 \end{enumerate}
 
 % --------------------------------------------------------------------------
@@ -1013,7 +1031,8 @@ the parity-sector test R6, the target-modulation probe R9 and the
 coupling sweep with the energy-basis target R10, and the energy-basis
 target on XXZ and on the cross-system model R20, and the two-body
 correlators R23, entanglement sudden death R24 and its learning
-curve R25, and the occurrence and permanence of the death R26.
+curve R25, and the occurrence and permanence of the death R26 and,
+on a larger sample, R27.
 
 \section*{Reproducibility}
 All runs are seeded end to end: the sampled system configurations, each
