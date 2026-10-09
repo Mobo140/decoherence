@@ -110,6 +110,8 @@ CATALOG: List[ExperimentEntry] = [
                     ("r20a_xxz_J_sweep.csv", "r20b_cross_energy.csv"), status="replication"),
     ExperimentEntry("R21", "AR(1) measurement noise and stochastic (log-normal OU) gamma(t)", "experiments.r21_stochastic_gamma_ar1", "-", "-", "B/C",
                     ("r21_stochastic_gamma_ar1.csv",), status="replication"),
+    ExperimentEntry("R22", "Noise-aware training with AR(1)-correlated noise (five seeds)", "experiments.r22_ar1_noise_training", "-", "-", "B/C",
+                    ("r22_ar1_noise_training.csv",), status="replication"),
 ]
 
 

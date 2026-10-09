@@ -53,6 +53,7 @@ from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.run_noise_sweep import NoiseSweepUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
+from src.infrastructure.quantum.noise import ar1_filter
 from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 from src.infrastructure.ml.transformer_predictor import TransformerPredictor
 from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
@@ -68,12 +69,16 @@ ARMS = {
 }
 
 
-def noise_augmented(ds, copies: int, rng: np.random.Generator):
+def noise_augmented(ds, copies: int, rng: np.random.Generator, phi_max: float = 0.0):
     """Append `copies` noisy versions of every train/val window.
 
     The noise goes into the raw window, so every quantity the model derives
     from it (log channels, slope, OLS R^2, T_phys) is computed from the noisy
     copy. Test windows are left untouched.
+
+    phi_max > 0 makes the noise AR(1) in time with a lag-one correlation drawn
+    per window from U[0, phi_max] (R22); the default draws exactly what R16
+    drew.
     """
     per_window = [
         "sequences", "t_obs", "t_decoh_abs", "remaining_time", "risk_labels",
@@ -87,7 +92,10 @@ def noise_augmented(ds, copies: int, rng: np.random.Generator):
     offset = n
     for _ in range(copies):
         sig = np.exp(rng.uniform(np.log(0.005), np.log(0.12), len(src))).astype(np.float32)
-        noisy = ds.sequences[src] + rng.normal(0.0, 1.0, ds.sequences[src].shape).astype(np.float32) * sig[:, None, None]
+        eta = rng.normal(0.0, 1.0, ds.sequences[src].shape).astype(np.float32)
+        if phi_max > 0.0:
+            eta = ar1_filter(eta, rng.uniform(0.0, phi_max, len(src)))
+        noisy = ds.sequences[src] + eta * sig[:, None, None]
         for k in per_window:
             arr = getattr(ds, k)
             parts[k].append(noisy if k == "sequences" else (arr[src] if len(arr) == n else arr))
