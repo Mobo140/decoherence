@@ -75,7 +75,8 @@ a $2\%$ change of the rate for $3$--$8\%$ of trajectories, and no
 input can predict that.
 With entanglement as the target, the time of its sudden death is predicted
 at $R^2 = 0.43$--$0.66$, and here two-body inputs and the concurrence
-itself help in every seed.
+itself help in every seed; with 4{,}000 training trajectories and the
+full state as input it reaches $0.81$ on TFIM and $0.69$ on XXZ.
 \end{abstract}
 
 % --------------------------------------------------------------------------
@@ -797,10 +798,54 @@ by the unitary dynamics, which bring $C_W$ to zero, with dissipation
 deciding only whether it reaches zero exactly. Most of
 $T_\mathrm{ESD}$ is therefore determined by the state and the
 Hamiltonian, which a window with the full state contains; the remaining
-error looks like a learning problem---a nonlinear function of the state
-learned from 500 trajectories---rather than an information limit, but
-larger training sets were not tested. On XXZ $7$--$8\%$ of trajectories
-still jump by more than $5\%$.
+error then looks like a learning problem---a nonlinear function of the
+state learned from 500 trajectories---rather than an information limit.
+On XXZ $7$--$8\%$ of trajectories still jump by more than $5\%$.
+
+\paragraph{Learning curve.}
+Experiment R25 tests this reading. The Transformer is trained on 250 to
+4{,}000 trajectories per scenario with the three input sets; the
+training sets are nested (the smaller sets are the first trajectories of
+the largest), and every model is scored on the 200 independent
+trajectories of Table~\ref{tab:r24}; three seeds (Table~\ref{tab:r25}).
+
+\begin{table}[h]
+\centering
+\caption{Learning curve for $T_\mathrm{ESD}$: $R^2$ of the Transformer on
+  200 independent trajectories against the number of training
+  trajectories per scenario, mean over three seeds (s.d.\ at 4{,}000 in
+  the text).\label{tab:r25}}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{llccccc}
+\toprule
+Sc. & Inputs & 250 & 500 & 1{,}000 & 2{,}000 & 4{,}000 \\
+\midrule
+D & base & 0.447 & 0.422 & 0.490 & 0.486 & 0.538 \\
+D & $+$corr. & 0.449 & 0.405 & 0.501 & 0.540 & 0.629 \\
+D & $+$corr.$+C_W$ & 0.413 & 0.530 & 0.608 & 0.548 & $\mathbf{0.687}$ \\
+\midrule
+E & base & 0.546 & 0.559 & 0.675 & 0.694 & 0.701 \\
+E & $+$corr. & 0.527 & 0.684 & 0.722 & 0.736 & $\mathbf{0.811}$ \\
+E & $+$corr.$+C_W$ & 0.510 & 0.694 & 0.725 & 0.760 & $\mathbf{0.812}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+With the full state as input $R^2$ keeps rising: from 2{,}000 to
+4{,}000 trajectories it gains $0.05$--$0.14$ in every seed for both
+full-state input sets on both systems, reaching $0.811 \pm 0.010$ (TFIM)
+and $0.687 \pm 0.013$ (XXZ, with $C_W$). With the base inputs it
+flattens on TFIM ($+0.007 \pm 0.018$ from 2{,}000 to 4{,}000, sign
+varying, at $0.70$), which is what an information limit of the local
+observables looks like. The value of $C_W$ as an explicit input fades
+with data: on TFIM the gap to the correlators alone is
+$+0.001 \pm 0.003$ at 4{,}000, so the network learns the concurrence from
+the correlators; on XXZ it halves, from $+0.11$--$0.13$ at 500--1{,}000
+to $+0.058 \pm 0.028$ at 4{,}000, but remains in every seed. AUROC rises
+with the data to $0.93$ (TFIM) and $0.85$ (XXZ).
+At 4{,}000 trajectories the first sudden death on TFIM is predicted
+better than $T_2$ on the same systems ($0.81$ against $0.69$).
 
 % --------------------------------------------------------------------------
 \section{Discussion}
@@ -849,9 +894,8 @@ spreads quoted.
 
 \paragraph{Open questions.}
 \begin{enumerate}
-  \item Larger training sets for the entanglement target, and whether the
-    pair stays disentangled after the first sudden death.
-  \item Extension to three and four qubits.
+  \item Whether the pair stays disentangled after the first sudden death,
+    and whether a death occurs at all, as targets in their own right.
 \end{enumerate}
 
 % --------------------------------------------------------------------------
@@ -890,7 +934,9 @@ spreads quoted.
     ($R^2 = 0.43$--$0.66$). Here inputs matter: the correlators help on
     TFIM and the concurrence itself as an input on XXZ, in every seed.
     The first death hardly depends on the rate and is followed by
-    revival in most trajectories.
+    revival in most trajectories. With the full state as input $R^2$
+    keeps rising with data, to $0.81$ (TFIM) and $0.69$ (XXZ) at 4{,}000
+    trajectories; with local inputs it levels off.
 \end{enumerate}
 
 % --------------------------------------------------------------------------
@@ -910,7 +956,8 @@ replications are R1, R8, R5 and R3, the configuration-overlap check R4,
 the parity-sector test R6, the target-modulation probe R9 and the
 coupling sweep with the energy-basis target R10, and the energy-basis
 target on XXZ and on the cross-system model R20, and the two-body
-correlators R23, and entanglement sudden death R24.
+correlators R23, entanglement sudden death R24 and its learning
+curve R25.
 
 \section*{Reproducibility}
 All runs are seeded end to end: the sampled system configurations, each
