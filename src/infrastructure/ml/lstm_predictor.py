@@ -46,33 +46,21 @@ Architecture
 """
 from __future__ import annotations
 
-import copy
 import io
 from dataclasses import dataclass, field
-from typing import Optional, Tuple
+from typing import Optional
 
 import numpy as np
 import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader, TensorDataset
 
 from ...domain.ports import IPredictor
 from ...domain.value_objects import PredictionResult
+from .batching import _add_log, _ns
 from .physics_only_predictor import remaining_to_risk
+from .physics_prior import _n_physics_from_state, physics_remaining
+from .residual_net import _ResidualNet
 
-# Re-exported for backward compatibility: these lived in this module before
-# task 19 split it up. workbench_server.py imports physics_remaining from here.
-from .physics_prior import (  # noqa: F401
-    _coherence_envelope,
-    _maybe_envelope_slope,
-    _n_physics_from_state,
-    _ols_log_slope,
-    physics_remaining,
-)
-from .residual_net import _ResidualNet  # noqa: F401
-from .batching import _add_log, _batch_physics, _loader, _ns  # noqa: F401
-
-__all__ = ["LSTMPredictor", "physics_remaining"]
+__all__ = ["LSTMPredictor"]
 
 
 @dataclass
@@ -95,7 +83,7 @@ class LSTMPredictor(IPredictor):
     t_max: float = 10.0
     use_physics_prior: bool = True
     # Set to e.g. 0.7 for 2-qubit systems to gate the OLS prior by its own R².
-    # 0.0 = disabled (backward-compatible default).
+    # 0.0 = disabled.
     adaptive_prior_r2_threshold: float = 0.0
     # Context codes at inference — must match generate_dataset 4-class scheme:
     #   0.0 = 1q σ−,  1.0 = 1q σz,  2.0 = 2q XXZ,  3.0 = 2q TFIM
@@ -310,7 +298,7 @@ class LSTMPredictor(IPredictor):
     # ------------------------------------------------------------------
 
     def _fit(self, ds, n_epochs, batch_size, lr, verbose, regression_loss: str = "huber"):
-        """Delegates to training.fit_predictor (split out in task 19)."""
+        """Delegates to training.fit_predictor."""
         from .training import fit_predictor
         return fit_predictor(self, ds, n_epochs, batch_size, lr, verbose, regression_loss)
 

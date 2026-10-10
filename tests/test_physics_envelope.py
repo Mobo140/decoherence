@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from src.infrastructure.ml.lstm_predictor import (
+from src.infrastructure.ml.physics_prior import (
     _ols_log_slope,
     physics_remaining,
 )

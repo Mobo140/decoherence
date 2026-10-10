@@ -3,7 +3,6 @@
 Covers:
   - Domain value objects (NoiseConfig, ExperimentSpec, AblationResult)
   - ILossFunction implementations and registry
-  - GaussianMeasurementNoise transform
   - PhysicsOnlyPredictor: analytical correctness
   - TransformerPredictor: train/predict smoke test
   - LSTMPredictor use_physics_prior flag
@@ -25,16 +24,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # ---------------------------------------------------------------------------
 
 class TestNoiseConfig:
-    def test_noiseless(self):
-        from src.domain.value_objects import NoiseConfig
-        nc = NoiseConfig(sigma=0.0)
-        assert nc.is_noiseless
-
-    def test_noisy(self):
-        from src.domain.value_objects import NoiseConfig
-        nc = NoiseConfig(sigma=0.05)
-        assert not nc.is_noiseless
-
     def test_negative_sigma_raises(self):
         from src.domain.value_objects import NoiseConfig
         with pytest.raises(ValueError):
@@ -149,64 +138,6 @@ class TestLossFunctions:
         pred = torch.tensor([1.0])
         bound = torch.tensor([4.0])
         assert float(SurvHuberLoss()(pred, bound, torch.ones(1))) > 0.0
-
-
-# ---------------------------------------------------------------------------
-# Noise transform
-# ---------------------------------------------------------------------------
-
-class TestGaussianMeasurementNoise:
-    def _make_trajectory(self):
-        from src.domain.value_objects import (
-            DissipatorConfig, QubitCount, SystemConfig, TrajectoryResult,
-        )
-        config = SystemConfig(
-            n_qubits=QubitCount.ONE, omega=1.0,
-            dissipator=DissipatorConfig.constant(0.5),
-        )
-        T = 50
-        times = np.linspace(0, 5, T)
-        obs = {
-            "sigma_x": np.random.randn(T).astype(np.float32),
-            "coherence_l1": np.exp(-0.5 * times).astype(np.float32),
-            "purity": np.ones(T, dtype=np.float32),
-        }
-        return TrajectoryResult(times=times, observables=obs, t_decoh=3.0, system_config=config)
-
-    def test_noiseless_is_identity(self):
-        from src.domain.value_objects import NoiseConfig
-        from src.infrastructure.quantum.noise import GaussianMeasurementNoise
-        traj = self._make_trajectory()
-        transform = GaussianMeasurementNoise(NoiseConfig(sigma=0.0))
-        result = transform(traj)
-        np.testing.assert_array_equal(result.observables["sigma_x"], traj.observables["sigma_x"])
-
-    def test_noisy_changes_values(self):
-        from src.domain.value_objects import NoiseConfig
-        from src.infrastructure.quantum.noise import GaussianMeasurementNoise
-        traj = self._make_trajectory()
-        transform = GaussianMeasurementNoise(NoiseConfig(sigma=0.1, seed=42))
-        result = transform(traj)
-        assert not np.allclose(result.observables["sigma_x"], traj.observables["sigma_x"])
-
-    def test_metadata_preserved(self):
-        from src.domain.value_objects import NoiseConfig
-        from src.infrastructure.quantum.noise import GaussianMeasurementNoise
-        traj = self._make_trajectory()
-        transform = GaussianMeasurementNoise(NoiseConfig(sigma=0.1, seed=0))
-        result = transform(traj)
-        assert result.t_decoh == traj.t_decoh
-        np.testing.assert_array_equal(result.times, traj.times)
-
-    def test_composed_transform(self):
-        from src.domain.value_objects import NoiseConfig
-        from src.infrastructure.quantum.noise import ComposedTransform, GaussianMeasurementNoise
-        traj = self._make_trajectory()
-        t1 = GaussianMeasurementNoise(NoiseConfig(sigma=0.01, seed=0))
-        t2 = GaussianMeasurementNoise(NoiseConfig(sigma=0.01, seed=1))
-        composed = ComposedTransform((t1, t2))
-        result = composed(traj)
-        assert result.t_decoh == traj.t_decoh
 
 
 # ---------------------------------------------------------------------------

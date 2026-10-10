@@ -1,6 +1,5 @@
 """OLS physics prior for the decoherence-time estimate.
 
-Extracted verbatim from lstm_predictor.py (task 19) -- no behaviour change.
 The coherence decays as C(t) = C0*exp(-gamma*t/2), so log C is linear in t and
 the OLS slope gives T2 = 2/gamma = -1/slope. See lstm_predictor.py for the
 full derivation.

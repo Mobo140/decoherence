@@ -50,8 +50,7 @@ CATALOG: List[ExperimentEntry] = [
     ExperimentEntry("E9", "Context codes", "experiments.e9_context_injection", "-", "C5", "D, E",
                     ("e9a_cross_system.csv", "e9b_ablation.csv"), status="negative"),
     # The papers' "E10b" is the window-30 cross-system run produced by
-    # e10_fixed_context.py -- not e10_tfim_specialized.py, which this catalog
-    # used to label E10b. Ids now match what the papers cite.
+    # e10_fixed_context.py, not by e10_tfim_specialized.py.
     ExperimentEntry("E10a/E10b", "Fixed context (E10b cited)", "experiments.e10_fixed_context", "2", "C5", "D, E",
                     ("e10a_cross_system.csv", "e10b_cross_system.csv"), status="superseded"),
     ExperimentEntry("E10-TFIM", "TFIM specialized", "experiments.e10_tfim_specialized", "-", "C2", "E",
@@ -177,15 +176,6 @@ def summarize_r2(path: Path) -> str:
         tag = f"{label}" + (f"/{extra}" if extra and extra != label else "")
         parts.append(f"{tag} {r2s}")
     return f"{path.name}: " + "; ".join(parts[:8])
-
-
-def catalog_table() -> List[List[str]]:
-    table = []
-    for e in CATALOG:
-        csvs = list_csv_paths(e)
-        status = f"{len(csvs)} CSV" if csvs else "no CSV"
-        table.append([e.id, e.title, e.paper, e.claim, e.scenarios, status, e.module])
-    return table
 
 
 CLAIMS = [

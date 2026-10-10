@@ -1,7 +1,4 @@
-"""Batch construction helpers for LSTMPredictor training.
-
-Extracted verbatim from lstm_predictor.py (task 19) -- no behaviour change.
-"""
+"""Batch construction helpers for LSTMPredictor training."""
 from __future__ import annotations
 
 from typing import Tuple

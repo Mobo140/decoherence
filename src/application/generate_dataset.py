@@ -58,40 +58,6 @@ class Dataset:
     # True: t_decoh_abs is a lower bound (threshold not crossed by t_max).
     censored: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=bool))
 
-    # keep backward-compat alias
-    @property
-    def t_decoh(self) -> np.ndarray:
-        """Alias for t_decoh_abs (absolute decoherence time)."""
-        return self.t_decoh_abs
-
-    # convenience splits
-    def train_sequences(self) -> np.ndarray:
-        return self.sequences[self.train_idx]
-
-    def val_sequences(self) -> np.ndarray:
-        return self.sequences[self.val_idx]
-
-    def test_sequences(self) -> np.ndarray:
-        return self.sequences[self.test_idx]
-
-    def train_targets(self) -> np.ndarray:
-        return self.remaining_time[self.train_idx]
-
-    def val_targets(self) -> np.ndarray:
-        return self.remaining_time[self.val_idx]
-
-    def test_targets(self) -> np.ndarray:
-        return self.remaining_time[self.test_idx]
-
-    def train_risk(self) -> np.ndarray:
-        return self.risk_labels[self.train_idx]
-
-    def val_risk(self) -> np.ndarray:
-        return self.risk_labels[self.val_idx]
-
-    def test_risk(self) -> np.ndarray:
-        return self.risk_labels[self.test_idx]
-
 
 def trajectory_cache_key(config: SystemConfig, seed: Optional[int], index: int) -> str:
     """Stable per-trajectory name for ITrajectoryStore (content-addressed)."""
@@ -132,10 +98,10 @@ class GenerateDatasetCommand:
     seed: Optional[int] = 42
     dataset_name: str = "dataset"
     # Minimum gap between sampled window end-indices (in timesteps).
-    # 0 = off (default, backward-compatible).  Positive values reduce
-    # within-trajectory overlap, improving generalisation.
+    # 0 = off.  Positive values reduce within-trajectory overlap,
+    # improving generalisation.
     min_window_gap: int = 0
-    # False (default): drop right-censored trajectories (task 06).
+    # False (default): drop right-censored trajectories.
     # True: keep them; remaining_time is a lower bound, Dataset.censored=True.
     include_censored: bool = False
 

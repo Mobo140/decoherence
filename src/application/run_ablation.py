@@ -16,9 +16,7 @@ Usage::
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional
-
-import numpy as np
+from typing import List
 
 from ..domain.ports import IPredictor, ISimulator
 from ..domain.value_objects import (
@@ -64,11 +62,9 @@ class AblationStudyUseCase:
     def __init__(
         self,
         simulator: ISimulator,
-        noise_transform=None,
         store=None,
     ) -> None:
         self._simulator = simulator
-        self._noise_transform = noise_transform
         self._store = store
 
     def execute(self, command: AblationCommand) -> List[AblationResult]:
@@ -83,10 +79,6 @@ class AblationStudyUseCase:
             min_window_gap=command.min_window_gap,
         )
         dataset = gen_uc.execute(gen_cmd)
-
-        # Apply noise if configured
-        if self._noise_transform is not None:
-            dataset = self._apply_noise(dataset)
 
         results: List[AblationResult] = []
 
@@ -156,29 +148,11 @@ class AblationStudyUseCase:
             dt = command.configs[0].dt if command.configs else 0.1
             return StretchedExpPredictor(t_max=t_max, dt=dt)
         if variant == PredictorVariant.LSTM_ONLY:
-            # Disable physics prior by zeroing the physics features at inference
-            # We achieve this by setting alpha=0 conceptually; in practice we
-            # use LSTMPredictor and override _phys_std→∞ after training so
-            # phys_norm→0, making the physics estimate contribute nothing.
-            # Simpler: subclass or use a flag. For now, use a dedicated kwarg.
+            # use_physics_prior=False zeroes the physics estimate and slope,
+            # so the network sees only the raw observation window.
             return LSTMPredictor(use_physics_prior=False)
         if variant == PredictorVariant.PHYSICS_LSTM:
             return LSTMPredictor(use_physics_prior=True)
         if variant == PredictorVariant.TRANSFORMER:
             return TransformerPredictor()
         raise ValueError(f"Unknown variant: {variant}")
-
-    def _apply_noise(self, dataset):
-        """Return dataset with noise applied to all sequences."""
-        from ..infrastructure.quantum.noise import GaussianMeasurementNoise
-        # Noise is applied at the feature-matrix level (post-simulation)
-        # by adding Gaussian perturbations to the sequence arrays directly.
-        noise_cfg = self._noise_transform.config
-        rng = np.random.default_rng(noise_cfg.seed)
-        noisy_seqs = dataset.sequences + rng.normal(
-            0.0, noise_cfg.sigma, size=dataset.sequences.shape
-        ).astype(np.float32)
-        import copy
-        noisy_ds = copy.copy(dataset)
-        noisy_ds.sequences = noisy_seqs
-        return noisy_ds

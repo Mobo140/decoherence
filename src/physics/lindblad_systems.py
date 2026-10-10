@@ -1,7 +1,7 @@
 """Lindblad system definitions and parameterization."""
 import numpy as np
 import qutip as qt
-from typing import List, Tuple, Optional, Callable
+from typing import List, Optional, Tuple
 from scipy.special import comb
 
 

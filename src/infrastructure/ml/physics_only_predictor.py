@@ -19,12 +19,13 @@ The risk score is a sigmoid calibrated heuristically:
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 
 from ...domain.ports import IPredictor
 from ...domain.value_objects import PredictionResult
+from .physics_prior import physics_remaining
 
 
 def remaining_to_risk(remaining: float, horizon: float, k: float = 5.0) -> float:
@@ -51,9 +52,6 @@ class PhysicsOnlyPredictor(IPredictor):
     t_max: float = 100.0
     dt: float = 0.1
     risk_k: float = 5.0
-
-    # Always "trained" — no parameters to fit.
-    _fitted: bool = field(default=True, init=False, repr=False)
 
     @property
     def is_trained(self) -> bool:
@@ -99,9 +97,7 @@ class PhysicsOnlyPredictor(IPredictor):
 
     def _compute_remaining(self, window: np.ndarray, t_obs: float) -> float:
         """OLS / Hilbert-envelope slope of log(C) → remaining time."""
-        from .lstm_predictor import physics_remaining
-
         rem, slope, _ = physics_remaining(window, t_obs, dt=self.dt, t_max=self.t_max)
         if slope >= -1e-6:
             return float(self.t_max)
-        return rem 
+        return rem

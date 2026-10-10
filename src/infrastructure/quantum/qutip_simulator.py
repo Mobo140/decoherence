@@ -12,8 +12,6 @@ import qutip as qt
 from ...domain.ports import ISimulator
 from ...domain.value_objects import (
     DecoherenceCriterion,
-    DissipatorType,
-    InteractionType,
     QubitCount,
     SystemConfig,
     TrajectoryResult,
@@ -24,7 +22,6 @@ from ...physics.lindblad_systems import (
     sample_random_pure_state,
 )
 from ...physics.simulate_qutip import simulate_single_qubit, simulate_two_qubit
-from ...physics.decoherence_time import calculate_decoherence_time
 
 
 _SYSY = np.kron(np.array([[0, -1j], [1j, 0]]), np.array([[0, -1j], [1j, 0]]))

@@ -94,14 +94,3 @@ class JobQueue:
             "returncode": st.returncode,
             "log": self.log_tail(),
         }
-
-    def status_markdown(self) -> str:
-        st = self.as_dict()
-        args = " ".join(st["args"])
-        return (
-            f"**status:** `{st['status']}`  \n"
-            f"**job:** `{st['module']} {args}`  \n"
-            f"**pid:** {st['pid'] or '—'}  ·  **elapsed:** {st['elapsed_min']:.1f} min  \n"
-            f"**returncode:** {st['returncode'] if st['returncode'] is not None else '—'}\n\n"
-            f"```\n{st['log']}\n```"
-        )

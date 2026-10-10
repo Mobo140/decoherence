@@ -1,6 +1,5 @@
-"""Decoherence time calculation from density matrix trajectories."""
+"""Coherence, purity and Pauli observables of density matrices."""
 import numpy as np
-from typing import List, Optional
 
 
 def coherence_l1(rho: np.ndarray) -> float:
@@ -25,64 +24,6 @@ def purity(rho: np.ndarray) -> float:
         Purity value
     """
     return np.real(np.trace(rho @ rho))
-
-
-def calculate_decoherence_time(
-    times: np.ndarray,
-    density_matrices: List[np.ndarray],
-    criterion: str = 'coherence',
-    threshold: float = 0.01,
-    initial_coherence: Optional[float] = None,
-    initial_purity: Optional[float] = None
-) -> Optional[float]:
-    """Calculate decoherence time based on chosen criterion.
-    
-    Args:
-        times: Array of time points
-        density_matrices: List of density matrices at each time point
-        criterion: 'coherence' or 'purity'
-        threshold: Threshold value for decoherence (eps for coherence, P_thr for purity)
-        initial_coherence: Initial coherence value (for relative threshold, optional)
-        initial_purity: Initial purity value (for relative threshold, optional)
-        
-    Returns:
-        Decoherence time, or None if threshold not reached
-    """
-    if criterion == 'coherence':
-        values = [coherence_l1(rho) for rho in density_matrices]
-        
-        # Use absolute threshold or relative to initial
-        if initial_coherence is not None:
-            thresh = threshold * initial_coherence
-        else:
-            thresh = threshold
-        
-        # Find first time when coherence < threshold
-        for i, val in enumerate(values):
-            if val < thresh:
-                return times[i]
-        
-        # If threshold not reached, return None or last time
-        return None
-    
-    elif criterion == 'purity':
-        values = [purity(rho) for rho in density_matrices]
-        
-        # Use absolute threshold or relative to initial
-        if initial_purity is not None:
-            thresh = initial_purity - threshold * (initial_purity - 1.0 / len(density_matrices[0]))
-        else:
-            thresh = threshold
-        
-        # Find first time when purity < threshold
-        for i, val in enumerate(values):
-            if val < thresh:
-                return times[i]
-        
-        return None
-    
-    else:
-        raise ValueError(f"Unknown criterion: {criterion}")
 
 
 def compute_observables_single_qubit(rho: np.ndarray) -> dict:

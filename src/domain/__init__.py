@@ -11,7 +11,7 @@ from .value_objects import (
     BacktestMetrics,
 )
 from .ports import ISimulator, IPredictor, ITrajectoryStore, IModelStore
-from .events import DecoherenceDetected, RiskThresholdExceeded
+from .events import RiskThresholdExceeded
 
 __all__ = [
     "QubitCount",
@@ -27,6 +27,5 @@ __all__ = [
     "IPredictor",
     "ITrajectoryStore",
     "IModelStore",
-    "DecoherenceDetected",
     "RiskThresholdExceeded",
 ]

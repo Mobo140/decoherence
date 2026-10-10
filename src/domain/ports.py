@@ -129,16 +129,3 @@ class ILossFunction(ABC):
     @abstractmethod
     def name(self) -> str:
         """Human-readable identifier used in logs and result dicts."""
-
-
-class ITrajectoryTransform(ABC):
-    """Port: stateless transform applied to a TrajectoryResult.
-
-    Used to inject measurement noise, normalise observables, or apply
-    domain-specific pre-processing without modifying simulation logic.
-    Transforms are composable (see infrastructure/quantum/noise.py).
-    """
-
-    @abstractmethod
-    def __call__(self, trajectory: "TrajectoryResult") -> "TrajectoryResult":
-        """Return a transformed copy of *trajectory*."""

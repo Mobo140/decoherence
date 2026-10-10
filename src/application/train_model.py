@@ -16,10 +16,6 @@ class TrainModelResult:
     train_loss_history: List[float] = field(default_factory=list)
     val_loss_history: List[float] = field(default_factory=list)
 
-    @property
-    def best_val_loss(self) -> float:
-        return min(self.val_loss_history) if self.val_loss_history else float("inf")
-
 
 @dataclass(frozen=True)
 class TrainModelCommand:

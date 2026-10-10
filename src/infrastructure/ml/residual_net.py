@@ -1,6 +1,5 @@
 """BiLSTM residual corrector network.
 
-Extracted verbatim from lstm_predictor.py (task 19) -- no behaviour change.
 Serialisation stores only ``state_dict()`` tensors plus scalar config, never a
 reference to this class, so moving it does not affect existing checkpoints.
 """

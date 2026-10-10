@@ -68,7 +68,8 @@ def test_lstm_from_bytes_old_4_physics_scalars():
 
     import torch
 
-    from src.infrastructure.ml.lstm_predictor import LSTMPredictor, _ResidualNet
+    from src.infrastructure.ml.lstm_predictor import LSTMPredictor
+    from src.infrastructure.ml.residual_net import _ResidualNet
 
     hidden, n_raw, n_in = 64, 5, 7
     net = _ResidualNet(n_in, hidden, 1, 0.0, n_physics=4)

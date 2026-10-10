@@ -162,8 +162,6 @@ class PredictionResult:
     t_decoh_predicted: float       # predicted decoherence time
     risk_score: float              # P(decoherence within `horizon` steps)
     horizon: float                 # time horizon used for risk_score
-    confidence_lower: Optional[float] = None
-    confidence_upper: Optional[float] = None
 
     def __post_init__(self) -> None:
         if not (0.0 <= self.risk_score <= 1.0):
@@ -188,10 +186,6 @@ class NoiseConfig:
     def __post_init__(self) -> None:
         if self.sigma < 0:
             raise ValueError("NoiseConfig.sigma must be non-negative.")
-
-    @property
-    def is_noiseless(self) -> bool:
-        return self.sigma == 0.0
 
 
 class PredictorVariant(str, Enum):

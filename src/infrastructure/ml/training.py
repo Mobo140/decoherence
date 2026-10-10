@@ -1,9 +1,4 @@
-"""Training loop for LSTMPredictor.
-
-Extracted verbatim from LSTMPredictor._fit (task 19) -- no behaviour change.
-``self`` became the explicit ``predictor`` parameter; the body is otherwise
-untouched, including the nested prep/_reg_loss/_bce closures.
-"""
+"""Training loop for LSTMPredictor."""
 from __future__ import annotations
 
 import copy
@@ -12,7 +7,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .batching import _add_log, _batch_physics, _loader, _ns
+from .batching import _add_log, _batch_physics, _loader
 from .residual_net import _ResidualNet
 
 R2_SCALE_FLOOR = 0.05
