@@ -13,65 +13,55 @@ clean data (E3 configuration: scenarios B+C, 100 trajectories each, window
 channel. The same noise realisation, scaled by sigma, is used at every
 level, so the comparison across sigma is paired.
 
-Writes ONLY to experiments/results/r15_noise_variants.csv.
+Writes ONLY to experiments/results/r15_noise_variants*.csv.
+Each CSV is accompanied by <name>.csv.provenance.json (configuration,
+seeds, software environment).
 
 Usage
 -----
     python -m experiments.r15_noise_variants --seeds 42 43 44
+    python -m experiments.r15_noise_variants --fast --tag smoke
 """
 from __future__ import annotations
 
-import argparse
-import csv
-import sys
-from pathlib import Path
+from experiments import common
+from src import pipeline
 
-import numpy as np
+SIGMAS = (0.0, 0.01, 0.02, 0.05, 0.10)
+MODELS = ("physics_only", "lstm_only", "physics_lstm", "transformer")
+COLUMNS = ("seed", "variant", "sigma", "r2", "mae", "auroc")
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.application.backtest import BacktestCommand, BacktestUseCase
-from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
-from src.application.train_model import TrainModelCommand, TrainModelUseCase
-from src.data import observation
-from src.data.scenarios import build_configs, trajectory_store
-from src.models import registry
-from src.simulation.simulator import QuTipSimulator
+def arms(n_per: int, epochs: int) -> list[pipeline.ExperimentConfig]:
+    """Declares one arm per model, trained on clean data.
 
-RESULTS = Path(__file__).parent / "results" / "r15_noise_variants.csv"
-SIGMAS = [0.0, 0.01, 0.02, 0.05, 0.10]
+    Args:
+        n_per: Trajectories per scenario.
+        epochs: Training epochs.
+
+    Returns:
+        The arms in the order of the result rows.
+    """
+    data = pipeline.DataSpec(
+        name="r15", scenarios=("B", "C"), n_per_scenario=n_per,
+        cache="disk")
+    tests = tuple(
+        pipeline.EvalSpec("gaussian", sigma=sigma, tags=(("sigma", sigma),))
+        for sigma in SIGMAS)
+    return [
+        pipeline.ExperimentConfig(
+            data=data, model=name, epochs=epochs, tests=tests,
+            tags=(("variant", name),))
+        for name in MODELS
+    ]
 
 
 def main() -> None:
-    p = argparse.ArgumentParser()
-    p.add_argument("--seeds", type=int, nargs="+", default=[42, 43, 44])
-    p.add_argument("--fast", action="store_true")
-    a = p.parse_args()
-    n_per, epochs = (30, 10) if a.fast else (100, 100)
-    gen = GenerateDatasetUseCase(QuTipSimulator(), store=trajectory_store())
-    with RESULTS.open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["seed", "variant", "sigma", "r2", "mae", "auroc"])
-        w.writeheader()
-        for seed in a.seeds:
-            groups = build_configs(n_per_scenario=n_per, seed=seed)
-            ds = gen.execute(GenerateDatasetCommand(
-                configs=groups["B"] + groups["C"], window_length=50, horizon=1.0,
-                samples_per_trajectory=5, seed=seed, dataset_name=f"r15_{seed}"))
-            for name in ("physics_only", "lstm_only", "physics_lstm", "transformer"):
-                pred = registry.build_model(name)
-                if name != "physics_only":
-                    TrainModelUseCase(pred).execute(TrainModelCommand(
-                        dataset=ds, n_epochs=epochs, batch_size=32, learning_rate=1e-3,
-                        regression_loss="huber", verbose=False, seed=seed))
-                for sigma in SIGMAS:
-                    noisy = observation.OBSERVATIONS["gaussian"](
-                        ds, sigma=sigma, rng=np.random.default_rng(seed))
-                    m = BacktestUseCase(pred).execute(BacktestCommand(dataset=noisy, horizon=1.0))
-                    w.writerow({"seed": seed, "variant": name, "sigma": sigma,
-                                "r2": m.r2, "mae": m.mae, "auroc": m.risk_auroc})
-                    f.flush()
-                    print(f"R15 | seed={seed} {name:<13} sigma={sigma:.2f} R2={m.r2:.3f} "
-                          f"AUROC={m.risk_auroc:.3f}", flush=True)
+    args = common.parse_args(__doc__)
+    n_per, epochs = (30, 10) if args.fast else (100, 100)
+    common.run_arms(
+        "R15", arms(n_per, epochs), args,
+        common.results_path("r15_noise_variants", args), COLUMNS)
 
 
 if __name__ == "__main__":

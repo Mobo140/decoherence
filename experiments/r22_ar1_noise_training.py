@@ -31,36 +31,23 @@ realisation per seed is filtered for every phi and scaled by sigma, so all
 comparisons are paired and phi = 0 is the R15/R16 test noise.
 
 Writes ONLY to experiments/results/r22_ar1_noise_training*.csv.
+Each CSV is accompanied by <name>.csv.provenance.json (configuration,
+seeds, software environment).
 
 Usage
 -----
-    python -m experiments.r22_ar1_noise_training --fast
+    python -m experiments.r22_ar1_noise_training --fast --tag smoke
     python -m experiments.r22_ar1_noise_training --seeds 42 --tag s42
 """
 from __future__ import annotations
 
-import argparse
-import csv
-import sys
-import time
-from pathlib import Path
+from experiments import common
+from src import pipeline
 
-import numpy as np
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from src.application.backtest import BacktestCommand, BacktestUseCase
-from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
-from src.application.train_model import TrainModelCommand, TrainModelUseCase
-from src.data import observation
-from src.data.scenarios import build_configs, trajectory_store
-from src.models import registry
-from src.simulation.simulator import QuTipSimulator
-
-RESULTS_DIR = Path(__file__).parent / "results"
-SIGMAS = [0.0, 0.01, 0.02, 0.05, 0.10]
-PHIS = [0.0, 0.5, 0.9]
+SIGMAS = (0.0, 0.01, 0.02, 0.05, 0.10)
+PHIS = (0.0, 0.5, 0.9)
 PHI_MAX = 0.95
+COLUMNS = ("seed", "arm", "sigma", "phi", "r2", "mae", "auroc", "n_samples")
 
 # arm -> (model alias, training set)
 ARMS = {
@@ -70,59 +57,51 @@ ARMS = {
     "transformer": ("transformer", "clean"),
     "transformer_ar1": ("transformer", "ar1"),
 }
+# Same generator seed as R16/R21, so the white copies are R16's.
+AUGMENTATIONS = {
+    "clean": None,
+    "white": pipeline.Augmentation(2),
+    "ar1": pipeline.Augmentation(2, phi_max=PHI_MAX),
+}
+
+
+def arms(n_per: int, epochs: int) -> list[pipeline.ExperimentConfig]:
+    """Declares the arms: white and AR(1) noisy training copies.
+
+    Every test applies the same realisation of AR(1) noise, filtered with
+    each phi, to the clean test windows.
+
+    Args:
+        n_per: Trajectories per scenario.
+        epochs: Training epochs.
+
+    Returns:
+        The arms in the order of the result rows.
+    """
+    data = pipeline.DataSpec(
+        name="r22", scenarios=("B", "C"), n_per_scenario=n_per,
+        cache="disk")
+    tests = tuple(
+        pipeline.EvalSpec(
+            "ar1", sigma=sigma, phi=phi,
+            tags=(("sigma", sigma), ("phi", phi)))
+        for phi in PHIS for sigma in SIGMAS
+        if sigma > 0.0 or phi == 0.0
+    )
+    return [
+        pipeline.ExperimentConfig(
+            data=data, model=alias, epochs=epochs, tests=tests,
+            augmentation=AUGMENTATIONS[train], tags=(("arm", arm),))
+        for arm, (alias, train) in ARMS.items()
+    ]
 
 
 def main() -> None:
-    p = argparse.ArgumentParser()
-    p.add_argument("--seeds", type=int, nargs="+", default=[42, 43, 44])
-    p.add_argument("--fast", action="store_true")
-    p.add_argument("--tag", type=str, default="")
-    a = p.parse_args()
-    n_per, epochs = (30, 5) if a.fast else (100, 100)
-    sfx = (f"_{a.tag}" if a.tag else "") + ("_fast" if a.fast else "")
-    out = RESULTS_DIR / f"r22_ar1_noise_training{sfx}.csv"
-    print(f"R22 | seeds={a.seeds} n_per={n_per} epochs={epochs}", flush=True)
-
-    gen = GenerateDatasetUseCase(QuTipSimulator(), store=trajectory_store())
-    with out.open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["seed", "arm", "sigma", "phi", "r2", "mae",
-                                          "auroc", "n_samples"])
-        w.writeheader()
-        for seed in a.seeds:
-            ts = time.time()
-            groups = build_configs(n_per_scenario=n_per, seed=seed)
-            ds = gen.execute(GenerateDatasetCommand(
-                configs=groups["B"] + groups["C"], window_length=50, horizon=1.0,
-                samples_per_trajectory=5, seed=seed, dataset_name=f"r22_{seed}"))
-            # Same generator seed as R16/R21, so the white copies are R16's.
-            train_sets = {
-                "clean": ds,
-                "white": observation.noise_augmented(ds, 2, np.random.default_rng(seed + 7)),
-                "ar1": observation.noise_augmented(ds, 2, np.random.default_rng(seed + 7), phi_max=PHI_MAX),
-            }
-            tests = {}
-            for phi in PHIS:
-                for sigma in SIGMAS:
-                    if sigma == 0.0 and phi > 0.0:
-                        continue
-                    # Every call redraws the same realisation of the noise.
-                    tests[(sigma, phi)] = observation.OBSERVATIONS["ar1"](
-                        ds, sigma=sigma, phi=phi, rng=np.random.default_rng(seed))
-
-            for arm, (alias, train) in ARMS.items():
-                pred = registry.build_model(alias)
-                TrainModelUseCase(pred).execute(TrainModelCommand(
-                    dataset=train_sets[train], n_epochs=epochs, batch_size=32,
-                    learning_rate=1e-3, regression_loss="huber", verbose=False, seed=seed))
-                for (sigma, phi), tds in tests.items():
-                    m = BacktestUseCase(pred).execute(BacktestCommand(dataset=tds, horizon=1.0))
-                    w.writerow({"seed": seed, "arm": arm, "sigma": sigma, "phi": phi,
-                                "r2": m.r2, "mae": m.mae, "auroc": m.risk_auroc,
-                                "n_samples": m.n_samples})
-                    print(f"R22 | seed={seed} {arm:<19} sigma={sigma:.2f} phi={phi:.1f} "
-                          f"R2={m.r2:.3f}", flush=True)
-                f.flush()
-            print(f"R22 | seed={seed} done [{time.time() - ts:.0f}s]", flush=True)
+    args = common.parse_args(__doc__)
+    n_per, epochs = (30, 5) if args.fast else (100, 100)
+    common.run_arms(
+        "R22", arms(n_per, epochs), args,
+        common.results_path("r22_ar1_noise_training", args), COLUMNS)
 
 
 if __name__ == "__main__":

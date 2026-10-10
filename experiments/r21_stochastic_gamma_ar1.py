@@ -30,7 +30,8 @@ three seeds. Arms:
     physics_lstm        clean training
     physics_lstm_aug    white-noise training (R16)
     transformer         clean training
-    physics_lstm_sto    trained on stochastic gamma (s ~ U[0, 0.6], tau in {0.5, 2})
+    physics_lstm_sto    trained on stochastic gamma
+                        (s ~ U[0, 0.6], tau in {0.5, 2})
     transformer_sto     same
 Evaluation
     noise   test windows of the training dataset + AR(1) noise,
@@ -43,42 +44,31 @@ Evaluation
             same for every setting, so s = 0 is the paired control.
 
 Writes ONLY to experiments/results/r21_stochastic_gamma_ar1*.csv.
+Each CSV is accompanied by <name>.csv.provenance.json (configuration,
+seeds, software environment).
 
 Usage
 -----
-    python -m experiments.r21_stochastic_gamma_ar1 --fast
+    python -m experiments.r21_stochastic_gamma_ar1 --fast --tag smoke
     python -m experiments.r21_stochastic_gamma_ar1 --seeds 42 --tag s42
 """
 from __future__ import annotations
 
-import argparse
-import csv
-import sys
-import time
-from pathlib import Path
+import dataclasses
 
-import numpy as np
+from experiments import common
+from src import pipeline
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from src.application.backtest import BacktestCommand, BacktestUseCase
-from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
-from src.application.train_model import TrainModelCommand, TrainModelUseCase
-from src.data import observation
-from src.data.scenarios import build_configs, trajectory_store
-from src.models import registry
-from src.simulation.simulator import QuTipSimulator
-from src.simulation.variants import StochasticGammaSimulator
-
-RESULTS_DIR = Path(__file__).parent / "results"
 WINDOW = 50
-SIGMAS = [0.02, 0.05]
-PHIS = [0.0, 0.5, 0.9]
-GAMMA_SETTINGS = [(0.0, 0.5), (0.3, 0.5), (0.6, 0.5), (0.3, 2.0), (0.6, 2.0)]
+SIGMAS = (0.02, 0.05)
+PHIS = (0.0, 0.5, 0.9)
+GAMMA_SETTINGS = ((0.0, 0.5), (0.3, 0.5), (0.6, 0.5), (0.3, 2.0), (0.6, 2.0))
+COLUMNS = ("seed", "arm", "test", "sigma", "phi", "s", "tau", "r2", "mae",
+           "auroc", "n_samples")
 
-# arm -> (model alias, training set: "clean" | "aug" | "sto" | None)
+# arm -> (model alias, training set: "clean" | "aug" | "sto")
 ARMS = {
-    "physics_only": ("physics_only", None),
+    "physics_only": ("physics_only", "clean"),
     "lstm_only": ("lstm_only", "clean"),
     "physics_lstm": ("physics_lstm", "clean"),
     "physics_lstm_aug": ("physics_lstm", "aug"),
@@ -88,74 +78,85 @@ ARMS = {
 }
 
 
+def noise_tests() -> list[pipeline.EvalSpec]:
+    """Test windows of the training data plus AR(1) noise.
+
+    The first test is the clean one. For the others one realisation of the
+    noise is filtered for every phi, so the tests are paired; phi = 0
+    reproduces R15.
+    """
+    clean = pipeline.EvalSpec(
+        tags=(("test", "noise"), ("sigma", 0.0), ("phi", 0.0)))
+    noisy = [
+        pipeline.EvalSpec(
+            "ar1", sigma=sigma, phi=phi,
+            tags=(("test", "noise"), ("sigma", sigma), ("phi", phi)))
+        for phi in PHIS for sigma in SIGMAS
+    ]
+    return [clean, *noisy]
+
+
+def gamma_tests(
+    data: pipeline.DataSpec, n_eval: int
+) -> list[pipeline.EvalSpec]:
+    """Independent configurations simulated with a stochastic rate.
+
+    Initial states and the driving noise of the rate are the same for
+    every setting, so s = 0 is the paired control.
+    """
+    independent = dataclasses.replace(
+        data, name="r21_eval", n_per_scenario=n_eval, cache="none",
+        train_ratio=0.0, val_ratio=0.0, config_seed_offset=1000,
+        data_seed_offset=1)
+    return [
+        pipeline.EvalSpec(
+            data=dataclasses.replace(
+                independent, simulator=pipeline.SimulatorSpec(
+                    "stochastic_gamma", (("s", s), ("tau", tau)), 13)),
+            tags=(("test", "gamma"), ("s", s), ("tau", tau)))
+        for s, tau in GAMMA_SETTINGS
+    ]
+
+
+def arms(
+    n_per: int, n_eval: int, epochs: int
+) -> list[pipeline.ExperimentConfig]:
+    """Declares the arms: three training sets, noise and rate tests.
+
+    Args:
+        n_per: Trajectories per scenario.
+        n_eval: Independent trajectories per scenario for the rate tests.
+        epochs: Training epochs.
+
+    Returns:
+        The arms in the order of the result rows.
+    """
+    data = pipeline.DataSpec(
+        name="r21", scenarios=("B", "C"), n_per_scenario=n_per,
+        window_length=WINDOW, cache="disk")
+    # gamma(t) drawn with s ~ U[0, 0.6] and tau in {0.5, 2} per trajectory.
+    stochastic = dataclasses.replace(
+        data, name="r21_sto", cache="none",
+        simulator=pipeline.SimulatorSpec(
+            "stochastic_gamma", (("s", None), ("tau", None)), 11))
+    train_data = {"clean": None, "aug": None, "sto": stochastic}
+    tests = tuple(noise_tests() + gamma_tests(data, n_eval))
+    return [
+        pipeline.ExperimentConfig(
+            data=data, model=alias, epochs=epochs, tests=tests,
+            train_data=train_data[train],
+            augmentation=pipeline.Augmentation(2) if train == "aug" else None,
+            tags=(("arm", arm),))
+        for arm, (alias, train) in ARMS.items()
+    ]
+
+
 def main() -> None:
-    p = argparse.ArgumentParser()
-    p.add_argument("--seeds", type=int, nargs="+", default=[42, 43, 44])
-    p.add_argument("--fast", action="store_true")
-    p.add_argument("--tag", type=str, default="")
-    a = p.parse_args()
-    n_per, n_eval, epochs = (30, 20, 5) if a.fast else (100, 100, 100)
-    sfx = (f"_{a.tag}" if a.tag else "") + ("_fast" if a.fast else "")
-    out = RESULTS_DIR / f"r21_stochastic_gamma_ar1{sfx}.csv"
-    print(f"R21 | seeds={a.seeds} n_per={n_per} epochs={epochs}", flush=True)
-
-    gen_cached = GenerateDatasetUseCase(QuTipSimulator(), store=trajectory_store())
-    with out.open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["seed", "arm", "test", "sigma", "phi", "s",
-                                          "tau", "r2", "mae", "auroc", "n_samples"])
-        w.writeheader()
-        for seed in a.seeds:
-            ts = time.time()
-            groups = build_configs(n_per_scenario=n_per, seed=seed)
-            train_cfgs = groups["B"] + groups["C"]
-            cmd = dict(window_length=WINDOW, horizon=1.0, samples_per_trajectory=5, seed=seed)
-            ds = gen_cached.execute(GenerateDatasetCommand(
-                configs=train_cfgs, dataset_name=f"r21_{seed}", **cmd))
-            ds_aug = observation.noise_augmented(ds, 2, np.random.default_rng(seed + 7))
-            ds_sto = GenerateDatasetUseCase(
-                StochasticGammaSimulator(None, None, seed + 11), store=None
-            ).execute(GenerateDatasetCommand(configs=train_cfgs, dataset_name=f"r21_sto_{seed}", **cmd))
-            train_sets = {"clean": ds, "aug": ds_aug, "sto": ds_sto}
-
-            eval_groups = build_configs(n_per_scenario=n_eval, seed=seed + 1000)
-            eval_cfgs = eval_groups["B"] + eval_groups["C"]
-            gamma_tests = {}
-            for s, tau in GAMMA_SETTINGS:
-                sim = StochasticGammaSimulator(s, tau, seed + 13)
-                gamma_tests[(s, tau)] = GenerateDatasetUseCase(sim, store=None).execute(
-                    GenerateDatasetCommand(configs=eval_cfgs, train_ratio=0.0, val_ratio=0.0,
-                                           dataset_name=f"r21_eval_{seed}", **{**cmd, "seed": seed + 1})
-                ).as_test_only()
-            print(f"R21 | seed={seed} data ready [{time.time() - ts:.0f}s]", flush=True)
-
-            noise_tests = {(0.0, 0.0): ds}
-            for phi in PHIS:
-                for sigma in SIGMAS:
-                    # Every call redraws the same realisation of the noise.
-                    noise_tests[(sigma, phi)] = observation.OBSERVATIONS["ar1"](
-                        ds, sigma=sigma, phi=phi, rng=np.random.default_rng(seed))
-
-            for arm, (alias, train) in ARMS.items():
-                pred = registry.build_model(alias)
-                if train is not None:
-                    TrainModelUseCase(pred).execute(TrainModelCommand(
-                        dataset=train_sets[train], n_epochs=epochs, batch_size=32,
-                        learning_rate=1e-3, regression_loss="huber", verbose=False, seed=seed))
-                rows = []
-                for (sigma, phi), tds in noise_tests.items():
-                    m = BacktestUseCase(pred).execute(BacktestCommand(dataset=tds, horizon=1.0))
-                    rows.append(dict(test="noise", sigma=sigma, phi=phi, s="", tau="", m=m))
-                for (s, tau), tds in gamma_tests.items():
-                    m = BacktestUseCase(pred).execute(BacktestCommand(dataset=tds, horizon=1.0))
-                    rows.append(dict(test="gamma", sigma="", phi="", s=s, tau=tau, m=m))
-                for r in rows:
-                    m = r.pop("m")
-                    w.writerow({"seed": seed, "arm": arm, **r, "r2": m.r2, "mae": m.mae,
-                                "auroc": m.risk_auroc, "n_samples": m.n_samples})
-                    print(f"R21 | seed={seed} {arm:<17} {r['test']} sigma={r['sigma']} "
-                          f"phi={r['phi']} s={r['s']} tau={r['tau']} R2={m.r2:.3f}", flush=True)
-                f.flush()
-            print(f"R21 | seed={seed} done [{time.time() - ts:.0f}s]", flush=True)
+    args = common.parse_args(__doc__)
+    n_per, n_eval, epochs = (30, 20, 5) if args.fast else (100, 100, 100)
+    common.run_arms(
+        "R21", arms(n_per, n_eval, epochs), args,
+        common.results_path("r21_stochastic_gamma_ar1", args), COLUMNS)
 
 
 if __name__ == "__main__":
