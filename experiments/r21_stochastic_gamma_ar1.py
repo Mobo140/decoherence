@@ -66,9 +66,7 @@ from src.application.generate_dataset import GenerateDatasetCommand, GenerateDat
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.data import observation
 from src.data.scenarios import build_configs, trajectory_store
-from src.models.lstm import LSTMPredictor
-from src.models.physics_only import PhysicsOnlyPredictor
-from src.models.transformer import TransformerPredictor
+from src.models import registry
 from src.simulation.simulator import QuTipSimulator
 from src.simulation.variants import StochasticGammaSimulator
 
@@ -78,15 +76,15 @@ SIGMAS = [0.02, 0.05]
 PHIS = [0.0, 0.5, 0.9]
 GAMMA_SETTINGS = [(0.0, 0.5), (0.3, 0.5), (0.6, 0.5), (0.3, 2.0), (0.6, 2.0)]
 
-# name -> (builder, training set: "clean" | "aug" | "sto" | None)
+# arm -> (model alias, training set: "clean" | "aug" | "sto" | None)
 ARMS = {
-    "physics_only": (lambda: PhysicsOnlyPredictor(t_max=20.0), None),
-    "lstm_only": (lambda: LSTMPredictor(use_physics_prior=False), "clean"),
-    "physics_lstm": (lambda: LSTMPredictor(use_physics_prior=True), "clean"),
-    "physics_lstm_aug": (lambda: LSTMPredictor(use_physics_prior=True), "aug"),
-    "transformer": (lambda: TransformerPredictor(), "clean"),
-    "physics_lstm_sto": (lambda: LSTMPredictor(use_physics_prior=True), "sto"),
-    "transformer_sto": (lambda: TransformerPredictor(), "sto"),
+    "physics_only": ("physics_only", None),
+    "lstm_only": ("lstm_only", "clean"),
+    "physics_lstm": ("physics_lstm", "clean"),
+    "physics_lstm_aug": ("physics_lstm", "aug"),
+    "transformer": ("transformer", "clean"),
+    "physics_lstm_sto": ("physics_lstm", "sto"),
+    "transformer_sto": ("transformer", "sto"),
 }
 
 
@@ -137,8 +135,8 @@ def main() -> None:
                     noise_tests[(sigma, phi)] = observation.OBSERVATIONS["ar1"](
                         ds, sigma=sigma, phi=phi, rng=np.random.default_rng(seed))
 
-            for arm, (build, train) in ARMS.items():
-                pred = build()
+            for arm, (alias, train) in ARMS.items():
+                pred = registry.build_model(alias)
                 if train is not None:
                     TrainModelUseCase(pred).execute(TrainModelCommand(
                         dataset=train_sets[train], n_epochs=epochs, batch_size=32,

@@ -42,8 +42,9 @@ from src.application.generate_dataset import GenerateDatasetCommand, GenerateDat
 from src.application.run_cross_system import CrossSystemCommand, CrossSystemUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.data.scenarios import build_configs, trajectory_store
+from src.domain import ports
 from src.domain.value_objects import DissipatorType, InteractionType, PredictorVariant
-from src.models.lstm import LSTMPredictor
+from src.models import registry
 from src.persistence.stores import HamiltonianModelRegistry
 from src.simulation.simulator import QuTipSimulator
 
@@ -61,12 +62,14 @@ def _save_csv(rows: list, path: Path, fieldnames: list) -> None:
     print(f"Saved → {path}")
 
 
-def _make_tfim_lstm(hidden: int, tau: float, int_code: float) -> LSTMPredictor:
-    return LSTMPredictor(
+def _make_tfim_lstm(
+    hidden: int, tau: float, int_code: float
+) -> ports.IPredictor:
+    return registry.build_model(
+        "physics_lstm",
         hidden_size=hidden,
         num_layers=2,
         dropout=0.3,
-        use_physics_prior=True,
         adaptive_prior_r2_threshold=tau,
         risk_pos_weight=0.0,
         augment_sigma=0.02,

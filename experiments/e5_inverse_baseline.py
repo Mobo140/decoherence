@@ -44,7 +44,7 @@ from src.application.generate_dataset import GenerateDatasetCommand, GenerateDat
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.data.scenarios import build_configs, trajectory_store
 from src.domain.value_objects import AblationResult, ExperimentSpec, NoiseConfig, PredictorVariant
-from src.models.lstm import LSTMPredictor
+from src.models import registry
 from src.simulation.simulator import QuTipSimulator
 
 
@@ -235,7 +235,7 @@ def main(*, seed: int = 42, out_path=None) -> None:
         ))
 
         # --- Direct predictor (physics+LSTM) ---
-        direct = LSTMPredictor(use_physics_prior=True)
+        direct = registry.build_model("physics_lstm")
         TrainModelUseCase(direct).execute(TrainModelCommand(
             dataset=dataset,
             n_epochs=100,

@@ -143,8 +143,8 @@ class CrossSystemUseCase:
 
     def _build_predictor(self):
         """Factory for the predictor used in training. Override to customise."""
-        from src.models.lstm import LSTMPredictor
-        return LSTMPredictor(use_physics_prior=True)
+        from src.models import registry
+        return registry.build_model("physics_lstm")
 
 
 def _variant_of(predictor) -> PredictorVariant:

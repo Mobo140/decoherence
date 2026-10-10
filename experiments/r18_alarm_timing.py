@@ -45,21 +45,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.data.scenarios import build_configs, trajectory_store
-from src.models.lstm import LSTMPredictor
-from src.models.physics_only import PhysicsOnlyPredictor
-from src.models.stretched_exp import StretchedExpPredictor
-from src.models.transformer import TransformerPredictor
+from src.models import registry
 from src.simulation.simulator import QuTipSimulator
 
 RES = Path(__file__).parent / "results"
 BINS = [(0.0, 0.4), (0.4, 0.5), (0.5, 0.6), (0.6, 0.7), (0.7, 0.8), (0.8, 0.9), (0.9, 1.0)]
-MODELS = {
-    "physics_only": lambda: PhysicsOnlyPredictor(t_max=20.0),
-    "stretched_exp": lambda: StretchedExpPredictor(t_max=20.0, dt=0.1),
-    "lstm_only": lambda: LSTMPredictor(use_physics_prior=False),
-    "physics_lstm": lambda: LSTMPredictor(use_physics_prior=True),
-    "transformer": lambda: TransformerPredictor(),
-}
+MODELS = ("physics_only", "stretched_exp", "lstm_only", "physics_lstm",
+          "transformer")
 
 
 def _predict(pred, ds, idx):
@@ -107,8 +99,8 @@ def main() -> None:
             tobs = ev.t_obs[idx].astype(float)
             _, traj = np.unique(T2, return_inverse=True)
             prog = tobs / T2
-            for name, build in MODELS.items():
-                pred = build()
+            for name in MODELS:
+                pred = registry.build_model(name)
                 if name not in ("physics_only", "stretched_exp"):
                     TrainModelUseCase(pred).execute(TrainModelCommand(
                         dataset=train_ds, n_epochs=epochs, batch_size=32, learning_rate=1e-3,

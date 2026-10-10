@@ -56,31 +56,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src import reproducibility
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
-from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.data import features
 from src.data.scenarios import build_configs, fixed_coupling_configs
-from src.models.lstm import LSTMPredictor
-from src.models.transformer import TransformerPredictor
+from src.models import registry
 from src.simulation.simulator import QuTipSimulator
 from src.simulation.variants import CorrelatorSimulator
+from src.training import trainer
 
 RESULTS_DIR = Path(__file__).parent / "results"
 J_VALUES = [0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0]
 
 
-def _transformer():
-    return TransformerPredictor(d_model=128, n_heads=4, n_layers=3, dim_ff=512, dropout=0.1)
-
-
-def _train(pred, ds, epochs, seed):
-    TrainModelUseCase(pred).execute(TrainModelCommand(
-        dataset=ds, n_epochs=epochs, batch_size=64, learning_rate=5e-4,
-        regression_loss="huber", verbose=False, seed=seed))
-    return pred
-
-
-MODELS = {"transformer": _transformer,
-          "lstm_only": lambda: LSTMPredictor(use_physics_prior=False)}
+# CSV label -> model alias
+MODELS = {"transformer": "transformer_large", "lstm_only": "lstm_only"}
+BATCH_SIZE = 64
+LEARNING_RATE = 5e-4
 
 
 def part_a(seed, n_per, n_eval, epochs, w):
@@ -100,8 +90,10 @@ def part_a(seed, n_per, n_eval, epochs, w):
         for feats, (tr, ev) in {"base": (features.select(full, "base"),
                                          features.select(full_ev, "base")),
                                 "corr": (full, full_ev)}.items():
-            for model, build in MODELS.items():
-                pred = _train(build(), tr, epochs, seed)
+            for model, alias in MODELS.items():
+                pred = trainer.train(
+                    registry.build_model(alias), tr, epochs=epochs,
+                    batch_size=BATCH_SIZE, lr=LEARNING_RATE, seed=seed)
                 for split, ds in (("own", tr), ("independent", ev)):
                     m = BacktestUseCase(pred).execute(BacktestCommand(dataset=ds, horizon=1.0))
                     w.writerow({"part": "a", "seed": seed, "scenario": sc, "J": "",
@@ -123,7 +115,9 @@ def part_b(seed, n_per_J, epochs, w):
             horizon=1.0, samples_per_trajectory=5, seed=seed,
             dataset_name=f"r23b_{seed}_{J}"))
         for feats, ds in (("base", features.select(full, "base")), ("corr", full)):
-            pred = _train(_transformer(), ds, epochs, seed)
+            pred = trainer.train(
+                registry.build_model("transformer_large"), ds, epochs=epochs,
+                batch_size=BATCH_SIZE, lr=LEARNING_RATE, seed=seed)
             m = BacktestUseCase(pred).execute(BacktestCommand(dataset=ds, horizon=1.0))
             w.writerow({"part": "b", "seed": seed, "scenario": "E", "J": J,
                         "model": "transformer", "features": feats, "test": "own",

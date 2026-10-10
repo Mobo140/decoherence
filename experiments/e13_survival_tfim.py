@@ -43,18 +43,18 @@ from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.data.scenarios import build_configs, trajectory_store
+from src.domain import ports
 from src.domain.value_objects import PredictorVariant
-from src.models.lstm import LSTMPredictor
+from src.models import registry
 from src.simulation.simulator import QuTipSimulator
 
 
 RESULTS_DIR = Path(__file__).parent / "results"
 
 
-def _lstm() -> LSTMPredictor:
-    return LSTMPredictor(
-        hidden_size=128, num_layers=2, dropout=0.3,
-        use_physics_prior=True,
+def _lstm() -> ports.IPredictor:
+    return registry.build_model(
+        "physics_lstm", hidden_size=128, num_layers=2, dropout=0.3,
         adaptive_prior_r2_threshold=0.0,
         risk_pos_weight=0.0, augment_sigma=0.02,
         inference_interaction_code=3.0,

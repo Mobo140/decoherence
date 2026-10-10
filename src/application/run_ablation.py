@@ -135,24 +135,21 @@ class AblationStudyUseCase:
     # ------------------------------------------------------------------
 
     def _build_predictor(self, variant: PredictorVariant, command: AblationCommand) -> IPredictor:
-        from src.models.lstm import LSTMPredictor
-        from src.models.physics_only import PhysicsOnlyPredictor
-        from src.models.stretched_exp import StretchedExpPredictor
-        from src.models.transformer import TransformerPredictor
+        from src.models import registry
 
         if variant == PredictorVariant.PHYSICS_ONLY:
             t_max = max((c.t_max for c in command.configs), default=100.0)
-            return PhysicsOnlyPredictor(t_max=t_max)
+            return registry.build_model("physics_only", t_max=t_max)
         if variant == PredictorVariant.STRETCHED_EXP:
             t_max = max((c.t_max for c in command.configs), default=100.0)
             dt = command.configs[0].dt if command.configs else 0.1
-            return StretchedExpPredictor(t_max=t_max, dt=dt)
+            return registry.build_model("stretched_exp", t_max=t_max, dt=dt)
         if variant == PredictorVariant.LSTM_ONLY:
             # use_physics_prior=False zeroes the physics estimate and slope,
             # so the network sees only the raw observation window.
-            return LSTMPredictor(use_physics_prior=False)
+            return registry.build_model("lstm_only")
         if variant == PredictorVariant.PHYSICS_LSTM:
-            return LSTMPredictor(use_physics_prior=True)
+            return registry.build_model("physics_lstm")
         if variant == PredictorVariant.TRANSFORMER:
-            return TransformerPredictor()
+            return registry.build_model("transformer")
         raise ValueError(f"Unknown variant: {variant}")

@@ -61,10 +61,10 @@ def _save_csv(rows: list, path: Path, fieldnames: list) -> None:
 
 def _make_context_predictor(interaction_code: float = 0.5, dissipator_code: float = 0.0):
     """Build the context-aware physics_lstm."""
-    from src.models.lstm import LSTMPredictor
-    return LSTMPredictor(
+    from src.models import registry
+    return registry.build_model(
+        "physics_lstm",
         hidden_size=128, num_layers=2, dropout=0.3,
-        use_physics_prior=True,
         adaptive_prior_r2_threshold=0.5,
         risk_pos_weight=0.0, augment_sigma=0.02,
         inference_interaction_code=interaction_code,
@@ -121,7 +121,7 @@ def run_e9a(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
 
 def run_e9b(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
     """Ablation: compare physics_lstm with and without context codes."""
-    from src.models.lstm import LSTMPredictor
+    from src.models import registry
 
     all_rows = []
     for scenario_label, int_code in [("D", 2.0), ("E", 3.0)]:
@@ -148,14 +148,11 @@ def run_e9b(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
 
         class E9Ablation(AblationStudyUseCase):
             def _build_predictor(self, variant, command):
-                from src.models.transformer import TransformerPredictor
                 if variant == PredictorVariant.TRANSFORMER:
-                    return TransformerPredictor(
-                        d_model=128, n_heads=4, n_layers=3, dim_ff=512, dropout=0.1,
-                    )
-                return LSTMPredictor(
+                    return registry.build_model("transformer_large")
+                return registry.build_model(
+                    "physics_lstm",
                     hidden_size=128, num_layers=2, dropout=0.3,
-                    use_physics_prior=True,
                     adaptive_prior_r2_threshold=_tau,
                     risk_pos_weight=0.0, augment_sigma=0.02,
                     inference_interaction_code=_ic,

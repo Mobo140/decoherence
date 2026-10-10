@@ -52,32 +52,36 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from experiments.r23_two_body_correlators import MODELS, _train
+from experiments.r23_two_body_correlators import BATCH_SIZE, LEARNING_RATE, MODELS
 from src import reproducibility
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.data import features
 from src.data.scenarios import build_configs, fixed_coupling_configs
 from src.domain.value_objects import DecoherenceCriterion, InteractionType
+from src.models import registry
 from src.physics.lindblad_systems import TwoQubitSystem
 from src.physics.measures import wootters_lambda
 from src.physics.simulate_qutip import simulate_two_qubit
 from src.simulation import simulator
 from src.simulation.variants import EntanglementSimulator
+from src.training import trainer
 
 RESULTS_DIR = Path(__file__).parent / "results"
 ESD = DecoherenceCriterion.ENTANGLEMENT_DEATH
 
 
-def _esd(groups):
+def esd_configs(groups):
+    """Scenario groups D and E with entanglement death as the criterion."""
     return {sc: [dataclasses.replace(c, decoherence_criterion=ESD) for c in groups[sc]]
             for sc in ("D", "E")}
 
 
 def part_a(seed, n_per, n_eval, epochs, w, f):
     gen = GenerateDatasetUseCase(EntanglementSimulator(), store=None)
-    groups = _esd(build_configs(n_per_scenario=n_per, seed=seed))
-    eval_groups = _esd(build_configs(n_per_scenario=n_eval, seed=seed + 1000))
+    groups = esd_configs(build_configs(n_per_scenario=n_per, seed=seed))
+    eval_groups = esd_configs(
+        build_configs(n_per_scenario=n_eval, seed=seed + 1000))
     for sc in ("D", "E"):
         ts = time.time()
         full = gen.execute(GenerateDatasetCommand(
@@ -93,8 +97,10 @@ def part_a(seed, n_per, n_eval, epochs, w, f):
         for feats in ("base", "corr", "corr_conc"):
             tr = features.select(full, feats)
             ev = features.select(full_ev, feats)
-            for model, build in MODELS.items():
-                pred = _train(build(), tr, epochs, seed)
+            for model, alias in MODELS.items():
+                pred = trainer.train(
+                    registry.build_model(alias), tr, epochs=epochs,
+                    batch_size=BATCH_SIZE, lr=LEARNING_RATE, seed=seed)
                 for split, ds in (("own", tr), ("independent", ev)):
                     m = BacktestUseCase(pred).execute(BacktestCommand(dataset=ds, horizon=1.0))
                     w.writerow({"seed": seed, "scenario": sc, "model": model,

@@ -35,22 +35,11 @@ from src.application.generate_dataset import GenerateDatasetCommand, GenerateDat
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.data import observation
 from src.data.scenarios import build_configs, trajectory_store
-from src.models.lstm import LSTMPredictor
-from src.models.physics_only import PhysicsOnlyPredictor
-from src.models.transformer import TransformerPredictor
+from src.models import registry
 from src.simulation.simulator import QuTipSimulator
 
 RESULTS = Path(__file__).parent / "results" / "r15_noise_variants.csv"
 SIGMAS = [0.0, 0.01, 0.02, 0.05, 0.10]
-
-
-def _build(name):
-    return {
-        "physics_only": lambda: PhysicsOnlyPredictor(t_max=20.0),
-        "lstm_only": lambda: LSTMPredictor(use_physics_prior=False),
-        "physics_lstm": lambda: LSTMPredictor(use_physics_prior=True),
-        "transformer": lambda: TransformerPredictor(),
-    }[name]()
 
 
 def main() -> None:
@@ -69,7 +58,7 @@ def main() -> None:
                 configs=groups["B"] + groups["C"], window_length=50, horizon=1.0,
                 samples_per_trajectory=5, seed=seed, dataset_name=f"r15_{seed}"))
             for name in ("physics_only", "lstm_only", "physics_lstm", "transformer"):
-                pred = _build(name)
+                pred = registry.build_model(name)
                 if name != "physics_only":
                     TrainModelUseCase(pred).execute(TrainModelCommand(
                         dataset=ds, n_epochs=epochs, batch_size=32, learning_rate=1e-3,

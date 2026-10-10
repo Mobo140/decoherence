@@ -36,31 +36,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.data.scenarios import build_configs, trajectory_store
-from src.models.lstm import LSTMPredictor
-from src.models.physics_only import PhysicsOnlyPredictor
-from src.models.stretched_exp import StretchedExpPredictor
-from src.models.transformer import TransformerPredictor
+from src.models import registry
 from src.simulation.simulator import QuTipSimulator
 
 RESULTS = Path(__file__).parent / "results" / "r13_independent_test.csv"
 VARIANTS = ["physics_only", "stretched_exp", "lstm_only", "physics_feature",
             "physics_lstm", "transformer"]
-
-
-def _build(name: str):
-    if name == "physics_only":
-        return PhysicsOnlyPredictor(t_max=20.0)
-    if name == "stretched_exp":
-        return StretchedExpPredictor(t_max=20.0, dt=0.1)
-    if name == "lstm_only":
-        return LSTMPredictor(use_physics_prior=False)
-    if name == "physics_feature":
-        return LSTMPredictor(use_physics_prior=True, residual_output=False)
-    if name == "physics_lstm":
-        return LSTMPredictor(use_physics_prior=True)
-    if name == "transformer":
-        return TransformerPredictor()
-    raise ValueError(name)
 
 
 def _r2(y, p):
@@ -131,7 +112,7 @@ def main() -> None:
                 boots = [np.concatenate([members[k] for k in rng.integers(0, n_traj, n_traj)])
                          for _ in range(a.n_boot)]
                 for name in VARIANTS:
-                    pred = _build(name)
+                    pred = registry.build_model(name)
                     if name not in ("physics_only", "stretched_exp"):
                         TrainModelUseCase(pred).execute(TrainModelCommand(
                             dataset=train_ds, n_epochs=epochs, batch_size=32,

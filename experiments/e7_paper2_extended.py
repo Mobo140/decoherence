@@ -80,11 +80,9 @@ def run_e7a(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
 
     class TransformerCrossSystem(CrossSystemUseCase):
         def _build_predictor(self):
-            from src.models.transformer import TransformerPredictor
+            from src.models import registry
             # Larger Transformer: d_model=128, 4 heads, 3 layers, ff=512
-            return TransformerPredictor(
-                d_model=128, n_heads=4, n_layers=3, dim_ff=512, dropout=0.1,
-            )
+            return registry.build_model("transformer_large")
 
     cmd = CrossSystemCommand(
         train_configs=groups["D"] + groups["E"],
@@ -123,7 +121,7 @@ def run_e7a(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
 
 def run_e7b(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
     """Sweep τ for physics_lstm on D and E to find optimal threshold."""
-    from src.models.lstm import LSTMPredictor
+    from src.models import registry
 
     thresholds = [0.0, 0.3, 0.5, 0.7, 0.9]
     scenarios = ["D", "E"]
@@ -143,9 +141,8 @@ def run_e7b(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
 
         for tau in thresholds:
             print(f"\n  τ = {tau:.1f}")
-            predictor = LSTMPredictor(
-                hidden_size=128, num_layers=2, dropout=0.3,
-                use_physics_prior=True,
+            predictor = registry.build_model(
+                "physics_lstm", hidden_size=128, num_layers=2, dropout=0.3,
                 adaptive_prior_r2_threshold=tau,
             )
             TrainModelUseCase(predictor).execute(TrainModelCommand(
@@ -201,7 +198,7 @@ def run_e7c(simulator, n_per_J: int, n_epochs: int, verbose: bool = True,
     ``interaction=InteractionType.XXZ`` to run the same sweep on the
     Heisenberg model.
     """
-    from src.models.transformer import TransformerPredictor
+    from src.models import registry
 
     if J_values is None:
         J_values = [0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0]
@@ -229,9 +226,7 @@ def run_e7c(simulator, n_per_J: int, n_epochs: int, verbose: bool = True,
             print(f"  No test samples — skipping J={J}")
             continue
 
-        predictor = TransformerPredictor(
-            d_model=128, n_heads=4, n_layers=3, dim_ff=512, dropout=0.1,
-        )
+        predictor = registry.build_model("transformer_large")
         TrainModelUseCase(predictor).execute(TrainModelCommand(
             dataset=dataset,
             n_epochs=n_epochs,

@@ -102,28 +102,24 @@ def run_e8a(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
 
         class E8Ablation(AblationStudyUseCase):
             def _build_predictor(self, variant, command):
-                from src.models.lstm import LSTMPredictor
-                from src.models.physics_only import PhysicsOnlyPredictor
-                from src.models.transformer import TransformerPredictor
+                from src.models import registry
                 if variant == PredictorVariant.PHYSICS_ONLY:
-                    return PhysicsOnlyPredictor(t_max=max(c.t_max for c in command.configs))
+                    return registry.build_model(
+                        "physics_only",
+                        t_max=max(c.t_max for c in command.configs))
                 if variant == PredictorVariant.LSTM_ONLY:
-                    return LSTMPredictor(
-                        hidden_size=128, num_layers=2, dropout=0.3,
-                        use_physics_prior=False,
-                        risk_pos_weight=0.0, augment_sigma=0.02,
+                    return registry.build_model(
+                        "lstm_only", hidden_size=128, num_layers=2,
+                        dropout=0.3, risk_pos_weight=0.0, augment_sigma=0.02,
                     )
                 if variant == PredictorVariant.PHYSICS_LSTM:
-                    return LSTMPredictor(
-                        hidden_size=128, num_layers=2, dropout=0.3,
-                        use_physics_prior=True,
-                        adaptive_prior_r2_threshold=_tau,
+                    return registry.build_model(
+                        "physics_lstm", hidden_size=128, num_layers=2,
+                        dropout=0.3, adaptive_prior_r2_threshold=_tau,
                         risk_pos_weight=0.0, augment_sigma=0.02,
                     )
                 if variant == PredictorVariant.TRANSFORMER:
-                    return TransformerPredictor(
-                        d_model=128, n_heads=4, n_layers=3, dim_ff=512, dropout=0.1,
-                    )
+                    return registry.build_model("transformer_large")
                 raise ValueError(variant)
 
         results = E8Ablation(simulator, store=trajectory_store()).execute(cmd)
@@ -151,7 +147,7 @@ def run_e8a(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
 
 def run_e8b(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
     """Noise robustness: improved physics_lstm on D+E mixture."""
-    from src.models.lstm import LSTMPredictor
+    from src.models import registry
 
     configs = groups["D"] + groups["E"]
     cmd = NoiseSweepCommand(
@@ -171,10 +167,10 @@ def run_e8b(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
 
     class E8NoiseSweep(NoiseSweepUseCase):
         def _build_predictor(self):
-            return LSTMPredictor(
-                hidden_size=128, num_layers=2, dropout=0.3,
-                use_physics_prior=True,
-                adaptive_prior_r2_threshold=0.5,  # compromise between D(0.5) and E(0.0)
+            return registry.build_model(
+                "physics_lstm", hidden_size=128, num_layers=2, dropout=0.3,
+                # Compromise between D (0.5) and E (0.0).
+                adaptive_prior_r2_threshold=0.5,
                 risk_pos_weight=0.0, augment_sigma=0.02,
             )
 
@@ -203,7 +199,7 @@ def run_e8c(simulator, groups, n_epochs: int, verbose: bool = True,
     Defaults reproduce the published run; see _noise_sweep in
     e6_2qubit_improved.py for why the keyword-only arguments exist.
     """
-    from src.models.lstm import LSTMPredictor
+    from src.models import registry
 
     cmd = CrossSystemCommand(
         train_configs=groups["D"] + groups["E"],
@@ -222,9 +218,8 @@ def run_e8c(simulator, groups, n_epochs: int, verbose: bool = True,
 
     class E8CrossSystem(CrossSystemUseCase):
         def _build_predictor(self):
-            return LSTMPredictor(
-                hidden_size=128, num_layers=2, dropout=0.3,
-                use_physics_prior=True,
+            return registry.build_model(
+                "physics_lstm", hidden_size=128, num_layers=2, dropout=0.3,
                 adaptive_prior_r2_threshold=0.5,
                 risk_pos_weight=0.0, augment_sigma=0.02,
             )

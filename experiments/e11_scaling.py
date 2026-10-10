@@ -107,7 +107,7 @@ def run_e11a(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True,
     """Defaults reproduce the published E11a run; the keyword-only arguments
     exist so R3 can replicate it across seeds and window lengths without
     duplicating the configuration (see experiments/r3_multiseed_scaling.py)."""
-    from src.models.transformer import TransformerPredictor
+    from src.models import registry
 
     WINDOW  = window
     MIN_GAP = 10
@@ -123,9 +123,7 @@ def run_e11a(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True,
     ))
     print(f"  Train samples: {len(train_ds.train_idx)}  Val: {len(train_ds.val_idx)}")
 
-    predictor = TransformerPredictor(
-        d_model=128, n_heads=4, n_layers=3, dim_ff=512, dropout=0.1,
-    )
+    predictor = registry.build_model("transformer_large")
     TrainModelUseCase(predictor).execute(TrainModelCommand(
         dataset=train_ds, n_epochs=n_epochs,
         batch_size=64, learning_rate=5e-4,
@@ -158,7 +156,7 @@ def run_e11b(simulator, groups_1000, n_epochs: int, verbose: bool = True,
     """Defaults reproduce the published E11b run; see run_e11a for why the
     keyword-only arguments exist. Training-set size is chosen by the caller
     through ``groups_1000``, which is what R3 varies."""
-    from src.models.lstm import LSTMPredictor
+    from src.models import registry
 
     WINDOW  = 20
     MIN_GAP = 15
@@ -174,9 +172,10 @@ def run_e11b(simulator, groups_1000, n_epochs: int, verbose: bool = True,
     ))
     print(f"  Train samples: {len(train_ds.train_idx)}  Val: {len(train_ds.val_idx)}")
 
-    predictor = LSTMPredictor(
+    predictor = registry.build_model(
+        "physics_lstm",
         hidden_size=128, num_layers=2, dropout=0.3,
-        use_physics_prior=True, adaptive_prior_r2_threshold=0.5,
+        adaptive_prior_r2_threshold=0.5,
         risk_pos_weight=0.0, augment_sigma=0.02,
         inference_interaction_code=2.0,   # overridden per scenario at eval
         inference_dissipator_code=0.0,

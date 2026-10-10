@@ -60,23 +60,22 @@ class ImprovedAblation(AblationStudyUseCase):
     """
 
     def _build_predictor(self, variant, command):
-        from src.models.lstm import LSTMPredictor
-        from src.models.physics_only import PhysicsOnlyPredictor
-        from src.models.transformer import TransformerPredictor
+        from src.models import registry
         if variant == PredictorVariant.PHYSICS_ONLY:
-            return PhysicsOnlyPredictor(t_max=max(c.t_max for c in command.configs))
+            return registry.build_model(
+                "physics_only", t_max=max(c.t_max for c in command.configs))
         if variant == PredictorVariant.LSTM_ONLY:
-            return LSTMPredictor(
-                hidden_size=128, num_layers=2, dropout=0.3,
-                use_physics_prior=False, adaptive_prior_r2_threshold=0.0,
+            return registry.build_model(
+                "lstm_only", hidden_size=128, num_layers=2, dropout=0.3,
+                adaptive_prior_r2_threshold=0.0,
             )
         if variant == PredictorVariant.PHYSICS_LSTM:
-            return LSTMPredictor(
-                hidden_size=128, num_layers=2, dropout=0.3,
-                use_physics_prior=True, adaptive_prior_r2_threshold=0.7,
+            return registry.build_model(
+                "physics_lstm", hidden_size=128, num_layers=2, dropout=0.3,
+                adaptive_prior_r2_threshold=0.7,
             )
         if variant == PredictorVariant.TRANSFORMER:
-            return TransformerPredictor()
+            return registry.build_model("transformer")
         raise ValueError(variant)
 
 

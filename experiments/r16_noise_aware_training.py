@@ -52,18 +52,18 @@ from src.application.generate_dataset import GenerateDatasetCommand, GenerateDat
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.data import observation
 from src.data.scenarios import build_configs, trajectory_store
-from src.models.lstm import LSTMPredictor
-from src.models.transformer import TransformerPredictor
+from src.models import registry
 from src.simulation.simulator import QuTipSimulator
 
 RESULTS = Path(__file__).parent / "results" / "r16_noise_aware_training.csv"
 SIGMAS = [0.0, 0.01, 0.02, 0.05, 0.10]
+# arm -> (model alias, trained on the noise-augmented set)
 ARMS = {
-    "physics_lstm": (lambda: LSTMPredictor(use_physics_prior=True), False),
-    "physics_lstm_aug": (lambda: LSTMPredictor(use_physics_prior=True), True),
-    "lstm_only_aug": (lambda: LSTMPredictor(use_physics_prior=False), True),
-    "transformer": (lambda: TransformerPredictor(), False),
-    "transformer_aug": (lambda: TransformerPredictor(), True),
+    "physics_lstm": ("physics_lstm", False),
+    "physics_lstm_aug": ("physics_lstm", True),
+    "lstm_only_aug": ("lstm_only", True),
+    "transformer": ("transformer", False),
+    "transformer_aug": ("transformer", True),
 }
 
 
@@ -84,8 +84,8 @@ def main() -> None:
                 configs=groups["B"] + groups["C"], window_length=50, horizon=1.0,
                 samples_per_trajectory=5, seed=seed, dataset_name=f"r16_{seed}"))
             ds_aug = observation.noise_augmented(ds, a.copies, np.random.default_rng(seed + 7))
-            for arm, (build, aug) in ARMS.items():
-                pred = build()
+            for arm, (alias, aug) in ARMS.items():
+                pred = registry.build_model(alias)
                 TrainModelUseCase(pred).execute(TrainModelCommand(
                     dataset=ds_aug if aug else ds, n_epochs=epochs, batch_size=32,
                     learning_rate=1e-3, regression_loss="huber", verbose=False, seed=seed))

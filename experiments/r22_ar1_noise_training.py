@@ -54,8 +54,7 @@ from src.application.generate_dataset import GenerateDatasetCommand, GenerateDat
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.data import observation
 from src.data.scenarios import build_configs, trajectory_store
-from src.models.lstm import LSTMPredictor
-from src.models.transformer import TransformerPredictor
+from src.models import registry
 from src.simulation.simulator import QuTipSimulator
 
 RESULTS_DIR = Path(__file__).parent / "results"
@@ -63,13 +62,13 @@ SIGMAS = [0.0, 0.01, 0.02, 0.05, 0.10]
 PHIS = [0.0, 0.5, 0.9]
 PHI_MAX = 0.95
 
-# name -> (builder, training set)
+# arm -> (model alias, training set)
 ARMS = {
-    "physics_lstm_white": (lambda: LSTMPredictor(use_physics_prior=True), "white"),
-    "physics_lstm_ar1": (lambda: LSTMPredictor(use_physics_prior=True), "ar1"),
-    "lstm_only_ar1": (lambda: LSTMPredictor(use_physics_prior=False), "ar1"),
-    "transformer": (lambda: TransformerPredictor(), "clean"),
-    "transformer_ar1": (lambda: TransformerPredictor(), "ar1"),
+    "physics_lstm_white": ("physics_lstm", "white"),
+    "physics_lstm_ar1": ("physics_lstm", "ar1"),
+    "lstm_only_ar1": ("lstm_only", "ar1"),
+    "transformer": ("transformer", "clean"),
+    "transformer_ar1": ("transformer", "ar1"),
 }
 
 
@@ -110,8 +109,8 @@ def main() -> None:
                     tests[(sigma, phi)] = observation.OBSERVATIONS["ar1"](
                         ds, sigma=sigma, phi=phi, rng=np.random.default_rng(seed))
 
-            for arm, (build, train) in ARMS.items():
-                pred = build()
+            for arm, (alias, train) in ARMS.items():
+                pred = registry.build_model(alias)
                 TrainModelUseCase(pred).execute(TrainModelCommand(
                     dataset=train_sets[train], n_epochs=epochs, batch_size=32,
                     learning_rate=1e-3, regression_loss="huber", verbose=False, seed=seed))

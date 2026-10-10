@@ -38,7 +38,7 @@ from sklearn.metrics import roc_auc_score
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from experiments.r24_entanglement_target import _esd
+from experiments.r24_entanglement_target import esd_configs
 from experiments.r26_esd_occurrence import T_OBS, classifiers, score, simulate, windows
 from src.data import features
 from src.data.scenarios import build_configs
@@ -64,8 +64,9 @@ def boot_ci(y, p, owner, rng):
 
 def run(seed, n_train, n_test, w, f):
     ts = time.time()
-    tr_cfg = _esd(build_configs(n_per_scenario=n_train, seed=seed))["D"]
-    te_cfg = _esd(build_configs(n_per_scenario=n_test, seed=seed + 1000))["D"]
+    tr_cfg = esd_configs(build_configs(n_per_scenario=n_train, seed=seed))["D"]
+    te_cfg = esd_configs(
+        build_configs(n_per_scenario=n_test, seed=seed + 1000))["D"]
     tr, tr_died, tr_perm = simulate(tr_cfg, seed)
     te, te_died, te_perm = simulate(te_cfg, seed + 1)
     print(f"R27 | seed={seed} simulated [{time.time() - ts:.0f}s] died={tr_died.mean():.2f} "

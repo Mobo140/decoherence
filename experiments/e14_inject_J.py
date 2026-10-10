@@ -47,7 +47,8 @@ from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.data.scenarios import build_configs, trajectory_store
-from src.models.lstm import LSTMPredictor
+from src.domain import ports
+from src.models import registry
 from src.simulation.simulator import QuTipSimulator
 
 
@@ -70,10 +71,11 @@ def _save_csv(rows: list, path: Path, fieldnames: list) -> None:
     print(f"Saved → {path}")
 
 
-def _lstm(*, use_J: bool, tau: float, interaction_code: float) -> LSTMPredictor:
-    return LSTMPredictor(
-        hidden_size=128, num_layers=2, dropout=0.3,
-        use_physics_prior=True,
+def _lstm(
+    *, use_J: bool, tau: float, interaction_code: float
+) -> ports.IPredictor:
+    return registry.build_model(
+        "physics_lstm", hidden_size=128, num_layers=2, dropout=0.3,
         adaptive_prior_r2_threshold=tau,
         risk_pos_weight=0.0, augment_sigma=0.02,
         inference_interaction_code=interaction_code,
@@ -124,7 +126,7 @@ def _bin_rows(arm: str, scenario: str, use_J: bool, preds, actuals, js) -> List[
 
 
 def _train(simulator, configs, *, use_J: bool, tau: float, n_epochs: int,
-           verbose: bool, interaction_code: float) -> LSTMPredictor:
+           verbose: bool, interaction_code: float) -> ports.IPredictor:
     ds = GenerateDatasetUseCase(simulator, store=trajectory_store()).execute(GenerateDatasetCommand(
         configs=configs,
         window_length=WINDOW,

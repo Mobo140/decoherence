@@ -25,7 +25,7 @@ from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.data.scenarios import build_configs, trajectory_store
-from src.models.lstm import LSTMPredictor
+from src.models import registry
 from src.simulation.simulator import QuTipSimulator
 
 TAUS = [0.0, 0.3, 0.5, 0.7, 0.9]
@@ -55,9 +55,9 @@ def main() -> None:
                 GenerateDatasetCommand(configs=groups[scen], window_length=20,
                                        horizon=1.0, samples_per_trajectory=5, seed=seed))
             for tau in TAUS:
-                pred = LSTMPredictor(hidden_size=128, num_layers=2, dropout=0.3,
-                                     use_physics_prior=True,
-                                     adaptive_prior_r2_threshold=tau)
+                pred = registry.build_model(
+                    "physics_lstm", hidden_size=128, num_layers=2,
+                    dropout=0.3, adaptive_prior_r2_threshold=tau)
                 TrainModelUseCase(pred).execute(TrainModelCommand(
                     dataset=ds, n_epochs=a.epochs, batch_size=64,
                     seed=seed,

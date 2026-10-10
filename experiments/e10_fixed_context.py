@@ -73,7 +73,7 @@ def _save_csv(rows: list, path: Path, fieldnames: list) -> None:
 
 def run_e10a(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True) -> list:
     """Cross-system physics_lstm with corrected system-type codes."""
-    from src.models.lstm import LSTMPredictor
+    from src.models import registry
 
     print("=== E10a: training physics_lstm on D+E mixture (fixed 4-class codes) ===")
 
@@ -90,9 +90,9 @@ def run_e10a(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True)
         min_window_gap=MIN_GAP,
     ))
 
-    predictor = LSTMPredictor(
+    predictor = registry.build_model(
+        "physics_lstm",
         hidden_size=128, num_layers=2, dropout=0.3,
-        use_physics_prior=True,
         adaptive_prior_r2_threshold=0.5,
         risk_pos_weight=0.0, augment_sigma=0.02,
         inference_interaction_code=2.0,  # XXZ default; overridden per scenario below
@@ -155,7 +155,7 @@ def run_e10a(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True)
 
 def run_e10b(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True) -> list:
     """Cross-system Transformer with E8c config."""
-    from src.models.transformer import TransformerPredictor
+    from src.models import registry
 
     print("=== E10b: training Transformer on D+E mixture (E8c config) ===")
 
@@ -172,9 +172,7 @@ def run_e10b(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True)
         min_window_gap=MIN_GAP,
     ))
 
-    predictor = TransformerPredictor(
-        d_model=128, n_heads=4, n_layers=3, dim_ff=512, dropout=0.1,
-    )
+    predictor = registry.build_model("transformer_large")
     TrainModelUseCase(predictor).execute(TrainModelCommand(
         dataset=train_dataset,
         n_epochs=n_epochs,
