@@ -184,7 +184,7 @@ def test_normalisation_statistics_come_from_training_rows_only():
     ds = _build(n_traj=12)
     predictor = LSTMPredictor(hidden_size=8, num_layers=1, dropout=0.0)
     predictor.train(ds, n_epochs=1, batch_size=8, verbose=False, seed=0)
-    fitted_mean = np.array(predictor._feature_mean, dtype=np.float64).copy()
+    fitted_mean = np.array(predictor.feature_scaler.mean, dtype=np.float64).copy()
 
     # Corrupt only the rows the model must not have looked at.
     poisoned = Dataset(**{**ds.__dict__})
@@ -193,7 +193,7 @@ def test_normalisation_statistics_come_from_training_rows_only():
 
     predictor2 = LSTMPredictor(hidden_size=8, num_layers=1, dropout=0.0)
     predictor2.train(poisoned, n_epochs=1, batch_size=8, verbose=False, seed=0)
-    again = np.array(predictor2._feature_mean, dtype=np.float64)
+    again = np.array(predictor2.feature_scaler.mean, dtype=np.float64)
 
     assert np.allclose(fitted_mean, again), (
         "feature normalisation changed when only test rows changed"

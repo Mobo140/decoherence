@@ -1,74 +1,79 @@
-"""Pure-Transformer decoherence predictor — ablation baseline (E1).
+"""Pure-Transformer decoherence predictor (ablation baseline, E1).
 
-Architecture mirrors the spirit of arXiv 2505.06928 but applied directly
-to the T₂ prediction task (not the γ-reconstruction inverse problem).
-There is NO physics prior here — the Transformer must learn everything from
-data, including the exponential decay structure.
+The architecture follows arXiv 2505.06928 but is applied directly to the
+T2 prediction task, not to the gamma-reconstruction inverse problem. There
+is no physics prior: the Transformer must learn the exponential decay
+structure from data.
 
 Architecture::
-    input  (N, T, F)
-    → linear projection to d_model
-    → positional encoding (sinusoidal, fixed)
-    → TransformerEncoder (n_layers, n_heads, dim_ff, dropout)
-    → CLS-token pooling  (mean over sequence)
-    → (N, d_model)
-    → regression head:  Linear → GELU → Linear → scalar
-    → risk head:        Linear → GELU → Linear → logit (train auxiliary)
 
-  At predict() the risk logit is unused: risk = remaining_to_risk(remaining, horizon).
+    input (N, T, F)
+      -> linear projection to d_model
+      -> sinusoidal positional encoding (fixed)
+      -> TransformerEncoder (n_layers, n_heads, dim_ff, dropout)
+      -> mean pooling over the sequence -> (N, d_model)
+      -> regression head: Linear -> GELU -> Dropout -> Linear -> scalar
+      -> risk head:       Linear -> GELU -> Dropout -> Linear -> logit
 
-Compared to LSTMPredictor:
-  - No OLS physics estimate embedded
-  - No residual correction; raw output is the prediction
-  - Better at capturing long-range patterns in the window
-  - Weaker inductive bias → needs more data / larger window
+At prediction time the risk logit is unused: the risk is
+`remaining_to_risk(remaining, horizon)`.
+
+Compared to `lstm.LSTMPredictor` there is no OLS estimate and no residual
+correction (the raw output is the prediction), long-range patterns in the
+window are easier to capture, and the weaker inductive bias needs more data
+or a larger window.
 """
 from __future__ import annotations
 
-import copy
+import dataclasses
 import io
 import math
-from dataclasses import dataclass, field
-from typing import Optional, Tuple
 
 import numpy as np
 import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader, TensorDataset
+from torch import nn
+from torch.utils import data as torch_data
 
-from src.domain.ports import IPredictor
-from src.domain.value_objects import PredictionResult
-from src.models.physics_prior import remaining_to_risk
+from src.data import dataset as dataset_lib
+from src.domain import ports
+from src.domain import value_objects
+from src.models import physics_prior
+from src.training import loop
+from src.training import losses
+from src.training import standardize
+
+# Early-stopping patience; the Transformer has no configurable value.
+_PATIENCE = 25
 
 
-# ---------------------------------------------------------------------------
-# Positional encoding
-# ---------------------------------------------------------------------------
-
-class _SinusoidalPE(nn.Module):
+class SinusoidalPE(nn.Module):
     """Fixed sinusoidal positional encoding (Vaswani et al. 2017)."""
 
     def __init__(self, d_model: int, max_len: int = 512) -> None:
+        """Precomputes the encoding.
+
+        Args:
+            d_model: Embedding dimension.
+            max_len: Longest supported sequence.
+        """
         super().__init__()
         pe = torch.zeros(max_len, d_model)
         pos = torch.arange(max_len).unsqueeze(1).float()
         div = torch.exp(
-            torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
+            torch.arange(0, d_model, 2).float()
+            * (-math.log(10000.0) / d_model)
         )
         pe[:, 0::2] = torch.sin(pos * div)
         pe[:, 1::2] = torch.cos(pos * div)
         self.register_buffer("pe", pe.unsqueeze(0))  # (1, max_len, d_model)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x + self.pe[:, : x.size(1)]
+        """Adds the encoding to embeddings of shape (N, T, d_model)."""
+        return x + self.pe[:, :x.size(1)]
 
-
-# ---------------------------------------------------------------------------
-# Transformer model
-# ---------------------------------------------------------------------------
 
 class TransformerNet(nn.Module):
-    """Encoder-only Transformer for decoherence time prediction."""
+    """Encoder-only Transformer with a regression and a risk head."""
 
     def __init__(
         self,
@@ -79,10 +84,19 @@ class TransformerNet(nn.Module):
         dim_ff: int = 256,
         dropout: float = 0.1,
     ) -> None:
-        super().__init__()
+        """Builds the network.
 
+        Args:
+            n_features: Input channels per time step.
+            d_model: Embedding dimension.
+            n_heads: Attention heads.
+            n_layers: Encoder layers.
+            dim_ff: Feed-forward hidden dimension.
+            dropout: Dropout rate.
+        """
+        super().__init__()
         self.input_proj = nn.Linear(n_features, d_model)
-        self.pos_enc = _SinusoidalPE(d_model)
+        self.pos_enc = SinusoidalPE(d_model)
 
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=d_model,
@@ -91,7 +105,8 @@ class TransformerNet(nn.Module):
             dropout=dropout,
             batch_first=True,
         )
-        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
+        self.encoder = nn.TransformerEncoder(
+            encoder_layer, num_layers=n_layers)
 
         self.regression_head = nn.Sequential(
             nn.Linear(d_model, 64),
@@ -106,8 +121,17 @@ class TransformerNet(nn.Module):
             nn.Linear(32, 1),
         )
 
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        # x: (N, T, F)
+    def forward(
+        self, x: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Runs the network.
+
+        Args:
+            x: Standardised windows, shape (N, T, n_features).
+
+        Returns:
+            (regression, risk_logit), each of shape (N,).
+        """
         h = self.pos_enc(self.input_proj(x))   # (N, T, d_model)
         h = self.encoder(h)                    # (N, T, d_model)
         pooled = h.mean(dim=1)                 # (N, d_model)
@@ -116,21 +140,22 @@ class TransformerNet(nn.Module):
         return reg, risk_logit
 
 
-# ---------------------------------------------------------------------------
-# IPredictor adapter
-# ---------------------------------------------------------------------------
+@dataclasses.dataclass
+class TransformerPredictor(ports.IPredictor):
+    """Pure Transformer predictor without a physics prior.
 
-@dataclass
-class TransformerPredictor(IPredictor):
-    """Pure Transformer predictor — no physics prior (ablation baseline).
-
-    Hyper-parameters:
-        d_model:   Transformer embedding dimension.
-        n_heads:   Number of attention heads.
-        n_layers:  Number of encoder layers.
-        dim_ff:    Feed-forward hidden dimension.
-        dropout:   Dropout rate.
-        t_max:     Hard upper bound on predicted T₂.
+    Attributes:
+        d_model: Transformer embedding dimension.
+        n_heads: Number of attention heads.
+        n_layers: Number of encoder layers.
+        dim_ff: Feed-forward hidden dimension.
+        dropout: Dropout rate.
+        t_max: Hard upper bound on the predicted T2.
+        net: The trained network, None before training.
+        dt: Time step between window rows (stored in checkpoints only).
+        feature_scaler: Per-channel standardiser of the windows.
+        target_scaler: Standardiser of the remaining time.
+        device: Torch device the network runs on.
     """
 
     d_model: int = 64
@@ -140,84 +165,128 @@ class TransformerPredictor(IPredictor):
     dropout: float = 0.1
     t_max: float = 10.0
 
-    _net: Optional[TransformerNet] = field(default=None, init=False, repr=False)
-    _feature_mean: Optional[np.ndarray] = field(default=None, init=False, repr=False)
-    _feature_std: Optional[np.ndarray] = field(default=None, init=False, repr=False)
-    _target_mean: float = field(default=0.0, init=False, repr=False)
-    _target_std: float = field(default=1.0, init=False, repr=False)
-    _dt: float = field(default=0.1, init=False, repr=False)
-    _device: str = field(default="cpu", init=False, repr=False)
+    net: TransformerNet | None = dataclasses.field(
+        default=None, init=False, repr=False)
+    dt: float = dataclasses.field(default=0.1, init=False, repr=False)
+    feature_scaler: standardize.Standardizer | None = dataclasses.field(
+        default=None, init=False, repr=False)
+    target_scaler: standardize.Standardizer = dataclasses.field(
+        default_factory=standardize.Standardizer, init=False, repr=False)
+    device: str = dataclasses.field(default="cpu", init=False, repr=False)
 
     def __post_init__(self) -> None:
-        self._device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
     @property
     def is_trained(self) -> bool:
-        return self._net is not None
+        return self.net is not None
 
-    def predict(self, window: np.ndarray, t_obs: float, horizon: float) -> PredictionResult:
-        if self._net is None:
+    def predict(
+        self, window: np.ndarray, t_obs: float, horizon: float
+    ) -> value_objects.PredictionResult:
+        """Predicts the decoherence time of one window.
+
+        Args:
+            window: Array of shape (window_length, n_features).
+            t_obs: Absolute time at the end of the window.
+            horizon: Time window for the risk score.
+
+        Returns:
+            The predicted decoherence time and risk score.
+
+        Raises:
+            RuntimeError: If the predictor is not trained.
+        """
+        if self.net is None:
             raise RuntimeError("TransformerPredictor is not trained.")
-        self._net.eval()
+        self.net.eval()
         with torch.no_grad():
-            x = self._norm_window(window)
-            reg_norm, _risk_logit = self._net(x)
-            remaining = float(reg_norm.item()) * self._target_std + self._target_mean
+            x = self._standardise_window(window)
+            reg_norm, _risk_logit = self.net(x)
+            remaining = (float(reg_norm.item()) * self.target_scaler.std
+                         + self.target_scaler.mean)
             remaining = max(0.0, remaining)
             t_decoh_pred = float(np.clip(t_obs + remaining, 0.0, self.t_max))
-            risk = remaining_to_risk(remaining, horizon)
-        return PredictionResult(
+            risk = physics_prior.remaining_to_risk(remaining, horizon)
+        return value_objects.PredictionResult(
             t_decoh_predicted=t_decoh_pred,
             risk_score=risk,
             horizon=horizon,
         )
 
-    def train(self, dataset: object, **kwargs) -> object:
-        from src.application.train_model import TrainModelResult
-        from src.data.dataset import Dataset as DS
-        assert isinstance(dataset, DS)
-        ds: DS = dataset
-        n_epochs   = kwargs.get("n_epochs", 50)
-        batch_size = kwargs.get("batch_size", 32)
-        lr         = kwargs.get("lr", 1e-3)
-        verbose    = kwargs.get("verbose", True)
-        loss_name  = kwargs.get("regression_loss", "huber")
-        seed       = kwargs.get("seed")
-        if seed is not None:
-            # See LSTMPredictor.train: torch's global RNG drives weight init,
-            # dropout and batch shuffling.
-            torch.manual_seed(seed)
-        train_hist, val_hist = self._fit(ds, n_epochs, batch_size, lr, verbose, loss_name)
-        return TrainModelResult(predictor=self, train_loss_history=train_hist, val_loss_history=val_hist)
+    def train(self, dataset: object, **kwargs) -> loop.TrainResult:
+        """Fits the network to the training split of a dataset.
+
+        Args:
+            dataset: A `Dataset`; its train split is fitted and its val
+                split drives early stopping.
+            **kwargs: See `loop.FitOptions` (n_epochs, batch_size, lr,
+                verbose, regression_loss, seed).
+
+        Returns:
+            The predictor and the loss histories.
+
+        Raises:
+            TypeError: If `dataset` is not a `Dataset`.
+        """
+        if not isinstance(dataset, dataset_lib.Dataset):
+            raise TypeError("TransformerPredictor.train needs a Dataset.")
+        options = loop.FitOptions.from_kwargs(kwargs)
+        if options.seed is not None:
+            # See LSTMPredictor.train: torch's global RNG drives weight
+            # init, dropout and batch shuffling.
+            torch.manual_seed(options.seed)
+        train_hist, val_hist = self._fit(dataset, options)
+        return loop.TrainResult(
+            predictor=self,
+            train_loss_history=train_hist,
+            val_loss_history=val_hist,
+        )
 
     # ------------------------------------------------------------------
     # Serialisation
     # ------------------------------------------------------------------
 
     def state_bytes(self) -> bytes:
-        if self._net is None:
+        """Serialises the network, scalers and configuration (torch.save).
+
+        Returns:
+            The checkpoint bytes read back by `from_bytes`.
+
+        Raises:
+            RuntimeError: If the predictor is not trained.
+        """
+        if self.net is None:
             raise RuntimeError("Cannot serialise an untrained predictor.")
         buf = io.BytesIO()
         torch.save({
-            "state_dict":    self._net.state_dict(),
-            "feature_mean":  self._feature_mean,
-            "feature_std":   self._feature_std,
-            "target_mean":   self._target_mean,
-            "target_std":    self._target_std,
-            "dt":            self._dt,
-            "d_model":       self.d_model,
-            "n_heads":       self.n_heads,
-            "n_layers":      self.n_layers,
-            "dim_ff":        self.dim_ff,
-            "dropout":       self.dropout,
-            "n_features":    self._net.input_proj.in_features,
+            "state_dict": self.net.state_dict(),
+            "feature_mean": self.feature_scaler.mean,
+            "feature_std": self.feature_scaler.std,
+            "target_mean": self.target_scaler.mean,
+            "target_std": self.target_scaler.std,
+            "dt": self.dt,
+            "d_model": self.d_model,
+            "n_heads": self.n_heads,
+            "n_layers": self.n_layers,
+            "dim_ff": self.dim_ff,
+            "dropout": self.dropout,
+            "n_features": self.net.input_proj.in_features,
         }, buf)
         return buf.getvalue()
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "TransformerPredictor":
-        buf  = io.BytesIO(data)
-        ckpt = torch.load(buf, map_location="cpu", weights_only=False)
+    def from_bytes(cls, data: bytes) -> TransformerPredictor:
+        """Restores a predictor from `state_bytes`.
+
+        Args:
+            data: Checkpoint bytes.
+
+        Returns:
+            The trained predictor, with its network in eval mode.
+        """
+        ckpt = torch.load(io.BytesIO(data), map_location="cpu",
+                          weights_only=False)
         p = cls(
             d_model=ckpt["d_model"], n_heads=ckpt["n_heads"],
             n_layers=ckpt["n_layers"], dim_ff=ckpt["dim_ff"],
@@ -230,107 +299,71 @@ class TransformerPredictor(IPredictor):
         )
         net.load_state_dict(ckpt["state_dict"])
         net.eval()
-        p._net          = net
-        p._feature_mean = ckpt["feature_mean"]
-        p._feature_std  = ckpt["feature_std"]
-        p._target_mean  = ckpt["target_mean"]
-        p._target_std   = ckpt["target_std"]
-        p._dt           = ckpt.get("dt", 0.1)
+        p.net = net
+        p.feature_scaler = standardize.Standardizer(
+            ckpt["feature_mean"], ckpt["feature_std"])
+        p.target_scaler = standardize.Standardizer(
+            ckpt["target_mean"], ckpt["target_std"])
+        p.dt = ckpt.get("dt", 0.1)
         return p
 
     # ------------------------------------------------------------------
-    # Private training
+    # Training
     # ------------------------------------------------------------------
 
-    def _fit(self, ds, n_epochs, batch_size, lr, verbose, loss_name: str):
-        from src.training.losses import get_loss
+    def _fit(
+        self, ds: dataset_lib.Dataset, options: loop.FitOptions
+    ) -> tuple[list[float], list[float]]:
+        train = ds.train_idx
+        val = ds.val_idx
+        self.feature_scaler = standardize.Standardizer.fit(
+            ds.sequences[train], axis=(0, 1))
+        self.target_scaler = standardize.Standardizer.fit(
+            ds.remaining_time[train])
 
-        X_tr = ds.sequences[ds.train_idx]
-        X_va = ds.sequences[ds.val_idx]
-        rem_tr = ds.remaining_time[ds.train_idx]
-        rem_va = ds.remaining_time[ds.val_idx]
-        r_tr = ds.risk_labels[ds.train_idx]
-        r_va = ds.risk_labels[ds.val_idx]
+        self.net = TransformerNet(
+            ds.sequences.shape[-1], self.d_model, self.n_heads,
+            self.n_layers, self.dim_ff, self.dropout,
+        ).to(self.device)
 
-        self._feature_mean = X_tr.mean(axis=(0, 1))
-        self._feature_std  = X_tr.std(axis=(0, 1)) + 1e-8
-        self._target_mean  = float(rem_tr.mean())
-        self._target_std   = float(rem_tr.std()) + 1e-8
-
-        n_feat = X_tr.shape[-1]
-        self._net = TransformerNet(
-            n_feat, self.d_model, self.n_heads, self.n_layers,
-            self.dim_ff, self.dropout,
-        ).to(self._device)
-
-        opt   = torch.optim.AdamW(self._net.parameters(), lr=lr, weight_decay=1e-3)
-        sched = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, factor=0.5, patience=10)
-        reg_loss_fn = get_loss(loss_name).as_torch()
+        reg_loss = losses.get_loss(options.regression_loss).as_torch()
         bce = nn.BCEWithLogitsLoss()
 
-        def make_loader(X, rem, r, shuffle):
-            X_n   = (X - self._feature_mean) / self._feature_std
-            rem_n = (rem - self._target_mean) / self._target_std
-            td = TensorDataset(
-                torch.tensor(X_n,   dtype=torch.float32),
-                torch.tensor(rem_n, dtype=torch.float32),
-                torch.tensor(r,     dtype=torch.float32),
-            )
-            return DataLoader(td, batch_size=batch_size, shuffle=shuffle, drop_last=False)
+        def step(batch: tuple[torch.Tensor, ...]) -> torch.Tensor:
+            xb, yb, rb = (t.to(self.device) for t in batch)
+            reg_pred, risk_pred = self.net(xb)
+            return reg_loss(reg_pred, yb) + bce(risk_pred, rb)
 
-        tr_ld = make_loader(X_tr, rem_tr, r_tr, True)
-        va_ld = make_loader(X_va, rem_va, r_va, False)
+        return loop.fit(
+            self.net,
+            self._loader(ds, train, options.batch_size, True),
+            self._loader(ds, val, options.batch_size, False),
+            step=step,
+            n_epochs=options.n_epochs,
+            lr=options.lr,
+            patience=_PATIENCE,
+            verbose=options.verbose,
+            label="Transformer",
+        )
 
-        train_hist, val_hist = [], []
-        best_val, best_st, pat = float("inf"), None, 0
-        patience = 25
+    def _loader(
+        self,
+        ds: dataset_lib.Dataset,
+        idx: np.ndarray,
+        batch_size: int,
+        shuffle: bool,
+    ) -> torch_data.DataLoader:
+        arrays = (
+            self.feature_scaler.apply(ds.sequences[idx]),
+            self.target_scaler.apply(ds.remaining_time[idx]),
+            ds.risk_labels[idx],
+        )
+        tensors = [torch.tensor(a, dtype=torch.float32) for a in arrays]
+        return torch_data.DataLoader(
+            torch_data.TensorDataset(*tensors),
+            batch_size=batch_size, shuffle=shuffle, drop_last=False)
 
-        for ep in range(1, n_epochs + 1):
-            self._net.train()
-            tl = 0.0
-            for xb, yb, rb in tr_ld:
-                xb, yb, rb = xb.to(self._device), yb.to(self._device), rb.to(self._device)
-                reg_pred, risk_pred = self._net(xb)
-                loss = reg_loss_fn(reg_pred, yb) + bce(risk_pred, rb)
-                opt.zero_grad()
-                loss.backward()
-                nn.utils.clip_grad_norm_(self._net.parameters(), 1.0)
-                opt.step()
-                tl += loss.item()
-            avg_tr = tl / max(len(tr_ld), 1)
-
-            self._net.eval()
-            vl = 0.0
-            with torch.no_grad():
-                for xb, yb, rb in va_ld:
-                    xb, yb, rb = xb.to(self._device), yb.to(self._device), rb.to(self._device)
-                    reg_pred, risk_pred = self._net(xb)
-                    vl += (reg_loss_fn(reg_pred, yb) + bce(risk_pred, rb)).item()
-            avg_va = vl / max(len(va_ld), 1)
-
-            sched.step(avg_va)
-            train_hist.append(avg_tr)
-            val_hist.append(avg_va)
-
-            if avg_va < best_val - 1e-4:
-                best_val = avg_va
-                best_st  = copy.deepcopy(self._net.state_dict())
-                pat = 0
-            else:
-                pat += 1
-
-            if verbose and (ep % 10 == 0 or ep == 1):
-                print(f"  [Transformer] Epoch {ep:3d}/{n_epochs}  train={avg_tr:.4f}  val={avg_va:.4f}  best={best_val:.4f}  pat={pat}/{patience}")
-            if pat >= patience:
-                if verbose:
-                    print(f"  Early stop at epoch {ep}.")
-                break
-
-        if best_st is not None:
-            self._net.load_state_dict(best_st)
-        self._net.eval()
-        return train_hist, val_hist
-
-    def _norm_window(self, window: np.ndarray) -> torch.Tensor:
-        normed = (window - self._feature_mean) / self._feature_std
-        return torch.tensor(normed, dtype=torch.float32).unsqueeze(0).to(self._device)
+    def _standardise_window(self, window: np.ndarray) -> torch.Tensor:
+        normed = self.feature_scaler.apply(window)
+        return torch.tensor(normed, dtype=torch.float32).unsqueeze(0).to(
+            self.device)

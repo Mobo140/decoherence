@@ -112,7 +112,7 @@ def test_training_with_the_same_seed_gives_identical_weights():
     for _ in range(2):
         p = LSTMPredictor(hidden_size=8, num_layers=1, dropout=0.0)
         p.train(ds, n_epochs=1, batch_size=8, verbose=False, seed=123)
-        weights.append([w.detach().clone() for w in p._net.parameters()])
+        weights.append([w.detach().clone() for w in p.net.parameters()])
     for a, b in zip(*weights):
         assert torch.equal(a, b), "same seed produced different weights"
 
@@ -127,7 +127,7 @@ def test_training_without_a_seed_is_not_pinned():
     for _ in range(2):
         p = LSTMPredictor(hidden_size=32, num_layers=1, dropout=0.0)
         p.train(ds, n_epochs=1, batch_size=8, verbose=False)
-        weights.append([w.detach().clone() for w in p._net.parameters()])
+        weights.append([w.detach().clone() for w in p.net.parameters()])
     assert any(not torch.equal(a, b) for a, b in zip(*weights))
 
 

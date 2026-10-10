@@ -73,7 +73,7 @@ class IPredictor(ABC):
             **kwargs: Hyper-parameters (n_epochs, batch_size, lr, …).
 
         Returns:
-            TrainModelResult (defined in application layer).
+            training.loop.TrainResult for the trainable predictors.
         """
 
 

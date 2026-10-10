@@ -116,10 +116,10 @@ def test_lstm_use_J_roundtrip_from_bytes():
         use_J_scalar=True, early_stopping_patience=3,
     )
     p.train(ds, n_epochs=2, batch_size=8, lr=1e-3, verbose=False)
-    assert p._net.n_physics == 8
+    assert p.net.n_physics == 8
     p2 = LSTMPredictor.from_bytes(p.state_bytes())
     assert p2.use_J_scalar is True
-    assert p2._net.n_physics == 8
+    assert p2.net.n_physics == 8
     out = p2.predict(ds.sequences[0], float(ds.t_obs[0]), 1.0)
     assert out.t_decoh_predicted >= 0.0
 
@@ -135,7 +135,7 @@ def test_lstm_without_J_from_bytes_stays_seven_scalars():
     ))
     p = LSTMPredictor(hidden_size=16, num_layers=1, dropout=0.0, early_stopping_patience=3)
     p.train(ds, n_epochs=2, batch_size=8, lr=1e-3, verbose=False)
-    assert p._net.n_physics == 7
+    assert p.net.n_physics == 7
     p2 = LSTMPredictor.from_bytes(p.state_bytes())
     assert p2.use_J_scalar is False
-    assert p2._net.n_physics == 7
+    assert p2.net.n_physics == 7

@@ -1,20 +1,16 @@
 """Use-case: fit a predictor to a Dataset."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import List, Optional
+from dataclasses import dataclass
+from typing import Optional
 
 from src.data import dataset as dataset_lib
 from src.domain.ports import IModelStore, IPredictor
+from src.training import loop
 
 
-@dataclass
-class TrainModelResult:
-    """Summary produced by the training use-case."""
-
-    predictor: IPredictor
-    train_loss_history: List[float] = field(default_factory=list)
-    val_loss_history: List[float] = field(default_factory=list)
+# Kept under its old name for callers of the use case.
+TrainModelResult = loop.TrainResult
 
 
 @dataclass(frozen=True)

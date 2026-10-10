@@ -98,7 +98,7 @@ def test_lstm_from_bytes_old_4_physics_scalars():
         buf,
     )
     loaded = LSTMPredictor.from_bytes(buf.getvalue())
-    assert loaded._net.n_physics == 4
+    assert loaded.net.n_physics == 4
     window = np.ones((12, n_raw), dtype=np.float32)
     window[:, -1] = np.linspace(1.0, 0.2, 12, dtype=np.float32)
     pred = loaded.predict(window, 1.0, 1.0)
@@ -184,16 +184,16 @@ def test_as_test_only_puts_every_window_in_test_idx():
 
 def _untrained_transformer():
     from src.models.transformer import TransformerPredictor, TransformerNet
+    from src.training.standardize import Standardizer
 
     p = TransformerPredictor(d_model=32, n_heads=4, n_layers=1, dim_ff=64, dropout=0.0)
-    p._net = TransformerNet(
+    p.net = TransformerNet(
         n_features=5, d_model=32, n_heads=4, n_layers=1, dim_ff=64, dropout=0.0,
     )
-    p._feature_mean = np.zeros(5, dtype=np.float32)
-    p._feature_std = np.ones(5, dtype=np.float32)
-    p._target_mean = 0.0
-    p._target_std = 1.0
-    p._dt = 0.1
+    p.feature_scaler = Standardizer(
+        np.zeros(5, dtype=np.float32), np.ones(5, dtype=np.float32))
+    p.target_scaler = Standardizer(0.0, 1.0)
+    p.dt = 0.1
     return p
 
 
