@@ -38,7 +38,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import statistics as st
 import sys
 import time
 from collections import defaultdict
@@ -48,6 +47,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from experiments.e11_scaling import run_e11a
 from src.data.scenarios import build_configs
+from src.evaluation import stats
 from src.simulation.simulator import QuTipSimulator
 
 RESULTS_DIR = Path(__file__).parent / "results"
@@ -116,22 +116,27 @@ def main() -> None:
                 continue
             r2 = [float(x["r2"]) for x in v]
             au = [float(x["auroc"]) for x in v]
-            sd = st.stdev(r2) if len(r2) > 1 else 0.0
-            sa = st.stdev(au) if len(au) > 1 else 0.0
-            print(f"{sc:<5}{arm:<8}{st.mean(r2):9.3f}{sd:8.3f}{st.mean(au):8.3f}{sa:7.3f}")
+            mean_r2, sd = stats.mean_std(r2)
+            mean_au, sa = stats.mean_std(au)
+            print(f"{sc:<5}{arm:<8}{mean_r2:9.3f}{sd:8.3f}"
+                  f"{mean_au:8.3f}{sa:7.3f}")
 
     print("\npaired seen - unseen (positive = evaluating on training configs flatters):")
     for sc in ("D", "E"):
         seeds = sorted(set(g[(sc, "seen")]) & set(g[(sc, "unseen")]))
         if not seeds:
             continue
-        d = [float(g[(sc, "seen")][s]["r2"]) - float(g[(sc, "unseen")][s]["r2"])
-             for s in seeds]
-        da = [float(g[(sc, "seen")][s]["auroc"]) - float(g[(sc, "unseen")][s]["auroc"])
-              for s in seeds]
-        sd = st.stdev(d) if len(d) > 1 else 0.0
-        print(f"  {sc}: ΔR²={st.mean(d):+.3f} ± {sd:.3f}  {[f'{x:+.3f}' for x in d]}")
-        print(f"     ΔAUROC={st.mean(da):+.3f}  {[f'{x:+.3f}' for x in da]}")
+        seen = [g[(sc, "seen")][s] for s in seeds]
+        unseen = [g[(sc, "unseen")][s] for s in seeds]
+        d_r2 = stats.paired_difference(
+            [float(x["r2"]) for x in seen], [float(x["r2"]) for x in unseen])
+        d_au = stats.paired_difference(
+            [float(x["auroc"]) for x in seen],
+            [float(x["auroc"]) for x in unseen])
+        print(f"  {sc}: ΔR²={d_r2.mean:+.3f} ± {d_r2.std:.3f}  "
+              f"{[f'{x:+.3f}' for x in d_r2.differences]}")
+        print(f"     ΔAUROC={d_au.mean:+.3f}  "
+              f"{[f'{x:+.3f}' for x in d_au.differences]}")
 
     print(f"\ntotal {time.time() - t0:.0f}s -> {out}")
 

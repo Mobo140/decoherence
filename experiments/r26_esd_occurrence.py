@@ -46,7 +46,6 @@ from pathlib import Path
 import numpy as np
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import balanced_accuracy_score, brier_score_loss, roc_auc_score
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -56,6 +55,7 @@ from experiments.r24_entanglement_target import esd_configs
 from src import reproducibility
 from src.data import features
 from src.data.scenarios import build_configs
+from src.evaluation import metrics
 from src.simulation.variants import EntanglementSimulator
 
 RESULTS_DIR = Path(__file__).parent / "results"
@@ -108,8 +108,8 @@ def classifiers():
 def score(y, p):
     out = {"base_rate": float(y.mean()), "n_windows": int(len(y))}
     if 0 < y.mean() < 1:
-        out.update(auroc=roc_auc_score(y, p), brier=brier_score_loss(y, p),
-                   bal_acc=balanced_accuracy_score(y, p >= 0.5))
+        out.update(auroc=metrics.auroc(y, p), brier=metrics.brier(y, p),
+                   bal_acc=metrics.balanced_accuracy(y, p))
     return out
 
 

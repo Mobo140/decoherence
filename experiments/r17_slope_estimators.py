@@ -35,6 +35,7 @@ from src.application.generate_dataset import (
     GenerateDatasetUseCase,
 )
 from src.data.scenarios import build_configs, trajectory_store
+from src.evaluation import metrics
 from src.simulation.simulator import QuTipSimulator
 
 DT = 0.1
@@ -44,11 +45,6 @@ SEEDS = (42, 43, 44)
 SIGMAS = (0.0, 0.01, 0.02, 0.05, 0.10)
 ESTIMATORS = ("ols_log", "wls_log", "exp_fit", "ssa_ols", "holt")
 OUTPUT_CSV = Path(__file__).parent / "results" / "r17_slope_estimators.csv"
-
-
-def r2(y: np.ndarray, p: np.ndarray) -> float:
-    """Returns the coefficient of determination of predictions ``p``."""
-    return 1 - np.sum((y - p) ** 2) / np.sum((y - y.mean()) ** 2)
 
 
 def ols(t: np.ndarray, y: np.ndarray, w: np.ndarray | None = None) -> float:
@@ -163,7 +159,8 @@ def run() -> dict:
                 for name in ESTIMATORS:
                     preds[name].append(estimates[name])
             for name, p in preds.items():
-                res.setdefault((name, sigma), []).append(r2(y, np.array(p)))
+                res.setdefault((name, sigma), []).append(
+                    metrics.r2_unguarded(y, np.array(p)))
     return res
 
 

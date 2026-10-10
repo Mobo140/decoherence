@@ -39,6 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from experiments.e7_paper2_extended import run_e7c
 from src.domain.value_objects import DecoherenceCriterion
+from src.evaluation import stats
 from src.simulation.simulator import QuTipSimulator
 
 RESULTS_DIR = Path(__file__).parent / "results"
@@ -96,9 +97,10 @@ def main() -> None:
     print(f"\n{'J':>5}{'R5 R2':>10}{'R10 R2':>10}{'paired diff':>14}")
     for J in sorted(new):
         seeds = sorted(set(new[J]) & set(base[J]))
-        d = [new[J][s] - base[J][s] for s in seeds]
+        diff = stats.paired_difference(
+            [new[J][s] for s in seeds], [base[J][s] for s in seeds])
         print(f"{J:>5.1f}{st.mean(base[J].values()):>10.3f}"
-              f"{st.mean(new[J].values()):>10.3f}{st.mean(d):>+14.3f}")
+              f"{st.mean(new[J].values()):>10.3f}{diff.mean:>+14.3f}")
     print(f"\ndrop (J<=0.5 minus J>=0.8): R5 {drop(base):+.3f}  R10 {drop(new):+.3f}")
 
 

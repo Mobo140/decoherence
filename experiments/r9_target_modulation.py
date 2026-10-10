@@ -57,6 +57,7 @@ import numpy as np
 import qutip as qt
 
 from src.data.scenarios import bernstein_coeffs
+from src.evaluation import stats
 from src.physics.lindblad_systems import TwoQubitSystem
 
 RESULTS = Path(__file__).parent / "results" / "r9_target_modulation.csv"
@@ -157,7 +158,7 @@ def part2(n_traj: int, seed: int) -> list[dict]:
             ok = np.isfinite(b)
             if ok.sum() > 5:
                 k, c0 = np.polyfit(b[ok], a[ok], 1)
-                corr = float(np.corrcoef(b[ok], a[ok])[0, 1])
+                corr = stats.pearson(b[ok], a[ok])
                 resid = float(np.std(a[ok] - (k * b[ok] + c0)))
             else:
                 corr = resid = float("nan")

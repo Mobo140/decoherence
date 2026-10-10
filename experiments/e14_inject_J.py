@@ -48,6 +48,7 @@ from src.application.generate_dataset import GenerateDatasetCommand, GenerateDat
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.data.scenarios import build_configs, trajectory_store
 from src.domain import ports
+from src.evaluation import backtest, metrics
 from src.models import registry
 from src.simulation.simulator import QuTipSimulator
 
@@ -84,18 +85,8 @@ def _lstm(
     )
 
 
-def _r2(pred: np.ndarray, actual: np.ndarray) -> float:
-    ss_res = float(np.sum((actual - pred) ** 2))
-    ss_tot = float(np.sum((actual - actual.mean()) ** 2))
-    return float(1.0 - ss_res / ss_tot) if ss_tot > 1e-12 else 0.0
-
-
 def _predict_all(predictor, ds, horizon: float):
-    idx = ds.test_idx
-    if len(getattr(ds, "censored", [])) == len(ds.sequences) and len(idx) > 0:
-        uncens = ~ds.censored[idx]
-        if uncens.any():
-            idx = idx[uncens]
+    idx = backtest.test_indices(ds)
     preds, actuals, js = [], [], []
     for i in idx:
         if len(ds.J_values) == len(ds.sequences):
@@ -117,8 +108,10 @@ def _bin_rows(arm: str, scenario: str, use_J: bool, preds, actuals, js) -> List[
             "scenario": scenario,
             "use_J": use_J,
             "j_bin": name,
-            "r2": _r2(preds[mask], actuals[mask]) if n >= 3 else float("nan"),
-            "mae": float(np.mean(np.abs(preds[mask] - actuals[mask]))) if n else float("nan"),
+            "r2": (metrics.r2(actuals[mask], preds[mask]) if n >= 3
+                   else float("nan")),
+            "mae": (metrics.mae(actuals[mask], preds[mask]) if n
+                    else float("nan")),
             "n_samples": n,
             "auroc": float("nan"),
         })

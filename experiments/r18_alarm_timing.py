@@ -45,6 +45,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.data.scenarios import build_configs, trajectory_store
+from src.evaluation import backtest
 from src.models import registry
 from src.simulation.simulator import QuTipSimulator
 
@@ -52,17 +53,6 @@ RES = Path(__file__).parent / "results"
 BINS = [(0.0, 0.4), (0.4, 0.5), (0.5, 0.6), (0.6, 0.7), (0.7, 0.8), (0.8, 0.9), (0.9, 1.0)]
 MODELS = ("physics_only", "stretched_exp", "lstm_only", "physics_lstm",
           "transformer")
-
-
-def _predict(pred, ds, idx):
-    out = np.empty(len(idx))
-    for k, i in enumerate(idx):
-        for attr, arr in (("inference_interaction_code", ds.interaction_type_codes),
-                          ("inference_dissipator_code", ds.dissipator_type_codes)):
-            if hasattr(pred, attr) and len(arr) == len(ds.sequences):
-                setattr(pred, attr, float(arr[i]))
-        out[k] = pred.predict(ds.sequences[i], float(ds.t_obs[i]), 1.0).t_decoh_predicted
-    return out
 
 
 def main() -> None:
@@ -105,7 +95,7 @@ def main() -> None:
                     TrainModelUseCase(pred).execute(TrainModelCommand(
                         dataset=train_ds, n_epochs=epochs, batch_size=32, learning_rate=1e-3,
                         regression_loss="huber", verbose=False, seed=seed))
-                T2_hat = _predict(pred, ev, idx)
+                T2_hat, _ = backtest.predict_windows(pred, ev, idx)
                 rel = np.abs(T2_hat - T2) / T2
                 for lo, hi in BINS:
                     m = (prog >= lo) & (prog < hi)

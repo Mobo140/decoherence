@@ -36,37 +36,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.data.scenarios import build_configs, trajectory_store
+from src.evaluation import backtest, metrics, stats
 from src.models import registry
 from src.simulation.simulator import QuTipSimulator
 
 RESULTS = Path(__file__).parent / "results" / "r13_independent_test.csv"
 VARIANTS = ["physics_only", "stretched_exp", "lstm_only", "physics_feature",
             "physics_lstm", "transformer"]
-
-
-def _r2(y, p):
-    return 1.0 - np.sum((y - p) ** 2) / np.sum((y - y.mean()) ** 2)
-
-
-def _auroc(labels, scores):
-    pos, neg = scores[labels > 0.5], scores[labels <= 0.5]
-    if len(pos) == 0 or len(neg) == 0:
-        return float("nan")
-    diff = pos[:, None] - neg[None, :]
-    return float((diff > 0).mean() + 0.5 * (diff == 0).mean())
-
-
-def _predict(pred, ds):
-    out_t, out_r = [], []
-    for i in range(len(ds.sequences)):
-        for attr, arr in (("inference_interaction_code", ds.interaction_type_codes),
-                          ("inference_dissipator_code", ds.dissipator_type_codes)):
-            if hasattr(pred, attr) and len(arr) == len(ds.sequences):
-                setattr(pred, attr, float(arr[i]))
-        r = pred.predict(ds.sequences[i], float(ds.t_obs[i]), 1.0)
-        out_t.append(r.t_decoh_predicted)
-        out_r.append(r.risk_score)
-    return np.array(out_t), np.array(out_r)
 
 
 def main() -> None:
@@ -105,12 +81,9 @@ def main() -> None:
                     dataset_name=f"r13_eval_{seed}_{sc}"))
                 y, lab = eval_ds.t_decoh_abs.astype(float), eval_ds.risk_labels
                 # windows of one trajectory share T2: group by it for the bootstrap
-                _, traj = np.unique(eval_ds.t_decoh_abs, return_inverse=True)
-                n_traj = traj.max() + 1
-                members = [np.where(traj == k)[0] for k in range(n_traj)]
-                rng = np.random.default_rng(seed)
-                boots = [np.concatenate([members[k] for k in rng.integers(0, n_traj, n_traj)])
-                         for _ in range(a.n_boot)]
+                n_traj = len(np.unique(eval_ds.t_decoh_abs))
+                boots = stats.group_resample_indices(
+                    eval_ds.t_decoh_abs, a.n_boot, np.random.default_rng(seed))
                 for name in VARIANTS:
                     pred = registry.build_model(name)
                     if name not in ("physics_only", "stretched_exp"):
@@ -118,13 +91,17 @@ def main() -> None:
                             dataset=train_ds, n_epochs=epochs, batch_size=32,
                             learning_rate=1e-3, regression_loss="huber",
                             verbose=False, seed=seed))
-                    pt, pr = _predict(pred, eval_ds)
-                    bs = np.array([_r2(y[b], pt[b]) for b in boots])
+                    pt, pr = backtest.predict_windows(
+                        pred, eval_ds, np.arange(len(eval_ds.sequences)))
+                    bs = stats.bootstrap_values(
+                        metrics.r2_unguarded, boots, y, pt)
+                    r2_lo, r2_hi = stats.percentile_interval(bs)
                     row = {"seed": seed, "scenario": sc, "variant": name,
-                           "r2": _r2(y, pt), "r2_lo": np.percentile(bs, 2.5),
-                           "r2_hi": np.percentile(bs, 97.5),
-                           "mae": float(np.mean(np.abs(y - pt))),
-                           "auroc": _auroc(lab, pr), "n_eval_traj": int(n_traj),
+                           "r2": metrics.r2_unguarded(y, pt),
+                           "r2_lo": r2_lo, "r2_hi": r2_hi,
+                           "mae": metrics.mae(y, pt),
+                           "auroc": metrics.auroc_pairwise(lab, pr),
+                           "n_eval_traj": int(n_traj),
                            "n_eval_windows": len(y)}
                     w.writerow(row)
                     f.flush()

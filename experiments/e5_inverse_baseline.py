@@ -44,6 +44,7 @@ from src.application.generate_dataset import GenerateDatasetCommand, GenerateDat
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.data.scenarios import build_configs, trajectory_store
 from src.domain.value_objects import AblationResult, ExperimentSpec, NoiseConfig, PredictorVariant
+from src.evaluation import metrics
 from src.models import registry
 from src.simulation.simulator import QuTipSimulator
 
@@ -292,11 +293,9 @@ def main(*, seed: int = 42, out_path=None) -> None:
 
         inv_preds = np.array(inverse_preds)
         actuals = test_t_decoh.astype(np.float64)
-        mae_inv = float(np.mean(np.abs(inv_preds - actuals)))
-        rmse_inv = float(np.sqrt(np.mean((inv_preds - actuals) ** 2)))
-        ss_res = np.sum((actuals - inv_preds) ** 2)
-        ss_tot = np.sum((actuals - actuals.mean()) ** 2)
-        r2_inv = float(1.0 - ss_res / ss_tot) if ss_tot > 1e-12 else 0.0
+        mae_inv = metrics.mae(actuals, inv_preds)
+        rmse_inv = metrics.rmse(actuals, inv_preds)
+        r2_inv = metrics.r2(actuals, inv_preds)
 
         rows.append({
             "method": "inverse_gamma_reconstruct",

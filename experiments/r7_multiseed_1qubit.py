@@ -36,7 +36,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import statistics as st
 import sys
 import time
 from collections import defaultdict
@@ -45,6 +44,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import experiments.e1_ablation as e1
+from src.evaluation import stats
 
 RESULTS_DIR = Path(__file__).parent / "results"
 SCRATCH = RESULTS_DIR / "_r7_scratch.csv"
@@ -121,9 +121,9 @@ def main() -> None:
     print(f"{'scen':<5}{'variant':<15}{'R2 mean':>10}{'±std':>8}{'published':>11}")
     for key in sorted(by):
         v = list(by[key].values())
-        sd = st.stdev(v) if len(v) > 1 else 0.0
+        mean, sd = stats.mean_std(v)
         pub = PUBLISHED.get(key, float("nan"))
-        print(f"{key[0]:<5}{key[1]:<15}{st.mean(v):>10.3f}{sd:>8.3f}{pub:>11.4f}")
+        print(f"{key[0]:<5}{key[1]:<15}{mean:>10.3f}{sd:>8.3f}{pub:>11.4f}")
 
     print("\nclaims, as paired differences per seed:")
     for scen, better, worse, pub_margin, label in CLAIMS:
@@ -131,17 +131,18 @@ def main() -> None:
         seeds = sorted(set(hi) & set(lo))
         if not seeds:
             continue
-        d = [hi[s] - lo[s] for s in seeds]
-        sd = st.stdev(d) if len(d) > 1 else 0.0
-        if all(x > 0 for x in d):
+        diff = stats.paired_difference(
+            [hi[s] for s in seeds], [lo[s] for s in seeds])
+        if diff.n_positive == diff.n:
             verdict = "holds in every seed"
-        elif all(x < 0 for x in d):
+        elif diff.n_negative == diff.n:
             verdict = "REVERSED in every seed"
         else:
             verdict = "SIGN VARIES -- not resolved"
         print(f"  {label}")
-        print(f"    published {pub_margin:+.4f} | replicated {st.mean(d):+.3f} "
-              f"± {sd:.3f}  {[f'{x:+.3f}' for x in d]}  -> {verdict}")
+        print(f"    published {pub_margin:+.4f} | replicated {diff.mean:+.3f} "
+              f"± {diff.std:.3f}  "
+              f"{[f'{x:+.3f}' for x in diff.differences]}  -> {verdict}")
 
     print(f"\ntotal {time.time() - t0:.0f}s -> {out}")
 

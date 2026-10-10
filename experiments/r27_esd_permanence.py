@@ -34,7 +34,6 @@ import time
 from pathlib import Path
 
 import numpy as np
-from sklearn.metrics import roc_auc_score
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -42,6 +41,7 @@ from experiments.r24_entanglement_target import esd_configs
 from experiments.r26_esd_occurrence import T_OBS, classifiers, score, simulate, windows
 from src.data import features
 from src.data.scenarios import build_configs
+from src.evaluation import metrics, stats
 
 RESULTS_DIR = Path(__file__).parent / "results"
 N_BOOT = 1000
@@ -54,12 +54,9 @@ def boot_ci(y, p, owner, rng):
     resampling windows is resampling trajectories.
     """
     assert len(np.unique(owner)) == len(owner)
-    vals = []
-    for _ in range(N_BOOT):
-        pick = rng.integers(0, len(y), len(y))
-        if 0 < y[pick].mean() < 1:
-            vals.append(roc_auc_score(y[pick], p[pick]))
-    return np.percentile(vals, [2.5, 97.5])
+    resamples = stats.resample_indices(len(y), N_BOOT, rng)
+    values = stats.bootstrap_values(metrics.auroc, resamples, y, p)
+    return stats.percentile_interval(values, ignore_nan=True)
 
 
 def run(seed, n_train, n_test, w, f):
