@@ -22,24 +22,7 @@ from ...physics.lindblad_systems import (
     sample_random_pure_state,
 )
 from ...physics.simulate_qutip import simulate_single_qubit, simulate_two_qubit
-
-
-_SYSY = np.kron(np.array([[0, -1j], [1j, 0]]), np.array([[0, -1j], [1j, 0]]))
-
-
-def wootters_lambda(rho) -> float:
-    """l1 - l2 - l3 - l4, where l_i are the square roots of the eigenvalues of
-    rho (sy x sy) rho* (sy x sy) in decreasing order. Negative for separable
-    states; it changes sign smoothly where the concurrence reaches zero."""
-    m = rho.full() if hasattr(rho, "full") else np.asarray(rho)
-    r = m @ _SYSY @ m.conj() @ _SYSY
-    lam = np.sqrt(np.clip(np.sort(np.linalg.eigvals(r).real)[::-1], 0.0, None))
-    return float(lam[0] - lam[1] - lam[2] - lam[3])
-
-
-def concurrence(rho) -> float:
-    """Wootters concurrence C = max(0, wootters_lambda(rho))."""
-    return max(0.0, wootters_lambda(rho))
+from ...physics import measures
 
 
 class QuTipSimulator(ISimulator):
@@ -170,10 +153,10 @@ class QuTipSimulator(ISimulator):
                 config, times, system.H.full(), obs_dict["density_matrices"])
         elif config.decoherence_criterion == DecoherenceCriterion.CONCURRENCE:
             t_decoh, censored = self._first_crossing(
-                config, times, [concurrence(r) for r in obs_dict["density_matrices"]])
+                config, times, [measures.concurrence(r) for r in obs_dict["density_matrices"]])
         elif config.decoherence_criterion == DecoherenceCriterion.ENTANGLEMENT_DEATH:
             t_decoh, censored = self._sudden_death_time(
-                times, [wootters_lambda(r) for r in obs_dict["density_matrices"]])
+                times, [measures.wootters_lambda(r) for r in obs_dict["density_matrices"]])
         else:
             t_decoh, censored = self._compute_t_decoh(config, times, obs_dict)
         obs_dict.pop("density_matrices", None)
@@ -194,12 +177,11 @@ class QuTipSimulator(ISimulator):
         the crossing is set by dissipation alone. Only the target changes:
         the observables fed to the model stay in the computational basis.
         """
-        U = np.linalg.eigh(H)[1]
+        eigenvectors = np.linalg.eigh(H)[1]
         vals = []
         for r in rhos:
             m = r.full() if hasattr(r, "full") else np.asarray(r)
-            e = U.conj().T @ m @ U
-            vals.append(float(np.abs(e).sum() - np.abs(np.diag(e)).sum()))
+            vals.append(measures.energy_basis_coherence_l1(m, eigenvectors))
         return QuTipSimulator._first_crossing(config, times, vals)
 
     @staticmethod

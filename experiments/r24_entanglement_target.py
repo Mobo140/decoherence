@@ -59,8 +59,9 @@ from experiments.r23_two_body_correlators import CORR, MODELS, CorrelatorSimulat
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.domain.value_objects import DecoherenceCriterion, InteractionType
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator, concurrence, wootters_lambda
+from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
 from src.physics.lindblad_systems import TwoQubitSystem
+from src.physics.measures import concurrence, wootters_lambda
 from src.physics.simulate_qutip import simulate_two_qubit
 
 RESULTS_DIR = Path(__file__).parent / "results"

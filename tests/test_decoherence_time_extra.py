@@ -5,11 +5,8 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.physics.decoherence_time import (
-    coherence_l1,
-    purity,
-    compute_observables_single_qubit,
-)
+from src.physics.measures import coherence_l1, purity
+from src.physics.observables import compute_observables_single_qubit
 
 
 def test_coherence_and_purity_basic():

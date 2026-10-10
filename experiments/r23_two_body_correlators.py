@@ -62,14 +62,13 @@ from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 from src.infrastructure.ml.transformer_predictor import TransformerPredictor
 from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.physics import paulis
 
 RESULTS_DIR = Path(__file__).parent / "results"
-PAULI = {
-    "x": np.array([[0, 1], [1, 0]], dtype=complex),
-    "y": np.array([[0, -1j], [1j, 0]], dtype=complex),
-    "z": np.array([[1, 0], [0, -1]], dtype=complex),
+CORR = {
+    f"corr_{a}{b}": np.kron(paulis.PAULI[a], paulis.PAULI[b])
+    for a in "xyz" for b in "xyz"
 }
-CORR = {f"corr_{a}{b}": np.kron(PAULI[a], PAULI[b]) for a in "xyz" for b in "xyz"}
 J_VALUES = [0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0]
 
 

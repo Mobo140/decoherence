@@ -6,7 +6,8 @@ import qutip as qt
 
 from experiments._config import build_configs
 from src.domain.value_objects import DecoherenceCriterion
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator, concurrence, wootters_lambda
+from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.physics.measures import concurrence, wootters_lambda
 
 
 def test_concurrence_of_known_states():
