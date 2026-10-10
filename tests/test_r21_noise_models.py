@@ -1,8 +1,8 @@
 """R21 noise models: AR(1) measurement noise and the stochastic gamma(t) hook."""
 import numpy as np
 
+from src.data.observation import ar1_filter as ar1
 from src.data.scenarios import build_configs
-from src.infrastructure.quantum.noise import ar1_filter as ar1
 from src.simulation.simulator import QuTipSimulator
 from src.simulation.variants import StochasticGammaSimulator
 

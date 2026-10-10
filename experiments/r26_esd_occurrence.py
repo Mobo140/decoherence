@@ -52,16 +52,14 @@ from sklearn.preprocessing import StandardScaler
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from experiments.r23_two_body_correlators import CORR
 from experiments.r24_entanglement_target import EntanglementSimulator, _esd
-
+from src.data import features
 from src.data.scenarios import build_configs
 
 RESULTS_DIR = Path(__file__).parent / "results"
 WINDOW = 20
 T_OBS = [2.0, 2.5, 3.0, 3.5, 4.0]
 REVIVAL_EPS = 1e-3
-DROP = {"base": set(CORR) | {"concurrence"}, "corr": {"concurrence"}, "corr_conc": set()}
 
 
 def simulate(cfgs, seed):
@@ -86,7 +84,7 @@ def windows(trajs, feats):
     """
     X, owner, tob = [], [], []
     for i, t in enumerate(trajs):
-        keep = [j for j, n in enumerate(t.feature_names) if n not in DROP[feats]]
+        keep = [j for j, n in enumerate(t.feature_names) if n not in features.FEATURE_SETS[feats]]
         M = t.feature_matrix[:, keep]
         for t_obs in T_OBS:
             if t.t_decoh <= t_obs:          # already dead (first death) by t_obs
@@ -121,7 +119,7 @@ def run(seed, sc, n_train, n_test, w, f):
     te, te_died, te_perm = simulate(te_cfg, seed + 1)
     print(f"R26 | seed={seed} {sc} simulated [{time.time() - ts:.0f}s] "
           f"died={tr_died.mean():.2f} permanent|died={tr_perm[tr_died].mean():.2f}", flush=True)
-    for feats in DROP:
+    for feats in features.FEATURE_SETS:
         Xtr, otr, _ = windows(tr, feats)
         Xte, ote, tte = windows(te, feats)
         tasks = {"occurrence": (tr_died, te_died, None),

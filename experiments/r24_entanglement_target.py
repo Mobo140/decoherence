@@ -42,7 +42,6 @@ Usage
 from __future__ import annotations
 
 import argparse
-import copy
 import csv
 import dataclasses
 import sys
@@ -53,28 +52,20 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from experiments.r23_two_body_correlators import MODELS, _all_test, _train
+from experiments.r23_two_body_correlators import MODELS, _train
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
+from src.data import features
 from src.data.scenarios import build_configs, fixed_coupling_configs
 from src.domain.value_objects import DecoherenceCriterion, InteractionType
 from src.physics.lindblad_systems import TwoQubitSystem
 from src.physics.measures import wootters_lambda
 from src.physics.simulate_qutip import simulate_two_qubit
 from src.simulation import simulator
-from src.simulation.variants import CORR, EntanglementSimulator
+from src.simulation.variants import EntanglementSimulator
 
 RESULTS_DIR = Path(__file__).parent / "results"
 ESD = DecoherenceCriterion.ENTANGLEMENT_DEATH
-
-
-def feature_set(ds, name):
-    drop = {"base": set(CORR) | {"concurrence"}, "corr": {"concurrence"}, "corr_conc": set()}[name]
-    keep = [i for i, n in enumerate(ds.feature_names) if n not in drop]
-    out = copy.copy(ds)
-    out.sequences = np.ascontiguousarray(ds.sequences[:, :, keep])
-    out.feature_names = [ds.feature_names[i] for i in keep]
-    return out
 
 
 def _esd(groups):
@@ -91,15 +82,16 @@ def part_a(seed, n_per, n_eval, epochs, w, f):
         full = gen.execute(GenerateDatasetCommand(
             configs=groups[sc], window_length=20, horizon=1.0,
             samples_per_trajectory=5, seed=seed, dataset_name=f"r24a_{seed}_{sc}"))
-        full_ev = _all_test(gen.execute(GenerateDatasetCommand(
+        full_ev = gen.execute(GenerateDatasetCommand(
             configs=eval_groups[sc], window_length=20, horizon=1.0,
             samples_per_trajectory=5, seed=seed + 1, train_ratio=0.0, val_ratio=0.0,
-            dataset_name=f"r24a_eval_{seed}_{sc}")))
+            dataset_name=f"r24a_eval_{seed}_{sc}")).as_test_only()
         print(f"R24a | seed={seed} {sc} data [{time.time() - ts:.0f}s] "
               f"censored={full.metadata.get('n_censored')} windows={len(full.sequences)}",
               flush=True)
         for feats in ("base", "corr", "corr_conc"):
-            tr, ev = feature_set(full, feats), feature_set(full_ev, feats)
+            tr = features.select(full, feats)
+            ev = features.select(full_ev, feats)
             for model, build in MODELS.items():
                 pred = _train(build(), tr, epochs, seed)
                 for split, ds in (("own", tr), ("independent", ev)):

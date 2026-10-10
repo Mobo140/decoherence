@@ -52,7 +52,6 @@ Usage
 from __future__ import annotations
 
 import argparse
-import copy
 import csv
 import sys
 import time
@@ -62,15 +61,14 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from experiments.r16_noise_aware_training import noise_augmented
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
+from src.data import observation
 from src.data.scenarios import build_configs, trajectory_store
 from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 from src.infrastructure.ml.physics_only_predictor import PhysicsOnlyPredictor
 from src.infrastructure.ml.transformer_predictor import TransformerPredictor
-from src.infrastructure.quantum.noise import ar1_filter as ar1
 from src.simulation.simulator import QuTipSimulator
 from src.simulation.variants import StochasticGammaSimulator
 
@@ -90,20 +88,6 @@ ARMS = {
     "physics_lstm_sto": (lambda: LSTMPredictor(use_physics_prior=True), "sto"),
     "transformer_sto": (lambda: TransformerPredictor(), "sto"),
 }
-
-
-def _with_sequences(ds, seqs):
-    out = copy.copy(ds)
-    out.sequences = seqs.astype(np.float32)
-    return out
-
-
-def _all_test(ds):
-    out = copy.copy(ds)
-    out.test_idx = np.arange(len(ds.sequences))
-    out.train_idx = np.array([], dtype=np.int64)
-    out.val_idx = np.array([], dtype=np.int64)
-    return out
 
 
 def main() -> None:
@@ -129,7 +113,7 @@ def main() -> None:
             cmd = dict(window_length=WINDOW, horizon=1.0, samples_per_trajectory=5, seed=seed)
             ds = gen_cached.execute(GenerateDatasetCommand(
                 configs=train_cfgs, dataset_name=f"r21_{seed}", **cmd))
-            ds_aug = noise_augmented(ds, 2, np.random.default_rng(seed + 7))
+            ds_aug = observation.noise_augmented(ds, 2, np.random.default_rng(seed + 7))
             ds_sto = GenerateDatasetUseCase(
                 StochasticGammaSimulator(None, None, seed + 11), store=None
             ).execute(GenerateDatasetCommand(configs=train_cfgs, dataset_name=f"r21_sto_{seed}", **cmd))
@@ -140,17 +124,18 @@ def main() -> None:
             gamma_tests = {}
             for s, tau in GAMMA_SETTINGS:
                 sim = StochasticGammaSimulator(s, tau, seed + 13)
-                gamma_tests[(s, tau)] = _all_test(GenerateDatasetUseCase(sim, store=None).execute(
+                gamma_tests[(s, tau)] = GenerateDatasetUseCase(sim, store=None).execute(
                     GenerateDatasetCommand(configs=eval_cfgs, train_ratio=0.0, val_ratio=0.0,
-                                           dataset_name=f"r21_eval_{seed}", **{**cmd, "seed": seed + 1})))
+                                           dataset_name=f"r21_eval_{seed}", **{**cmd, "seed": seed + 1})
+                ).as_test_only()
             print(f"R21 | seed={seed} data ready [{time.time() - ts:.0f}s]", flush=True)
 
-            eta = np.random.default_rng(seed).normal(0.0, 1.0, size=ds.sequences.shape)
             noise_tests = {(0.0, 0.0): ds}
             for phi in PHIS:
-                e = ar1(eta, phi)
                 for sigma in SIGMAS:
-                    noise_tests[(sigma, phi)] = _with_sequences(ds, ds.sequences + sigma * e)
+                    # Every call redraws the same realisation of the noise.
+                    noise_tests[(sigma, phi)] = observation.OBSERVATIONS["ar1"](
+                        ds, sigma=sigma, phi=phi, rng=np.random.default_rng(seed))
 
             for arm, (build, train) in ARMS.items():
                 pred = build()

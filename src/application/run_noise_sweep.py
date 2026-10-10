@@ -16,8 +16,9 @@ from typing import List
 
 import numpy as np
 
-from ..domain.ports import ISimulator
-from ..domain.value_objects import (
+from src.data import observation
+from src.domain.ports import ISimulator
+from src.domain.value_objects import (
     AblationResult,
     ExperimentSpec,
     NoiseConfig,
@@ -87,7 +88,9 @@ class NoiseSweepUseCase:
             if command.verbose:
                 print(f"\n=== Noise σ={sigma:.3f} ===")
 
-            noisy_dataset = self._add_noise(clean_dataset, sigma, seed=command.seed)
+            noisy_dataset = observation.gaussian(
+                clean_dataset, sigma=sigma,
+                rng=np.random.default_rng(command.seed))
 
             metrics = BacktestUseCase(predictor).execute(
                 BacktestCommand(dataset=noisy_dataset, horizon=command.horizon)
@@ -121,17 +124,3 @@ class NoiseSweepUseCase:
         """Factory for the predictor used in training. Override to customise."""
         from ..infrastructure.ml.lstm_predictor import LSTMPredictor
         return LSTMPredictor(use_physics_prior=True)
-
-    @staticmethod
-    def _add_noise(dataset, sigma: float, seed: int):
-        """Return a copy of dataset with Gaussian noise added to sequences."""
-        import copy
-        if sigma == 0.0:
-            return dataset
-        rng = np.random.default_rng(seed)
-        noisy_seqs = dataset.sequences + rng.normal(
-            0.0, sigma, size=dataset.sequences.shape
-        ).astype(np.float32)
-        ds = copy.copy(dataset)
-        ds.sequences = noisy_seqs
-        return ds

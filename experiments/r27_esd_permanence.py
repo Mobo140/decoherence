@@ -39,8 +39,8 @@ from sklearn.metrics import roc_auc_score
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from experiments.r24_entanglement_target import _esd
-from experiments.r26_esd_occurrence import DROP, T_OBS, classifiers, score, simulate, windows
-
+from experiments.r26_esd_occurrence import T_OBS, classifiers, score, simulate, windows
+from src.data import features
 from src.data.scenarios import build_configs
 
 RESULTS_DIR = Path(__file__).parent / "results"
@@ -71,7 +71,7 @@ def run(seed, n_train, n_test, w, f):
     print(f"R27 | seed={seed} simulated [{time.time() - ts:.0f}s] died={tr_died.mean():.2f} "
           f"permanent|died={tr_perm[tr_died].mean():.2f} test permanent={te_perm.sum()}", flush=True)
     rng = np.random.default_rng(seed)
-    for feats in DROP:
+    for feats in features.FEATURE_SETS:
         Xtr, otr, _ = windows(tr, feats)
         Xte, ote, tte = windows(te, feats)
         tasks = {"occurrence": (tr_died, te_died, None),

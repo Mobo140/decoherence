@@ -40,7 +40,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import dataclasses
 import sys
 from pathlib import Path
 
@@ -50,10 +49,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
-from src.application.run_noise_sweep import NoiseSweepUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
+from src.data import observation
 from src.data.scenarios import build_configs, trajectory_store
-from src.infrastructure.quantum.noise import ar1_filter
 from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 from src.infrastructure.ml.transformer_predictor import TransformerPredictor
 from src.simulation.simulator import QuTipSimulator
@@ -67,45 +65,6 @@ ARMS = {
     "transformer": (lambda: TransformerPredictor(), False),
     "transformer_aug": (lambda: TransformerPredictor(), True),
 }
-
-
-def noise_augmented(ds, copies: int, rng: np.random.Generator, phi_max: float = 0.0):
-    """Append `copies` noisy versions of every train/val window.
-
-    The noise goes into the raw window, so every quantity the model derives
-    from it (log channels, slope, OLS R^2, T_phys) is computed from the noisy
-    copy. Test windows are left untouched.
-
-    phi_max > 0 makes the noise AR(1) in time with a lag-one correlation drawn
-    per window from U[0, phi_max] (R22); the default draws exactly what R16
-    drew.
-    """
-    per_window = [
-        "sequences", "t_obs", "t_decoh_abs", "remaining_time", "risk_labels",
-        "interaction_type_codes", "dissipator_type_codes", "J_values", "censored",
-    ]
-    n = len(ds.sequences)
-    src = np.concatenate([ds.train_idx, ds.val_idx])
-    is_train = np.concatenate([np.ones(len(ds.train_idx), bool), np.zeros(len(ds.val_idx), bool)])
-    parts = {k: [getattr(ds, k)] for k in per_window}
-    new_train, new_val = [ds.train_idx], [ds.val_idx]
-    offset = n
-    for _ in range(copies):
-        sig = np.exp(rng.uniform(np.log(0.005), np.log(0.12), len(src))).astype(np.float32)
-        eta = rng.normal(0.0, 1.0, ds.sequences[src].shape).astype(np.float32)
-        if phi_max > 0.0:
-            eta = ar1_filter(eta, rng.uniform(0.0, phi_max, len(src)))
-        noisy = ds.sequences[src] + eta * sig[:, None, None]
-        for k in per_window:
-            arr = getattr(ds, k)
-            parts[k].append(noisy if k == "sequences" else (arr[src] if len(arr) == n else arr))
-        new_idx = offset + np.arange(len(src))
-        new_train.append(new_idx[is_train]); new_val.append(new_idx[~is_train])
-        offset += len(src)
-    fields = {k: np.concatenate(v) if len(getattr(ds, k)) == n else getattr(ds, k) for k, v in parts.items()}
-    return dataclasses.replace(ds, **fields,
-                               train_idx=np.concatenate(new_train),
-                               val_idx=np.concatenate(new_val))
 
 
 def main() -> None:
@@ -124,14 +83,15 @@ def main() -> None:
             ds = gen.execute(GenerateDatasetCommand(
                 configs=groups["B"] + groups["C"], window_length=50, horizon=1.0,
                 samples_per_trajectory=5, seed=seed, dataset_name=f"r16_{seed}"))
-            ds_aug = noise_augmented(ds, a.copies, np.random.default_rng(seed + 7))
+            ds_aug = observation.noise_augmented(ds, a.copies, np.random.default_rng(seed + 7))
             for arm, (build, aug) in ARMS.items():
                 pred = build()
                 TrainModelUseCase(pred).execute(TrainModelCommand(
                     dataset=ds_aug if aug else ds, n_epochs=epochs, batch_size=32,
                     learning_rate=1e-3, regression_loss="huber", verbose=False, seed=seed))
                 for sigma in SIGMAS:
-                    noisy = NoiseSweepUseCase._add_noise(ds, sigma, seed=seed)
+                    noisy = observation.OBSERVATIONS["gaussian"](
+                        ds, sigma=sigma, rng=np.random.default_rng(seed))
                     m = BacktestUseCase(pred).execute(BacktestCommand(dataset=noisy, horizon=1.0))
                     w.writerow({"seed": seed, "arm": arm, "sigma": sigma,
                                 "r2": m.r2, "mae": m.mae, "auroc": m.risk_auroc})

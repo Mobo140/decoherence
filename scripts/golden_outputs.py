@@ -31,23 +31,22 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # --- Code under test (update these imports if the code moves) -------------
-from experiments._config import build_configs
-from experiments.r16_noise_aware_training import noise_augmented
-from experiments.r23_two_body_correlators import base_features
-from experiments.r24_entanglement_target import feature_set
 from experiments.r26_esd_occurrence import windows as esd_windows
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
+from src.data.features import select as feature_set
+from src.data.observation import ar1_filter, noise_augmented
+from src.data.scenarios import build_configs
 from src.domain.value_objects import DecoherenceCriterion
 from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 from src.infrastructure.ml.physics_only_predictor import PhysicsOnlyPredictor
 from src.infrastructure.ml.stretched_exp_predictor import StretchedExpPredictor
 from src.infrastructure.ml.transformer_predictor import TransformerPredictor
-from src.infrastructure.quantum.noise import ar1_filter
 from src.infrastructure.persistence.stores import NumpyTrajectoryStore, PickleModelStore
 from src.simulation.simulator import QuTipSimulator
 from src.simulation.variants import (
+    CORR,
     CorrelatorSimulator,
     EntanglementSimulator,
     StochasticGammaSimulator,
@@ -124,7 +123,7 @@ def compute() -> dict:
         GenerateDatasetCommand(configs=g["D"] + g["E"], dataset_name="golden_2q", **cmd))
     out["ds/1q"] = _dataset(ds_1q)
     out["ds/2q"] = _dataset(ds_2q)
-    out["ds/2q_base"] = _dataset(base_features(ds_2q))
+    out["ds/2q_base"] = _dataset(ds_2q.drop_features(CORR))
     out["ds/2q_corr"] = _dataset(feature_set(ds_2q, "corr"))
     out["ds/1q_aug"] = _dataset(noise_augmented(ds_1q, 2, np.random.default_rng(7), phi_max=0.9))
 
@@ -154,7 +153,7 @@ def compute() -> dict:
     out["model/transformer_2q"] = run(
         TransformerPredictor(d_model=32, n_heads=4, n_layers=1, dim_ff=64), feature_set(ds_2q, "corr"))
     out["model/lstm_2q_gated"] = run(
-        LSTMPredictor(use_physics_prior=True, adaptive_prior_r2_threshold=0.7), base_features(ds_2q))
+        LSTMPredictor(use_physics_prior=True, adaptive_prior_r2_threshold=0.7), ds_2q.drop_features(CORR))
 
     # Stored artefacts must keep loading: every checkpoint predicts on fixed
     # windows, and a few cached trajectories load unchanged.

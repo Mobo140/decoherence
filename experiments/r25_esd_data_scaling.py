@@ -42,10 +42,11 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from experiments.r23_two_body_correlators import _all_test, _train, _transformer
-from experiments.r24_entanglement_target import EntanglementSimulator, _esd, feature_set
+from experiments.r23_two_body_correlators import _train, _transformer
+from experiments.r24_entanglement_target import EntanglementSimulator, _esd
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
+from src.data import features
 from src.data.scenarios import build_configs
 from src.domain.ports import ITrajectoryStore
 
@@ -80,9 +81,10 @@ def run(seed, sc, sizes, n_eval, epochs, w, f):
     cfgs = _esd(build_configs(n_per_scenario=max(sizes), seed=seed))[sc]
     eval_cfgs = _esd(build_configs(n_per_scenario=n_eval, seed=seed + 1000))[sc]
     ts = time.time()
-    ev = _all_test(gen.execute(GenerateDatasetCommand(
+    ev = gen.execute(GenerateDatasetCommand(
         configs=eval_cfgs, window_length=20, horizon=1.0, samples_per_trajectory=5,
-        seed=seed + 1, train_ratio=0.0, val_ratio=0.0, dataset_name=f"r25_eval_{seed}_{sc}")))
+        seed=seed + 1, train_ratio=0.0, val_ratio=0.0, dataset_name=f"r25_eval_{seed}_{sc}")
+    ).as_test_only()
     for n in sorted(sizes, reverse=True):          # largest first: smaller sets are cache hits
         tr = gen.execute(GenerateDatasetCommand(
             configs=cfgs[:n], window_length=20, horizon=1.0, samples_per_trajectory=5,
@@ -90,8 +92,8 @@ def run(seed, sc, sizes, n_eval, epochs, w, f):
         print(f"R25 | seed={seed} {sc} n={n} windows={len(tr.sequences)} "
               f"censored={tr.metadata.get('n_censored')} [{time.time() - ts:.0f}s]", flush=True)
         for feats in FEATURES:
-            pred = _train(_transformer(), feature_set(tr, feats), epochs, seed)
-            m = BacktestUseCase(pred).execute(BacktestCommand(dataset=feature_set(ev, feats), horizon=1.0))
+            pred = _train(_transformer(), features.select(tr, feats), epochs, seed)
+            m = BacktestUseCase(pred).execute(BacktestCommand(dataset=features.select(ev, feats), horizon=1.0))
             w.writerow({"seed": seed, "scenario": sc, "n_traj": n, "features": feats,
                         "r2": m.r2, "mae": m.mae, "auroc": m.risk_auroc,
                         "n_samples": m.n_samples, "n_train_windows": len(tr.train_idx),

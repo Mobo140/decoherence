@@ -1,8 +1,8 @@
 """R23: two-body correlators complete the two-qubit state and leave the base features unchanged."""
 import numpy as np
 
-from experiments.r23_two_body_correlators import base_features
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
+from src.data import features
 from src.data.scenarios import build_configs
 from src.simulation.simulator import QuTipSimulator
 from src.simulation.variants import CORR, CorrelatorSimulator
@@ -34,7 +34,7 @@ def test_base_features_equal_the_plain_simulator():
                seed=4, dataset_name="r23_test")
     plain = GenerateDatasetUseCase(QuTipSimulator(), store=None).execute(GenerateDatasetCommand(**cmd))
     full = GenerateDatasetUseCase(CorrelatorSimulator(), store=None).execute(GenerateDatasetCommand(**cmd))
-    base = base_features(full)
+    base = features.select(full, "base")
     assert base.feature_names == plain.feature_names
     np.testing.assert_array_equal(base.sequences, plain.sequences)
     np.testing.assert_array_equal(base.remaining_time, plain.remaining_time)

@@ -44,7 +44,6 @@ Usage
 from __future__ import annotations
 
 import argparse
-import copy
 import csv
 import sys
 import time
@@ -57,31 +56,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
+from src.data import features
 from src.data.scenarios import build_configs, fixed_coupling_configs
 from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 from src.infrastructure.ml.transformer_predictor import TransformerPredictor
 from src.simulation.simulator import QuTipSimulator
-from src.simulation.variants import CORR, CorrelatorSimulator
+from src.simulation.variants import CorrelatorSimulator
 
 RESULTS_DIR = Path(__file__).parent / "results"
 J_VALUES = [0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0]
-
-
-def base_features(ds):
-    """The same dataset without the correlator columns."""
-    keep = [i for i, n in enumerate(ds.feature_names) if n not in CORR]
-    out = copy.copy(ds)
-    out.sequences = np.ascontiguousarray(ds.sequences[:, :, keep])
-    out.feature_names = [ds.feature_names[i] for i in keep]
-    return out
-
-
-def _all_test(ds):
-    out = copy.copy(ds)
-    out.test_idx = np.arange(len(ds.sequences))
-    out.train_idx = np.array([], dtype=np.int64)
-    out.val_idx = np.array([], dtype=np.int64)
-    return out
 
 
 def _transformer():
@@ -108,12 +91,13 @@ def part_a(seed, n_per, n_eval, epochs, w):
         full = gen.execute(GenerateDatasetCommand(
             configs=groups[sc], window_length=20, horizon=1.0,
             samples_per_trajectory=5, seed=seed, dataset_name=f"r23a_{seed}_{sc}"))
-        full_ev = _all_test(gen.execute(GenerateDatasetCommand(
+        full_ev = gen.execute(GenerateDatasetCommand(
             configs=eval_groups[sc], window_length=20, horizon=1.0,
             samples_per_trajectory=5, seed=seed + 1, train_ratio=0.0, val_ratio=0.0,
-            dataset_name=f"r23a_eval_{seed}_{sc}")))
+            dataset_name=f"r23a_eval_{seed}_{sc}")).as_test_only()
         print(f"R23a | seed={seed} {sc} data [{time.time() - ts:.0f}s]", flush=True)
-        for feats, (tr, ev) in {"base": (base_features(full), base_features(full_ev)),
+        for feats, (tr, ev) in {"base": (features.select(full, "base"),
+                                         features.select(full_ev, "base")),
                                 "corr": (full, full_ev)}.items():
             for model, build in MODELS.items():
                 pred = _train(build(), tr, epochs, seed)
@@ -137,7 +121,7 @@ def part_b(seed, n_per_J, epochs, w):
             configs=fixed_coupling_configs(n_per_J, J, rng), window_length=20,
             horizon=1.0, samples_per_trajectory=5, seed=seed,
             dataset_name=f"r23b_{seed}_{J}"))
-        for feats, ds in (("base", base_features(full)), ("corr", full)):
+        for feats, ds in (("base", features.select(full, "base")), ("corr", full)):
             pred = _train(_transformer(), ds, epochs, seed)
             m = BacktestUseCase(pred).execute(BacktestCommand(dataset=ds, horizon=1.0))
             w.writerow({"part": "b", "seed": seed, "scenario": "E", "J": J,

@@ -40,7 +40,6 @@ Usage
 from __future__ import annotations
 
 import argparse
-import copy
 import csv
 import sys
 import time
@@ -50,14 +49,13 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from experiments.r16_noise_aware_training import noise_augmented
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
+from src.data import observation
 from src.data.scenarios import build_configs, trajectory_store
 from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 from src.infrastructure.ml.transformer_predictor import TransformerPredictor
-from src.infrastructure.quantum.noise import ar1_filter
 from src.simulation.simulator import QuTipSimulator
 
 RESULTS_DIR = Path(__file__).parent / "results"
@@ -100,19 +98,17 @@ def main() -> None:
             # Same generator seed as R16/R21, so the white copies are R16's.
             train_sets = {
                 "clean": ds,
-                "white": noise_augmented(ds, 2, np.random.default_rng(seed + 7)),
-                "ar1": noise_augmented(ds, 2, np.random.default_rng(seed + 7), phi_max=PHI_MAX),
+                "white": observation.noise_augmented(ds, 2, np.random.default_rng(seed + 7)),
+                "ar1": observation.noise_augmented(ds, 2, np.random.default_rng(seed + 7), phi_max=PHI_MAX),
             }
-            eta = np.random.default_rng(seed).normal(0.0, 1.0, size=ds.sequences.shape)
             tests = {}
             for phi in PHIS:
-                e = ar1_filter(eta, phi)
                 for sigma in SIGMAS:
                     if sigma == 0.0 and phi > 0.0:
                         continue
-                    t = copy.copy(ds)
-                    t.sequences = (ds.sequences + sigma * e).astype(np.float32)
-                    tests[(sigma, phi)] = t
+                    # Every call redraws the same realisation of the noise.
+                    tests[(sigma, phi)] = observation.OBSERVATIONS["ar1"](
+                        ds, sigma=sigma, phi=phi, rng=np.random.default_rng(seed))
 
             for arm, (build, train) in ARMS.items():
                 pred = build()
