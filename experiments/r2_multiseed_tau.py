@@ -16,20 +16,41 @@ spread, not the level, is the point.
 """
 from __future__ import annotations
 
-import argparse, csv, statistics, sys, time
+import argparse
+import csv
+import time
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.data.scenarios import build_configs, trajectory_store
+from src.evaluation import stats
 from src.models import registry
 from src.simulation.simulator import QuTipSimulator
 
 TAUS = [0.0, 0.3, 0.5, 0.7, 0.9]
 OUT = Path(__file__).parent / "results" / "r2_multiseed_tau.csv"  # overridable via --out
+
+
+def summarise(rows: list, scenarios: list) -> None:
+    """Prints mean and standard deviation of R^2 and AUROC per tau.
+
+    Args:
+        rows: Result rows with the keys scenario, tau, r2 and auroc.
+        scenarios: Scenarios to print, in order.
+    """
+    print(f"\n{'='*62}\nMEAN +/- STD PER TAU\n{'='*62}")
+    print(f"{'scen':5} {'tau':>5} {'R2 mean':>9} {'R2 std':>8} "
+          f"{'AUROC mean':>11} {'AUROC std':>10}")
+    for scen in scenarios:
+        for tau in TAUS:
+            sub = [r for r in rows
+                   if r["scenario"] == scen and r["tau"] == tau]
+            r2_mean, r2_std = stats.mean_std([r["r2"] for r in sub])
+            au_mean, au_std = stats.mean_std([r["auroc"] for r in sub])
+            print(f"{scen:5} {tau:5.1f} {r2_mean:9.3f} {r2_std:8.3f} "
+                  f"{au_mean:11.3f} {au_std:10.3f}")
 
 
 def main() -> None:
@@ -75,16 +96,7 @@ def main() -> None:
                 print(f"  seed={seed} {scen} tau={tau:.1f} R2={m.r2:8.3f} "
                       f"AUROC={m.risk_auroc:.3f}", flush=True)
 
-    print(f"\n{'='*62}\nMEAN +/- STD PER TAU\n{'='*62}")
-    print(f"{'scen':5} {'tau':>5} {'R2 mean':>9} {'R2 std':>8} {'AUROC mean':>11} {'AUROC std':>10}")
-    for scen in a.scenarios:
-        for tau in TAUS:
-            sub = [r for r in rows if r["scenario"] == scen and r["tau"] == tau]
-            r2s = [r["r2"] for r in sub]; aus = [r["auroc"] for r in sub]
-            sd = statistics.stdev(r2s) if len(r2s) > 1 else 0.0
-            sa = statistics.stdev(aus) if len(aus) > 1 else 0.0
-            print(f"{scen:5} {tau:5.1f} {statistics.mean(r2s):9.3f} {sd:8.3f} "
-                  f"{statistics.mean(aus):11.3f} {sa:10.3f}")
+    summarise(rows, a.scenarios)
     print(f"\ntotal {time.time()-t0:.0f}s -> {OUT}")
 
 

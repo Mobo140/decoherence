@@ -38,16 +38,13 @@ from __future__ import annotations
 
 import argparse
 import csv
-import statistics
-import sys
 import time
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.application.run_ablation import AblationCommand, AblationStudyUseCase
 from src.data.scenarios import build_configs
 from src.domain.value_objects import PredictorVariant
+from src.evaluation import stats
 from src.simulation.simulator import QuTipSimulator
 
 class ImprovedAblation(AblationStudyUseCase):
@@ -136,20 +133,24 @@ def run_seed(simulator, seed: int, n_per: int, epochs: int, scenarios: list,
 
 
 def summarise(rows: list) -> None:
+    """Prints mean and standard deviation of R^2 and AUROC over the seeds.
+
+    Args:
+        rows: Result rows with the keys scenario, variant, r2 and auroc.
+    """
     print(f"\n{'='*78}\nMEAN +/- STD ACROSS SEEDS\n{'='*78}")
     print(f"{'scen':5} {'variant':14} {'R2 mean':>9} {'R2 std':>8} "
           f"{'AUROC mean':>11} {'AUROC std':>10} {'n':>3}")
     for scen in sorted({r["scenario"] for r in rows}):
         for var in [v.value for v in VARIANTS]:
-            sub = [r for r in rows if r["scenario"] == scen and r["variant"] == var]
+            sub = [r for r in rows
+                   if r["scenario"] == scen and r["variant"] == var]
             if not sub:
                 continue
-            r2s = [r["r2"] for r in sub]
-            aus = [r["auroc"] for r in sub]
-            sd = statistics.stdev(r2s) if len(r2s) > 1 else 0.0
-            sda = statistics.stdev(aus) if len(aus) > 1 else 0.0
-            print(f"{scen:5} {var:14} {statistics.mean(r2s):9.3f} {sd:8.3f} "
-                  f"{statistics.mean(aus):11.3f} {sda:10.3f} {len(sub):3d}")
+            r2_mean, r2_std = stats.mean_std([r["r2"] for r in sub])
+            au_mean, au_std = stats.mean_std([r["auroc"] for r in sub])
+            print(f"{scen:5} {var:14} {r2_mean:9.3f} {r2_std:8.3f} "
+                  f"{au_mean:11.3f} {au_std:10.3f} {len(sub):3d}")
 
 
 def main() -> None:

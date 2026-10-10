@@ -44,16 +44,13 @@ from __future__ import annotations
 
 import argparse
 import csv
-import statistics as st
-import sys
 import time
 from collections import defaultdict
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 from experiments.e11_scaling import run_e11a, run_e11b
 from src.data.scenarios import build_configs
+from src.evaluation import stats
 from src.simulation.simulator import QuTipSimulator
 
 RESULTS_DIR = Path(__file__).parent / "results"
@@ -68,6 +65,27 @@ def _append(path: Path, row: dict, first: bool) -> None:
         if first:
             w.writeheader()
         w.writerow(row)
+
+
+def summarise(rows: list) -> None:
+    """Prints mean and standard deviation of R^2 and AUROC per arm.
+
+    Args:
+        rows: Result rows with the keys arm, scenario, r2 and auroc.
+    """
+    print("\n" + "=" * 62)
+    print(f"{'arm':<11}{'scen':<5}{'R2 mean':>9}{'R2 std':>9}{'AUROC':>8}"
+          f"{'std':>7}{'n':>4}")
+    groups = defaultdict(list)
+    for r in rows:
+        groups[(r["arm"], r["scenario"])].append(r)
+    for key in sorted(groups):
+        r2_mean, r2_std = stats.mean_std(
+            [float(x["r2"]) for x in groups[key]])
+        au_mean, au_std = stats.mean_std(
+            [float(x["auroc"]) for x in groups[key]])
+        print(f"{key[0]:<11}{key[1]:<5}{r2_mean:9.3f}{r2_std:9.3f}"
+              f"{au_mean:8.3f}{au_std:7.3f}{len(groups[key]):4d}")
 
 
 def main() -> None:
@@ -124,18 +142,7 @@ def main() -> None:
 
     SCRATCH.unlink(missing_ok=True)
 
-    print("\n" + "=" * 62)
-    print(f"{'arm':<11}{'scen':<5}{'R2 mean':>9}{'R2 std':>9}{'AUROC':>8}{'std':>7}{'n':>4}")
-    g = defaultdict(list)
-    for r in collected:
-        g[(r["arm"], r["scenario"])].append(r)
-    for k in sorted(g):
-        rs = [float(x["r2"]) for x in g[k]]
-        au = [float(x["auroc"]) for x in g[k]]
-        sd = st.stdev(rs) if len(rs) > 1 else 0.0
-        sa = st.stdev(au) if len(au) > 1 else 0.0
-        print(f"{k[0]:<11}{k[1]:<5}{st.mean(rs):9.3f}{sd:9.3f}"
-              f"{st.mean(au):8.3f}{sa:7.3f}{len(rs):4d}")
+    summarise(collected)
     print(f"\ntotal {time.time() - t0:.0f}s -> {out}")
 
 

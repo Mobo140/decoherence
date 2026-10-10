@@ -39,17 +39,14 @@ from __future__ import annotations
 import argparse
 import csv
 import math
-import statistics as st
-import sys
 import time
 from collections import defaultdict
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 from experiments.e6_2qubit_improved import _noise_sweep
 from experiments.e8_improved_2qubit import run_e8c
 from src.data.scenarios import build_configs
+from src.evaluation import stats
 from src.simulation.simulator import QuTipSimulator
 
 RESULTS_DIR = Path(__file__).parent / "results"
@@ -74,7 +71,7 @@ def _stats(values):
     good = [v for v in values if math.isfinite(v)]
     if not good:
         return float("nan"), float("nan")
-    return st.mean(good), (st.stdev(good) if len(good) > 1 else 0.0)
+    return stats.mean_std(good)
 
 
 def main() -> None:
@@ -144,12 +141,14 @@ def main() -> None:
             spans = [max(d.values()) - min(d.values()) for d in per_seed.values()]
             print(f"\n  span of R2 across sigma, per seed: "
                   f"{[f'{s:.3f}' for s in spans]}")
-            print(f"  mean span {st.mean(spans):.3f} "
+            mean_span = stats.mean_std(spans)[0]
+            print(f"  mean span {mean_span:.3f} "
                   f"(published 0.007)")
-            seed_sd = st.mean([_stats(g[('e6b', k)])[1] for k in keys])
+            seed_sd = stats.mean_std(
+                [_stats(g[('e6b', k)])[1] for k in keys])[0]
             print(f"  typical seed-to-seed s.d. at fixed sigma: {seed_sd:.3f}")
             verdict = ("robustness claim holds: the sweep moves far less than the seeds do"
-                       if st.mean(spans) < seed_sd else
+                       if mean_span < seed_sd else
                        "NOT supported: the sweep moves as much as the seeds do")
             print(f"  -> {verdict}")
 

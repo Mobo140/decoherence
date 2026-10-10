@@ -36,15 +36,12 @@ from __future__ import annotations
 import argparse
 import csv
 import math
-import statistics as st
-import sys
 import time
 from collections import defaultdict
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 from experiments.e7_paper2_extended import run_e7c
+from src.evaluation import stats
 from src.simulation.simulator import QuTipSimulator
 
 RESULTS_DIR = Path(__file__).parent / "results"
@@ -67,8 +64,8 @@ def _stats(values):
     good = [v for v in values if math.isfinite(v)]
     if not good:
         return float("nan"), float("nan"), 0
-    sd = st.stdev(good) if len(good) > 1 else 0.0
-    return st.mean(good), sd, len(good)
+    mean, std = stats.mean_std(good)
+    return mean, std, len(good)
 
 
 def _r(J: float) -> float:
@@ -134,7 +131,7 @@ def main() -> None:
         sds = [_stats([float(x["r2"]) for x in v])[1]
                for v in g.values() if len(v) > 1]
         sds = [x for x in sds if math.isfinite(x)]
-        typical = st.mean(sds) if sds else 0.0
+        typical = stats.mean_std(sds)[0] if sds else 0.0
         print(f"\nworst mean at J={worst} ({means[worst]:.3f}), "
               f"best at J={best} ({means[best]:.3f})")
         print(f"dip depth {spread:.3f} vs typical seed spread {typical:.3f}"

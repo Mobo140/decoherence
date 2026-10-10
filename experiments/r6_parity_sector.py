@@ -59,18 +59,14 @@ from __future__ import annotations
 import argparse
 import csv
 import math
-import statistics as st
-import sys
 import time
 from collections import defaultdict
 from pathlib import Path
 
-import numpy as np
 import qutip as qt
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 from experiments.e7_paper2_extended import run_e7c
+from src.evaluation import stats
 from src.simulation.simulator import QuTipSimulator
 
 RESULTS_DIR = Path(__file__).parent / "results"
@@ -124,7 +120,7 @@ def _stats(values):
     good = [v for v in values if math.isfinite(v)]
     if not good:
         return float("nan"), float("nan")
-    return st.mean(good), (st.stdev(good) if len(good) > 1 else 0.0)
+    return stats.mean_std(good)
 
 
 def main() -> None:
