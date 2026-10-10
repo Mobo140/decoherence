@@ -1,13 +1,9 @@
 """Tests for HamiltonianModelRegistry file names, update rule, and fallback."""
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.domain.value_objects import DissipatorType, InteractionType
 from src.models.physics_only import PhysicsOnlyPredictor

@@ -1,9 +1,5 @@
 """Additional tests for decoherence utilities."""
 import numpy as np
-from pathlib import Path
-import sys
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.physics.measures import coherence_l1, purity
 from src.physics.observables import compute_observables_single_qubit

@@ -1,12 +1,7 @@
 """Backtest must ignore right-censored labels when computing R²."""
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import numpy as np
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.data.dataset import Dataset

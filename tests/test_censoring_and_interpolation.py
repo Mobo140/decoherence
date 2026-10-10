@@ -1,14 +1,9 @@
 """Tests for T₂ interpolation, right-censoring, and dataset exclusion."""
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import numpy as np
 import pytest
 import qutip as qt
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.domain.value_objects import (

@@ -26,6 +26,7 @@ from src.domain.value_objects import (
     SystemConfig,
     TrajectoryResult,
 )
+from src.physics.lindblad_systems import sample_random_pure_state
 
 EXPERIMENTS = Path(__file__).resolve().parents[1] / "experiments"
 
@@ -92,6 +93,12 @@ def test_the_initial_state_draw_is_seeded_too():
     assert np.array_equal(a.t_decoh_abs, b.t_decoh_abs), (
         "trajectory content depended on RNG state outside the command's seed"
     )
+
+
+def test_a_seeded_random_pure_state_is_reproducible():
+    first = sample_random_pure_state(n_qubits=1, seed=42)
+    second = sample_random_pure_state(n_qubits=1, seed=42)
+    assert np.allclose(first.full(), second.full())
 
 
 def test_different_seeds_give_different_data():
