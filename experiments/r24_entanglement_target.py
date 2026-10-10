@@ -66,13 +66,6 @@ COLUMNS = ("seed", "scenario", "model", "features", "test", "r2", "mae",
            "auroc", "n_samples", "n_censored")
 
 
-def esd_configs(groups):
-    """Scenario groups D and E with entanglement death as the criterion."""
-    return {sc: [dataclasses.replace(c, decoherence_criterion=ESD)
-                 for c in groups[sc]]
-            for sc in ("D", "E")}
-
-
 def part_a(
     n_per: int, n_eval: int, epochs: int
 ) -> list[pipeline.ExperimentConfig]:
