@@ -54,6 +54,12 @@ from src.simulation.variants import (
 # ---------------------------------------------------------------------------
 
 GOLDEN = Path(__file__).with_name("golden_outputs.json")
+# Content-addressed trajectory-cache entries checked for unchanged loading.
+_CACHE_KEYS = (
+    "t_00011afa500936f7",
+    "t_00025c1e6cdcbc45",
+    "t_0002ff968920fd21",
+)
 
 
 def _fp(arr) -> list[str]:
@@ -172,8 +178,10 @@ def compute() -> dict:
                 preds.append(type(exc).__name__)
         out[f"ckpt/{ckpt.stem}"] = [type(pred).__name__] + [
             repr(float(x)) if not isinstance(x, str) else x for x in preds]
+    # Content-addressed entries never change once written; the named
+    # dataset dumps are overwritten by every run, so they are not checked.
     traj_store = NumpyTrajectoryStore()
-    for name in sorted(traj_store.list_available())[:5]:
+    for name in _CACHE_KEYS:
         out[f"cache/{name}"] = [_traj(t) for t in traj_store.load(name)[:2]]
     return out
 
