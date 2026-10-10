@@ -89,6 +89,19 @@ def n_physics_from_state(state_dict: dict, hidden_size: int) -> int | None:
     return n
 
 
+def _scalers_from_checkpoint(ckpt: dict) -> dict[str, standardize.Standardizer]:
+    scalers = {}
+    for key in ("t_obs", "slope", "logc", "phys", _RESIDUAL_KEY):
+        scalers[key] = standardize.Standardizer(
+            ckpt[f"{key}_mean"], ckpt[f"{key}_std"])
+    # Checkpoints from before these inputs existed lack their keys; the
+    # identity map is what such a network was trained with.
+    for key in ("r2", "ic", "dc", "j"):
+        scalers[key] = standardize.Standardizer(
+            ckpt.get(f"{key}_mean", 0.0), ckpt.get(f"{key}_std", 1.0))
+    return scalers
+
+
 def _identity_scalers() -> dict[str, standardize.Standardizer]:
     keys = (*SCALAR_KEYS, _RESIDUAL_KEY)
     return {key: standardize.Standardizer() for key in keys}
@@ -212,20 +225,7 @@ class LSTMPredictor(ports.IPredictor):
 
         self.net.eval()
         with torch.no_grad():
-            x = self._standardise_window(window)
-            inputs = [
-                lstm_data.scalar_tensor(v, self.scalers[k], self.device)
-                for k, v in values.items()
-            ]
-            j_in = None
-            if self.use_J_scalar:
-                j_in = lstm_data.scalar_tensor(
-                    self.inference_J, self.scalers["j"], self.device)
-
-            residual_norm, _risk_logit = self.net(x, *inputs, j_in)
-
-            target = self.scalers[_RESIDUAL_KEY]
-            residual = float(residual_norm.item()) * target.std + target.mean
+            residual = self._residual(window, values)
             base = phys_rem if self.residual_output else 0.0
             remaining = max(0.0, base + residual)
             t_decoh_pred = float(np.clip(t_obs + remaining, 0.0, self.t_max))
@@ -266,6 +266,21 @@ class LSTMPredictor(ports.IPredictor):
             train_loss_history=train_hist,
             val_loss_history=val_hist,
         )
+
+    def _residual(self, window: np.ndarray, values: dict[str, float]) -> float:
+        """Runs the network; returns its output in time units."""
+        x = self._standardise_window(window)
+        inputs = [
+            lstm_data.scalar_tensor(v, self.scalers[k], self.device)
+            for k, v in values.items()
+        ]
+        j_in = None
+        if self.use_J_scalar:
+            j_in = lstm_data.scalar_tensor(
+                self.inference_J, self.scalers["j"], self.device)
+        residual_norm, _risk_logit = self.net(x, *inputs, j_in)
+        target = self.scalers[_RESIDUAL_KEY]
+        return float(residual_norm.item()) * target.std + target.mean
 
     # ------------------------------------------------------------------
     # Serialisation
@@ -355,14 +370,7 @@ class LSTMPredictor(ports.IPredictor):
         p.net = net
         p.feature_scaler = standardize.Standardizer(
             ckpt["feature_mean"], ckpt["feature_std"])
-        # Checkpoints from before these inputs existed lack their keys; the
-        # identity map is what such a network was trained with.
-        for key in ("t_obs", "slope", "logc", "phys", _RESIDUAL_KEY):
-            p.scalers[key] = standardize.Standardizer(
-                ckpt[f"{key}_mean"], ckpt[f"{key}_std"])
-        for key in ("r2", "ic", "dc", "j"):
-            p.scalers[key] = standardize.Standardizer(
-                ckpt.get(f"{key}_mean", 0.0), ckpt.get(f"{key}_std", 1.0))
+        p.scalers = _scalers_from_checkpoint(ckpt)
         p.dt = ckpt.get("dt", 0.1)
         return p
 
