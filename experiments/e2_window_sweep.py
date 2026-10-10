@@ -37,8 +37,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from experiments._config import build_configs, trajectory_store
 from src.application.run_window_sweep import WindowSweepCommand, WindowSweepUseCase
+from src.data.scenarios import build_configs, trajectory_store
 from src.simulation.simulator import QuTipSimulator
 
 

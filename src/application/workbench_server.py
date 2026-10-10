@@ -91,7 +91,7 @@ def _series(traj) -> dict:
 
 
 def _simulate_preset(scenario: str, seed: int):
-    from experiments._config import build_configs
+    from src.data.scenarios import build_configs
 
     groups = build_configs(n_per_scenario=1, seed=int(seed))
     if scenario not in groups:

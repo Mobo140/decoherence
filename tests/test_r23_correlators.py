@@ -1,9 +1,9 @@
 """R23: two-body correlators complete the two-qubit state and leave the base features unchanged."""
 import numpy as np
 
-from experiments._config import build_configs
 from experiments.r23_two_body_correlators import base_features
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
+from src.data.scenarios import build_configs
 from src.simulation.simulator import QuTipSimulator
 from src.simulation.variants import CORR, CorrelatorSimulator
 

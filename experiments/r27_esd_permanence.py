@@ -38,9 +38,10 @@ from sklearn.metrics import roc_auc_score
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from experiments._config import build_configs
 from experiments.r24_entanglement_target import _esd
 from experiments.r26_esd_occurrence import DROP, T_OBS, classifiers, score, simulate, windows
+
+from src.data.scenarios import build_configs
 
 RESULTS_DIR = Path(__file__).parent / "results"
 N_BOOT = 1000

@@ -37,24 +37,23 @@ from __future__ import annotations
 import argparse
 import copy
 import csv
-import itertools
 import sys
 from pathlib import Path
-from typing import List, Dict
+from typing import Dict
 
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from experiments._config import build_configs, trajectory_store, _bernstein_coeffs, trajectory_store
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.run_cross_system import CrossSystemCommand, CrossSystemUseCase
 from src.application.run_ablation import AblationCommand, AblationStudyUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
+from src.data.scenarios import (
+    build_configs, fixed_coupling_configs, trajectory_store)
 from src.domain.value_objects import (
-    DecoherenceCriterion, DissipatorConfig, DissipatorType,
-    InteractionType, PredictorVariant, QubitCount, SystemConfig,
+    DecoherenceCriterion, InteractionType, PredictorVariant,
 )
 from src.simulation.simulator import QuTipSimulator
 
@@ -186,32 +185,6 @@ def run_e7b(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
 # E7c — TFIM J-coupling sweep
 # ---------------------------------------------------------------------------
 
-def _make_tfim_configs_fixed_J(
-    n: int, J: float, rng: np.random.Generator,
-    criterion: DecoherenceCriterion = DecoherenceCriterion.COHERENCE,
-    interaction: InteractionType = InteractionType.TFIM,
-) -> List[SystemConfig]:
-    """Generate two-qubit configs (TFIM by default) with a fixed coupling J."""
-    shapes = ["random", "peak", "step_up", "step_down", "monotone_increasing",
-              "monotone_decreasing"]
-    shape_cycle = itertools.cycle(shapes)
-    configs = []
-    for _ in range(n):
-        shape = next(shape_cycle)
-        coeffs = _bernstein_coeffs(shape, rng, gamma_max=0.8)
-        configs.append(SystemConfig(
-            n_qubits=QubitCount.TWO,
-            omega=float(rng.uniform(0.5, 2.0)),
-            J=J,
-            dissipator=DissipatorConfig.time_dependent(coeffs, DissipatorType.SIGMA_MINUS),
-            interaction_type=interaction,
-            t_max=20.0,
-            dt=0.1,
-            decoherence_criterion=criterion,
-        ))
-    return configs
-
-
 def run_e7c(simulator, n_per_J: int, n_epochs: int, verbose: bool = True,
             *, seed: int = 42, config_seed: int = 123, out_path=None,
             J_values=None, store=_UNSET,
@@ -242,7 +215,8 @@ def run_e7c(simulator, n_per_J: int, n_epochs: int, verbose: bool = True,
 
     for J in J_values:
         print(f"\n{'='*60}\n{interaction.value} J={J:.1f}\n{'='*60}")
-        configs = _make_tfim_configs_fixed_J(n_per_J, J, rng, criterion, interaction)
+        configs = fixed_coupling_configs(
+            n_per_J, J, rng, criterion, interaction)
 
         dataset = gen_uc.execute(GenerateDatasetCommand(
             configs=configs,

@@ -32,7 +32,7 @@ ENV/
 *.swo
 
 # Data and checkpoints
-data/
+/data/
 checkpoints/
 runs/
 /figures/

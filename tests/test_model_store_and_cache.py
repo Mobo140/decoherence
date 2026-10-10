@@ -160,9 +160,8 @@ def test_e7a_csv_variant_is_transformer():
     assert "physics_lstm" not in text
 
 
-def test_force_all_test_puts_every_window_in_test_idx():
-    from src.application.generate_dataset import Dataset
-    from src.application.run_cross_system import CrossSystemUseCase
+def test_as_test_only_puts_every_window_in_test_idx():
+    from src.data.dataset import Dataset
 
     n = 6
     ds = Dataset(
@@ -177,7 +176,7 @@ def test_force_all_test_puts_every_window_in_test_idx():
         feature_names=["a", "b", "c"],
         metadata={},
     )
-    out = CrossSystemUseCase._force_all_test(ds)
+    out = ds.as_test_only()
     assert list(out.test_idx) == list(range(n))
     assert len(out.train_idx) == 0
     assert len(out.val_idx) == 0

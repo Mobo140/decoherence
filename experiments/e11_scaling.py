@@ -34,19 +34,17 @@ Usage
 from __future__ import annotations
 
 import argparse
-import copy
 import csv
 import sys
 from pathlib import Path
 
-import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from experiments._config import build_configs, trajectory_store
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
+from src.data.scenarios import build_configs, trajectory_store
 from src.simulation.simulator import QuTipSimulator
 
 
@@ -60,14 +58,6 @@ def _save_csv(rows: list, path: Path, fieldnames: list) -> None:
         writer.writeheader()
         writer.writerows(rows)
     print(f"Saved → {path}")
-
-
-def _force_all_test(dataset):
-    ds = copy.copy(dataset)
-    ds.test_idx  = np.arange(len(dataset.sequences))
-    ds.train_idx = np.array([], dtype=np.int64)
-    ds.val_idx   = np.array([], dtype=np.int64)
-    return ds
 
 
 # 4-class system-type codes matching generate_dataset.py
@@ -97,7 +87,7 @@ def _eval_per_scenario(predictor, simulator, groups, window, min_gap,
             train_ratio=0.0, val_ratio=0.0,
             min_window_gap=min_gap,
         ))
-        eval_ds = _force_all_test(eval_ds)
+        eval_ds = eval_ds.as_test_only()
         m = BacktestUseCase(predictor).execute(BacktestCommand(dataset=eval_ds, horizon=1.0))
         print(f"  [{sc}] → {m.summary()}")
         rows.append(dict(

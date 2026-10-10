@@ -4,8 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from ..domain.ports import IModelStore, IPredictor
-from .generate_dataset import Dataset
+from src.data import dataset as dataset_lib
+from src.domain.ports import IModelStore, IPredictor
 
 
 @dataclass
@@ -21,7 +21,7 @@ class TrainModelResult:
 class TrainModelCommand:
     """Input for TrainModelUseCase."""
 
-    dataset: Dataset
+    dataset: dataset_lib.Dataset
     n_epochs: int = 50
     batch_size: int = 32
     learning_rate: float = 1e-3

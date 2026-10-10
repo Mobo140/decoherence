@@ -13,9 +13,9 @@
 | `src/domain/` | Типы-значения (`SystemConfig`, `TrajectoryResult`, критерии) и порты | — |
 | `src/physics/` | Системы Линдблада, решение уравнения, меры, операторы Паули | `measures.coherence_l1`, `measures.concurrence`, … |
 | `src/simulation/` | Адаптер QuTiP и его варианты | `simulator.QuTipSimulator`, `variants.*` |
-| `src/data/scenarios.py` | Сценарии A–E и генераторы конфигураций (сейчас `experiments/_config.py`) | `build_configs(n_per_scenario, seed)`, `SCENARIOS` |
-| `src/data/dataset.py` | `Dataset` и операции над ним | `Dataset.with_sequences`, `Dataset.select_features`, `Dataset.as_test_only` |
-| `src/data/windows.py` | Нарезка окон и разбиение по траекториям (сейчас `_build_dataset`) | `build_dataset(trajectories, ...)` |
+| `src/data/scenarios.py` | Сценарии A–E и генераторы конфигураций (`experiments/_config.py` оставлен как псевдоним для `paper/`) | `build_configs(n_per_scenario, seed)`, `fixed_coupling_configs`, `SCENARIOS` |
+| `src/data/dataset.py` | `Dataset` и операции над ним | `Dataset.with_sequences`, `Dataset.select_features`, `Dataset.drop_features`, `Dataset.as_test_only` |
+| `src/data/windows.py` | Нарезка окон и разбиение по траекториям | `build_dataset(trajectories, ...)`, `assign_splits`, `sample_window_ends` |
 | `src/data/observation.py` | **Модель наблюдения**: как из точных средних получаются входы | реестр `OBSERVATIONS`: `"exact"`, `"gaussian"`, `"ar1"`; позже `"shots"`, `"sequential"` |
 | `src/data/features.py` | Наборы признаков | реестр `FEATURE_SETS`: `"base"`, `"corr"`, `"corr_conc"`; позже `"local"` |
 | `src/models/` | Предикторы и сети; реестр по псевдониму | `build_model("transformer", **kw)`; `MODELS`: `"physics_only"`, `"stretched_exp"`, `"lstm_only"`, `"physics_lstm"`, `"physics_feature"`, `"transformer"` |

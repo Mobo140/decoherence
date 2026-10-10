@@ -56,7 +56,7 @@ from pathlib import Path
 import numpy as np
 import qutip as qt
 
-from experiments._config import _bernstein_coeffs
+from src.data.scenarios import bernstein_coeffs
 from src.physics.lindblad_systems import TwoQubitSystem
 
 RESULTS = Path(__file__).parent / "results" / "r9_target_modulation.csv"
@@ -130,7 +130,7 @@ def part2(n_traj: int, seed: int) -> list[dict]:
             shapes = itertools.cycle(SHAPES)
             t2, t2e, gaps, nonmono, censored = [], [], [], 0, 0
             for _ in range(n_traj):
-                coeffs = np.array(_bernstein_coeffs(next(shapes), rng, gamma_max=0.8))
+                coeffs = np.array(bernstein_coeffs(next(shapes), rng, gamma_max=0.8))
                 system = TwoQubitSystem(J=J, interaction_type=model,
                                         gamma_coeffs=coeffs, gamma_t_max=T_MAX)
                 psi = qt.Qobj(_haar(rng).reshape(-1, 1), dims=[[2, 2], [1, 1]])

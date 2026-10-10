@@ -117,14 +117,15 @@ and the network predicts T₂ directly from sequences.
 ├── app.py                              # FastAPI workbench: 7 screens
 ├── static/workbench.css
 ├── experiments/
-│   ├── _config.py                      # SystemConfig factory, scenarios A–E
+│   ├── _config.py                      # alias of src/data/scenarios (paper figures)
 │   ├── e1_ablation.py … e14_inject_J.py
 │   ├── run_all.py                      # Paper 1 suite (E1–E5)
 │   └── results/                        # CSV from completed runs
 ├── src/
 │   ├── domain/                         # value objects, ports — no torch/qutip
 │   ├── application/                    # use-cases + experiment_catalog / job_queue
-│   ├── infrastructure/                 # LSTM, Transformer, registries, noise
+│   ├── data/                           # scenarios A–E, Dataset, windows, observation models, feature sets
+│   ├── infrastructure/                 # LSTM, Transformer, registries, stores
 │   ├── physics/                        # Lindblad systems, master equation, measures
 │   └── simulation/                     # QuTipSimulator (ISimulator adapter) and variants
 ├── paper/

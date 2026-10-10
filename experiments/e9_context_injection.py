@@ -38,9 +38,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from experiments._config import build_configs, trajectory_store
 from src.application.run_ablation import AblationCommand, AblationStudyUseCase
 from src.application.run_cross_system import CrossSystemCommand, CrossSystemUseCase
+from src.data.scenarios import build_configs, trajectory_store
 from src.domain.value_objects import PredictorVariant
 from src.simulation.simulator import QuTipSimulator
 

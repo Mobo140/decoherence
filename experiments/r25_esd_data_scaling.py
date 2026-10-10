@@ -42,11 +42,11 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from experiments._config import build_configs
 from experiments.r23_two_body_correlators import _all_test, _train, _transformer
 from experiments.r24_entanglement_target import EntanglementSimulator, _esd, feature_set
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
+from src.data.scenarios import build_configs
 from src.domain.ports import ITrajectoryStore
 
 RESULTS_DIR = Path(__file__).parent / "results"

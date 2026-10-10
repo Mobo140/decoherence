@@ -214,7 +214,7 @@ class TestPhysicsOnlyPredictor:
 
 class TestLSTMPredictorFlag:
     def _make_tiny_dataset(self):
-        from experiments._config import build_configs
+        from src.data.scenarios import build_configs
         from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
         from src.simulation.simulator import QuTipSimulator
         simulator = QuTipSimulator()
@@ -276,7 +276,7 @@ class TestLSTMPredictorFlag:
 
 class TestTransformerPredictor:
     def _make_tiny_dataset(self):
-        from experiments._config import build_configs
+        from src.data.scenarios import build_configs
         from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
         from src.simulation.simulator import QuTipSimulator
         simulator = QuTipSimulator()

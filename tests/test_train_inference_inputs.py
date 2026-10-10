@@ -7,7 +7,7 @@ trained on one input distribution and evaluated on another.
 import numpy as np
 import torch
 
-from src.application.generate_dataset import Dataset
+from src.data.dataset import Dataset
 from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 
 

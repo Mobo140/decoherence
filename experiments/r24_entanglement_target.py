@@ -53,11 +53,10 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from experiments._config import build_configs
-from experiments.e7_paper2_extended import _make_tfim_configs_fixed_J
 from experiments.r23_two_body_correlators import MODELS, _all_test, _train
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
+from src.data.scenarios import build_configs, fixed_coupling_configs
 from src.domain.value_objects import DecoherenceCriterion, InteractionType
 from src.physics.lindblad_systems import TwoQubitSystem
 from src.physics.measures import wootters_lambda
@@ -120,7 +119,7 @@ def part_b(seed, n, out_path):
     for inter in (InteractionType.XXZ, InteractionType.TFIM):
         rng = np.random.default_rng(seed)
         for J in (0.2, 0.8, 1.5):
-            for i, cfg in enumerate(_make_tfim_configs_fixed_J(n, J, rng, interaction=inter)):
+            for i, cfg in enumerate(fixed_coupling_configs(n, J, rng, interaction=inter)):
                 times = np.linspace(0.0, cfg.t_max, int(round(cfg.t_max / cfg.dt)) + 1)
                 row = {"seed": seed, "system": inter.value, "J": J, "index": i}
                 for tag, scale in (("", 1.0), ("_scaled", 1.02)):

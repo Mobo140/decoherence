@@ -52,9 +52,10 @@ from sklearn.preprocessing import StandardScaler
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from experiments._config import build_configs
 from experiments.r23_two_body_correlators import CORR
 from experiments.r24_entanglement_target import EntanglementSimulator, _esd
+
+from src.data.scenarios import build_configs
 
 RESULTS_DIR = Path(__file__).parent / "results"
 WINDOW = 20

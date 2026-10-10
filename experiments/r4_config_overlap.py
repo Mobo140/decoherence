@@ -46,8 +46,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from experiments._config import build_configs
 from experiments.e11_scaling import run_e11a
+from src.data.scenarios import build_configs
 from src.simulation.simulator import QuTipSimulator
 
 RESULTS_DIR = Path(__file__).parent / "results"

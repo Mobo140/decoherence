@@ -5,16 +5,16 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..domain.ports import IPredictor
-from ..domain.value_objects import BacktestMetrics
-from .generate_dataset import Dataset
+from src.data import dataset as dataset_lib
+from src.domain.ports import IPredictor
+from src.domain.value_objects import BacktestMetrics
 
 
 @dataclass(frozen=True)
 class BacktestCommand:
     """Input for BacktestUseCase."""
 
-    dataset: Dataset
+    dataset: dataset_lib.Dataset
     horizon: float = 1.0
 
 

@@ -174,7 +174,7 @@ class TransformerPredictor(IPredictor):
 
     def train(self, dataset: object, **kwargs) -> object:
         from ...application.train_model import TrainModelResult
-        from ...application.generate_dataset import Dataset as DS
+        from src.data.dataset import Dataset as DS
         assert isinstance(dataset, DS)
         ds: DS = dataset
         n_epochs   = kwargs.get("n_epochs", 50)

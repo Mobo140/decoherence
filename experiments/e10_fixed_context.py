@@ -31,21 +31,19 @@ Usage
 from __future__ import annotations
 
 import argparse
-import copy
 import csv
 import sys
 from pathlib import Path
 from typing import Dict, List
 
-import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from experiments._config import build_configs, trajectory_store
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.run_cross_system import CrossSystemCommand, CrossSystemUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
+from src.data.scenarios import build_configs, trajectory_store
 from src.domain.value_objects import (
     AblationResult, ExperimentSpec, NoiseConfig, PredictorVariant, SystemConfig,
 )
@@ -67,14 +65,6 @@ def _save_csv(rows: list, path: Path, fieldnames: list) -> None:
         writer.writeheader()
         writer.writerows(rows)
     print(f"Saved → {path}")
-
-
-def _force_all_test(dataset):
-    ds = copy.copy(dataset)
-    ds.test_idx  = np.arange(len(dataset.sequences))
-    ds.train_idx = np.array([], dtype=np.int64)
-    ds.val_idx   = np.array([], dtype=np.int64)
-    return ds
 
 
 # ---------------------------------------------------------------------------
@@ -133,7 +123,7 @@ def run_e10a(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True)
             val_ratio=0.0,
             min_window_gap=MIN_GAP,
         ))
-        eval_dataset = _force_all_test(eval_dataset)
+        eval_dataset = eval_dataset.as_test_only()
 
         metrics = BacktestUseCase(predictor).execute(
             BacktestCommand(dataset=eval_dataset, horizon=1.0)
@@ -207,7 +197,7 @@ def run_e10b(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True)
             val_ratio=0.0,
             min_window_gap=MIN_GAP,
         ))
-        eval_dataset = _force_all_test(eval_dataset)
+        eval_dataset = eval_dataset.as_test_only()
 
         metrics = BacktestUseCase(predictor).execute(
             BacktestCommand(dataset=eval_dataset, horizon=1.0)

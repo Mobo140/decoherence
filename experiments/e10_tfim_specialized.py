@@ -37,11 +37,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from experiments._config import build_configs, trajectory_store
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.run_cross_system import CrossSystemCommand, CrossSystemUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
+from src.data.scenarios import build_configs, trajectory_store
 from src.domain.value_objects import DissipatorType, InteractionType, PredictorVariant
 from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 from src.infrastructure.persistence.stores import HamiltonianModelRegistry

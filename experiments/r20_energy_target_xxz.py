@@ -43,9 +43,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from experiments._config import build_configs
 from experiments.e7_paper2_extended import run_e7c
 from experiments.e11_scaling import run_e11a
+from src.data.scenarios import build_configs
 from src.domain.value_objects import DecoherenceCriterion, InteractionType
 from src.simulation.simulator import QuTipSimulator
 

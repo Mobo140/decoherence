@@ -47,9 +47,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from experiments._config import build_configs
 from experiments.e6_2qubit_improved import _noise_sweep
 from experiments.e8_improved_2qubit import run_e8c
+from src.data.scenarios import build_configs
 from src.simulation.simulator import QuTipSimulator
 
 RESULTS_DIR = Path(__file__).parent / "results"

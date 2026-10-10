@@ -28,11 +28,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from experiments._config import build_configs, trajectory_store
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.run_noise_sweep import NoiseSweepUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
+from src.data.scenarios import build_configs, trajectory_store
 from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 from src.infrastructure.ml.physics_only_predictor import PhysicsOnlyPredictor
 from src.infrastructure.ml.transformer_predictor import TransformerPredictor

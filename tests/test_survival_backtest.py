@@ -9,7 +9,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.application.backtest import BacktestCommand, BacktestUseCase
-from src.application.generate_dataset import Dataset
+from src.data.dataset import Dataset
 from src.domain.value_objects import PredictionResult
 from src.infrastructure.ml.physics_only_predictor import PhysicsOnlyPredictor
 

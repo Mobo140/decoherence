@@ -54,11 +54,10 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from experiments._config import build_configs
-from experiments.e7_paper2_extended import _make_tfim_configs_fixed_J
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
+from src.data.scenarios import build_configs, fixed_coupling_configs
 from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 from src.infrastructure.ml.transformer_predictor import TransformerPredictor
 from src.simulation.simulator import QuTipSimulator
@@ -135,7 +134,7 @@ def part_b(seed, n_per_J, epochs, w):
     for J in J_VALUES:
         ts = time.time()
         full = gen.execute(GenerateDatasetCommand(
-            configs=_make_tfim_configs_fixed_J(n_per_J, J, rng), window_length=20,
+            configs=fixed_coupling_configs(n_per_J, J, rng), window_length=20,
             horizon=1.0, samples_per_trajectory=5, seed=seed,
             dataset_name=f"r23b_{seed}_{J}"))
         for feats, ds in (("base", base_features(full)), ("corr", full)):
@@ -158,7 +157,7 @@ def part_c(seed, n, out_path):
     for inter in (InteractionType.TFIM, InteractionType.XXZ):
         rng = np.random.default_rng(seed)
         for J in (0.2, 0.8, 1.5):
-            for i, cfg in enumerate(_make_tfim_configs_fixed_J(n, J, rng, interaction=inter)):
+            for i, cfg in enumerate(fixed_coupling_configs(n, J, rng, interaction=inter)):
                 scaled = dataclasses.replace(cfg, dissipator=dataclasses.replace(
                     cfg.dissipator, gamma_coeffs=tuple(1.02 * c for c in cfg.dissipator.gamma_coeffs)))
                 row = {"seed": seed, "system": inter.value, "J": J, "index": i}

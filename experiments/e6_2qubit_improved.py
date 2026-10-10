@@ -39,13 +39,13 @@ from typing import List
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from experiments._config import build_configs, trajectory_store
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.run_ablation import AblationCommand, AblationStudyUseCase
 from src.application.run_noise_sweep import NoiseSweepCommand, NoiseSweepUseCase
 from src.application.run_cross_system import CrossSystemCommand, CrossSystemUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
+from src.data.scenarios import build_configs, trajectory_store
 from src.domain.value_objects import PredictorVariant
 from src.simulation.simulator import QuTipSimulator
 

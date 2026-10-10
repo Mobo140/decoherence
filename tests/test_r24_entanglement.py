@@ -4,7 +4,7 @@ import dataclasses
 import numpy as np
 import qutip as qt
 
-from experiments._config import build_configs
+from src.data.scenarios import build_configs
 from src.domain.value_objects import DecoherenceCriterion
 from src.physics.measures import concurrence, wootters_lambda
 from src.simulation import simulator

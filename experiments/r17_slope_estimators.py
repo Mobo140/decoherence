@@ -30,11 +30,11 @@ from pathlib import Path
 
 import numpy as np
 
-from experiments._config import build_configs, trajectory_store
 from src.application.generate_dataset import (
     GenerateDatasetCommand,
     GenerateDatasetUseCase,
 )
+from src.data.scenarios import build_configs, trajectory_store
 from src.simulation.simulator import QuTipSimulator
 
 DT = 0.1

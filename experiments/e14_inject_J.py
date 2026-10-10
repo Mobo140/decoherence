@@ -43,10 +43,10 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from experiments._config import build_configs, trajectory_store
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
+from src.data.scenarios import build_configs, trajectory_store
 from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 from src.simulation.simulator import QuTipSimulator
 
@@ -86,15 +86,6 @@ def _r2(pred: np.ndarray, actual: np.ndarray) -> float:
     ss_res = float(np.sum((actual - pred) ** 2))
     ss_tot = float(np.sum((actual - actual.mean()) ** 2))
     return float(1.0 - ss_res / ss_tot) if ss_tot > 1e-12 else 0.0
-
-
-def _force_all_test(dataset):
-    import copy
-    ds = copy.copy(dataset)
-    ds.test_idx = np.arange(len(dataset.sequences))
-    ds.train_idx = np.array([], dtype=np.int64)
-    ds.val_idx = np.array([], dtype=np.int64)
-    return ds
 
 
 def _predict_all(predictor, ds, horizon: float):
@@ -169,7 +160,7 @@ def _eval_group(simulator, pred, configs, *, arm: str, scenario: str,
         val_ratio=0.0,
         min_window_gap=MIN_GAP,
     ))
-    ds = _force_all_test(ds)
+    ds = ds.as_test_only()
     metrics = BacktestUseCase(pred).execute(BacktestCommand(dataset=ds, horizon=1.0))
     preds, actuals, js = _predict_all(pred, ds, 1.0)
     print(f"  {arm} {scenario} use_J={use_J} → {metrics.summary()}")

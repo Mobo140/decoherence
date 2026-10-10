@@ -11,10 +11,10 @@ import numpy as np
 import pytest
 
 from src.application.generate_dataset import (
-    Dataset,
     GenerateDatasetCommand,
     GenerateDatasetUseCase,
 )
+from src.data.dataset import Dataset
 from src.domain.value_objects import (
     DissipatorConfig,
     QubitCount,

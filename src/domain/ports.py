@@ -69,7 +69,7 @@ class IPredictor(ABC):
         """Fit the predictor to a Dataset.
 
         Args:
-            dataset: application.generate_dataset.Dataset instance.
+            dataset: data.dataset.Dataset instance.
             **kwargs: Hyper-parameters (n_epochs, batch_size, lr, …).
 
         Returns:

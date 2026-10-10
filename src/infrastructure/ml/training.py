@@ -14,7 +14,7 @@ R2_SCALE_FLOOR = 0.05
 
 
 def fit_predictor(predictor, ds, n_epochs, batch_size, lr, verbose, regression_loss: str = "huber"):
-    from ...application.generate_dataset import Dataset as DS
+    from src.data.dataset import Dataset as DS
     ds: DS = ds
 
     # Sync dt from dataset so physics formulas use the actual simulation step.

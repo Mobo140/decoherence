@@ -20,8 +20,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List
 
-import numpy as np
-
 from ..domain.ports import ISimulator
 from ..domain.value_objects import (
     AblationResult,
@@ -109,7 +107,7 @@ class CrossSystemUseCase:
             ))
 
             # Ensure all samples land in test_idx
-            eval_dataset = self._force_all_test(eval_dataset)
+            eval_dataset = eval_dataset.as_test_only()
 
             if command.eval_interaction_codes and group_name in command.eval_interaction_codes:
                 if hasattr(predictor, "inference_interaction_code"):
@@ -147,16 +145,6 @@ class CrossSystemUseCase:
         """Factory for the predictor used in training. Override to customise."""
         from ..infrastructure.ml.lstm_predictor import LSTMPredictor
         return LSTMPredictor(use_physics_prior=True)
-
-    @staticmethod
-    def _force_all_test(dataset):
-        """Return dataset where every sample is in test_idx."""
-        import copy
-        ds = copy.copy(dataset)
-        ds.test_idx = np.arange(len(dataset.sequences))
-        ds.train_idx = np.array([], dtype=np.int64)
-        ds.val_idx = np.array([], dtype=np.int64)
-        return ds
 
 
 def _variant_of(predictor) -> PredictorVariant:
