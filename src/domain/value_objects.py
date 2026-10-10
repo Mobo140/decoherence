@@ -249,7 +249,20 @@ class AblationResult:
 
 @dataclass
 class BacktestMetrics:
-    """Aggregate evaluation metrics produced by the backtest use-case."""
+    """Aggregate evaluation metrics produced by the backtest use-case.
+
+    Attributes:
+        mae: Mean absolute error of the predicted decoherence time.
+        rmse: Root mean squared error of the same.
+        r2: Coefficient of determination (0.0 for constant targets).
+        mape: Mean absolute percentage error, nan if no target > 1e-8.
+        risk_auroc: AUROC of the risk score, nan if one class only.
+        n_samples: Number of scored windows.
+        predictions: Predicted decoherence times.
+        actuals: True decoherence times.
+        extra: Additional metrics requested from `evaluation.backtest`,
+            by alias.
+    """
 
     mae: float
     rmse: float
@@ -259,6 +272,7 @@ class BacktestMetrics:
     n_samples: int
     predictions: np.ndarray
     actuals: np.ndarray
+    extra: Dict[str, float] = field(default_factory=dict)
 
     def summary(self) -> str:
         return (
