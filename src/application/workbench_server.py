@@ -37,7 +37,7 @@ from src.domain.value_objects import DissipatorType, InteractionType
 from src.infrastructure.ml.physics_only_predictor import PhysicsOnlyPredictor
 from src.infrastructure.ml.physics_prior import physics_remaining
 from src.infrastructure.persistence.stores import BestModelRegistry, HamiltonianModelRegistry
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.simulation.simulator import QuTipSimulator
 
 
 _jobs = JobQueue()

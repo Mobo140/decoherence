@@ -50,7 +50,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from experiments._config import build_configs
 from experiments.e6_2qubit_improved import _noise_sweep
 from experiments.e8_improved_2qubit import run_e8c
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.simulation.simulator import QuTipSimulator
 
 RESULTS_DIR = Path(__file__).parent / "results"
 SCRATCH = RESULTS_DIR / "_r8_scratch.csv"

@@ -27,7 +27,7 @@ import sys; sys.path.insert(0, ".")
 import numpy as np
 from experiments._config import build_configs, trajectory_store
 from src.application.generate_dataset import GenerateDatasetUseCase, GenerateDatasetCommand
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.simulation.simulator import QuTipSimulator
 
 DT, TMAX = 0.1, 20.0
 def r2(y, p): return 1 - np.sum((y-p)**2) / np.sum((y-y.mean())**2)

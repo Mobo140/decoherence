@@ -45,7 +45,7 @@ from src.application.generate_dataset import GenerateDatasetCommand, GenerateDat
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.domain.value_objects import AblationResult, ExperimentSpec, NoiseConfig, PredictorVariant
 from src.infrastructure.ml.lstm_predictor import LSTMPredictor
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.simulation.simulator import QuTipSimulator
 
 
 # ---------------------------------------------------------------------------

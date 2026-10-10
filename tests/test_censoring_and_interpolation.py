@@ -18,7 +18,8 @@ from src.domain.value_objects import (
     SystemConfig,
     TrajectoryResult,
 )
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.physics import lindblad_systems
+from src.simulation.simulator import QuTipSimulator, compute_t_decoh
 
 
 def _plus_state(n_qubits: int = 1, seed=None) -> qt.Qobj:
@@ -47,7 +48,7 @@ class TestInterpolation:
         c0 = 1.0
         coh = c0 * np.exp(-gamma * times / 2.0)
         cfg = _const_sigma_minus(gamma, t_max=30.0)
-        t_decoh, censored = QuTipSimulator._compute_t_decoh(
+        t_decoh, censored = compute_t_decoh(
             cfg, times, {"coherence_l1": coh},
         )
         assert censored is False
@@ -55,9 +56,9 @@ class TestInterpolation:
 
     def test_simulator_recovers_analytical_t2(self, monkeypatch):
         """γ=0.4, σ₋ → T₂ = 2/γ = 5.0 within 0.05 after interpolation."""
-        import src.infrastructure.quantum.qutip_simulator as sim_mod
-
-        monkeypatch.setattr(sim_mod, "sample_random_pure_state", _plus_state)
+        monkeypatch.setattr(
+            lindblad_systems, "sample_random_pure_state", _plus_state
+        )
         traj = QuTipSimulator().simulate(_const_sigma_minus(0.4, t_max=30.0))
         assert traj.censored is False
         assert abs(traj.t_decoh - 5.0) < 0.05
@@ -66,9 +67,9 @@ class TestInterpolation:
 class TestCensoring:
     def test_slow_decay_is_censored(self, monkeypatch):
         """γ=0.01, t_max=5 → T₂=200, threshold never crossed."""
-        import src.infrastructure.quantum.qutip_simulator as sim_mod
-
-        monkeypatch.setattr(sim_mod, "sample_random_pure_state", _plus_state)
+        monkeypatch.setattr(
+            lindblad_systems, "sample_random_pure_state", _plus_state
+        )
         traj = QuTipSimulator().simulate(_const_sigma_minus(0.01, t_max=5.0))
         assert traj.censored is True
         assert traj.t_decoh == pytest.approx(5.0, abs=1e-9)

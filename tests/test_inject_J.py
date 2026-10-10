@@ -24,7 +24,7 @@ from src.domain.value_objects import (
 )
 from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 from src.infrastructure.ml.physics_only_predictor import PhysicsOnlyPredictor
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.simulation.simulator import QuTipSimulator
 
 
 def _1q(gamma: float = 0.4) -> SystemConfig:

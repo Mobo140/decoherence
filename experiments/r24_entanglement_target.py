@@ -55,26 +55,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from experiments._config import build_configs
 from experiments.e7_paper2_extended import _make_tfim_configs_fixed_J
-from experiments.r23_two_body_correlators import CORR, MODELS, CorrelatorSimulator, _all_test, _train
+from experiments.r23_two_body_correlators import MODELS, _all_test, _train
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.domain.value_objects import DecoherenceCriterion, InteractionType
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
 from src.physics.lindblad_systems import TwoQubitSystem
-from src.physics.measures import concurrence, wootters_lambda
+from src.physics.measures import wootters_lambda
 from src.physics.simulate_qutip import simulate_two_qubit
+from src.simulation import simulator
+from src.simulation.variants import CORR, EntanglementSimulator
 
 RESULTS_DIR = Path(__file__).parent / "results"
 ESD = DecoherenceCriterion.ENTANGLEMENT_DEATH
-
-
-class EntanglementSimulator(CorrelatorSimulator):
-    """Records the two-body correlators and the concurrence."""
-
-    def _extra_observables(self, density_matrices) -> dict:
-        out = super()._extra_observables(density_matrices)
-        out["concurrence"] = np.array([concurrence(r) for r in density_matrices])
-        return out
 
 
 def feature_set(ds, name):
@@ -138,10 +130,10 @@ def part_b(seed, n, out_path):
                         gamma_t_max=cfg.t_max,
                         jump_operators=[cfg.dissipator.operator_type.value])
                     np.random.seed(seed * 100000 + i)
-                    psi = QuTipSimulator()._initial_state(cfg)
+                    psi = simulator.sample_initial_state(cfg)
                     rhos = simulate_two_qubit(sys_, psi, times)["density_matrices"]
                     lam = np.array([wootters_lambda(r) for r in rhos])
-                    t_esd, cens = QuTipSimulator._sudden_death_time(times, lam)
+                    t_esd, cens = simulator.sudden_death_time(times, lam)
                     after = lam[times > t_esd] if not cens else np.array([])
                     row[f"c0{tag}"] = max(0.0, lam[0])
                     row[f"t_esd{tag}"] = t_esd

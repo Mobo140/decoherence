@@ -39,7 +39,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from experiments._config import build_configs, trajectory_store
 from src.application.run_window_sweep import WindowSweepCommand, WindowSweepUseCase
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.simulation.simulator import QuTipSimulator
 
 
 def main(scenarios: list | None = None, suffix: str = "",

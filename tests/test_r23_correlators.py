@@ -2,9 +2,10 @@
 import numpy as np
 
 from experiments._config import build_configs
-from experiments.r23_two_body_correlators import CORR, CorrelatorSimulator, base_features
+from experiments.r23_two_body_correlators import base_features
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.simulation.simulator import QuTipSimulator
+from src.simulation.variants import CORR, CorrelatorSimulator
 
 
 def _cfgs():

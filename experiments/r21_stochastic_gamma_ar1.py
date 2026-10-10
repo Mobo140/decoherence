@@ -71,14 +71,14 @@ from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 from src.infrastructure.ml.physics_only_predictor import PhysicsOnlyPredictor
 from src.infrastructure.ml.transformer_predictor import TransformerPredictor
 from src.infrastructure.quantum.noise import ar1_filter as ar1
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.simulation.simulator import QuTipSimulator
+from src.simulation.variants import StochasticGammaSimulator
 
 RESULTS_DIR = Path(__file__).parent / "results"
 WINDOW = 50
 SIGMAS = [0.02, 0.05]
 PHIS = [0.0, 0.5, 0.9]
 GAMMA_SETTINGS = [(0.0, 0.5), (0.3, 0.5), (0.6, 0.5), (0.3, 2.0), (0.6, 2.0)]
-OU_GRID_DT = 0.01
 
 # name -> (builder, training set: "clean" | "aug" | "sto" | None)
 ARMS = {
@@ -90,43 +90,6 @@ ARMS = {
     "physics_lstm_sto": (lambda: LSTMPredictor(use_physics_prior=True), "sto"),
     "transformer_sto": (lambda: TransformerPredictor(), "sto"),
 }
-
-
-class StochasticGammaSimulator(QuTipSimulator):
-    """QuTiP simulator with gamma(t) multiplied by a log-normal OU factor.
-
-    One OU path is drawn per simulated trajectory from the simulator's own
-    generator, in the order trajectories are simulated. Two instances with
-    the same seed therefore drive the same configurations with the same
-    standard-normal increments, whatever s and tau are.
-
-    s, tau: fixed strength and correlation time; if s is None, each
-    trajectory draws s ~ U[0, 0.6] and tau from {0.5, 2.0}.
-    """
-
-    def __init__(self, s: float | None, tau: float | None, seed: int):
-        self.s, self.tau = s, tau
-        self.rng = np.random.default_rng(seed)
-
-    def _prepare_system(self, system, config):
-        n = int(round(config.t_max / OU_GRID_DT)) + 1
-        eta = self.rng.standard_normal(n)
-        s, tau = self.s, self.tau
-        if s is None:
-            s = float(self.rng.uniform(0.0, 0.6))
-            tau = float(self.rng.choice([0.5, 2.0]))
-        if s == 0.0 or system.gamma_const is not None:
-            return system
-        a = np.exp(-OU_GRID_DT / tau)
-        x = np.empty(n)
-        x[0] = eta[0]
-        for k in range(1, n):
-            x[k] = a * x[k - 1] + np.sqrt(1.0 - a * a) * eta[k]
-        grid = np.linspace(0.0, config.t_max, n)
-        factor = np.exp(s * x - 0.5 * s * s)
-        base = system.get_gamma
-        system.get_gamma = lambda t: base(t) * float(np.interp(t, grid, factor))
-        return system
 
 
 def _with_sequences(ds, seqs):

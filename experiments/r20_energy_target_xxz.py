@@ -47,7 +47,7 @@ from experiments._config import build_configs
 from experiments.e7_paper2_extended import run_e7c
 from experiments.e11_scaling import run_e11a
 from src.domain.value_objects import DecoherenceCriterion, InteractionType
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.simulation.simulator import QuTipSimulator
 
 RESULTS_DIR = Path(__file__).parent / "results"
 ARMS = ("xxz_coh", "xxz_energy", "cross_energy")

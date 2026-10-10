@@ -49,7 +49,7 @@ from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.domain.value_objects import (
     AblationResult, ExperimentSpec, NoiseConfig, PredictorVariant, SystemConfig,
 )
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.simulation.simulator import QuTipSimulator
 
 
 RESULTS_DIR = Path(__file__).parent / "results"

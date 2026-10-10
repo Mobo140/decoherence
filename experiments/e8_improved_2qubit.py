@@ -44,7 +44,7 @@ from src.application.run_ablation import AblationCommand, AblationStudyUseCase
 from src.application.run_noise_sweep import NoiseSweepCommand, NoiseSweepUseCase
 from src.application.run_cross_system import CrossSystemCommand, CrossSystemUseCase
 from src.domain.value_objects import PredictorVariant
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.simulation.simulator import QuTipSimulator
 
 
 RESULTS_DIR = Path(__file__).parent / "results"

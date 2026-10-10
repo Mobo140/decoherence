@@ -49,7 +49,7 @@ from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 from src.infrastructure.ml.physics_only_predictor import PhysicsOnlyPredictor
 from src.infrastructure.ml.stretched_exp_predictor import StretchedExpPredictor
 from src.infrastructure.ml.transformer_predictor import TransformerPredictor
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.simulation.simulator import QuTipSimulator
 
 RES = Path(__file__).parent / "results"
 BINS = [(0.0, 0.4), (0.4, 0.5), (0.5, 0.6), (0.6, 0.7), (0.7, 0.8), (0.8, 0.9), (0.9, 1.0)]

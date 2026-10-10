@@ -54,7 +54,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from experiments._config import build_configs
 from experiments.e11_scaling import run_e11a, run_e11b
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.simulation.simulator import QuTipSimulator
 
 RESULTS_DIR = Path(__file__).parent / "results"
 SCRATCH = RESULTS_DIR / "_r3_scratch.csv"   # run_e11* insist on writing a CSV

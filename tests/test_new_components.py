@@ -216,7 +216,7 @@ class TestLSTMPredictorFlag:
     def _make_tiny_dataset(self):
         from experiments._config import build_configs
         from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
-        from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+        from src.simulation.simulator import QuTipSimulator
         simulator = QuTipSimulator()
         groups = build_configs(n_per_scenario=8, seed=7)
         gen = GenerateDatasetUseCase(simulator)
@@ -278,7 +278,7 @@ class TestTransformerPredictor:
     def _make_tiny_dataset(self):
         from experiments._config import build_configs
         from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
-        from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+        from src.simulation.simulator import QuTipSimulator
         simulator = QuTipSimulator()
         groups = build_configs(n_per_scenario=8, seed=3)
         gen = GenerateDatasetUseCase(simulator)

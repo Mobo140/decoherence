@@ -47,7 +47,7 @@ from src.application.run_noise_sweep import NoiseSweepCommand, NoiseSweepUseCase
 from src.application.run_cross_system import CrossSystemCommand, CrossSystemUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.domain.value_objects import PredictorVariant
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.simulation.simulator import QuTipSimulator
 
 
 # ---------------------------------------------------------------------------

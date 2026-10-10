@@ -2,9 +2,9 @@
 import numpy as np
 
 from experiments._config import build_configs
-from experiments.r21_stochastic_gamma_ar1 import StochasticGammaSimulator
 from src.infrastructure.quantum.noise import ar1_filter as ar1
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.simulation.simulator import QuTipSimulator
+from src.simulation.variants import StochasticGammaSimulator
 
 
 def test_ar1_is_stationary_with_unit_variance_and_lag_one_correlation_phi():

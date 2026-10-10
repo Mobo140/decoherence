@@ -71,7 +71,7 @@ import qutip as qt
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from experiments.e7_paper2_extended import run_e7c
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.simulation.simulator import QuTipSimulator
 
 RESULTS_DIR = Path(__file__).parent / "results"
 SCRATCH = RESULTS_DIR / "_r6_scratch.csv"

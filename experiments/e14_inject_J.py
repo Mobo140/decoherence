@@ -48,7 +48,7 @@ from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.infrastructure.ml.lstm_predictor import LSTMPredictor
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.simulation.simulator import QuTipSimulator
 
 
 RESULTS_DIR = Path(__file__).parent / "results"

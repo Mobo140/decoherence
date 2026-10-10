@@ -124,8 +124,9 @@ and the network predicts T₂ directly from sequences.
 ├── src/
 │   ├── domain/                         # value objects, ports — no torch/qutip
 │   ├── application/                    # use-cases + experiment_catalog / job_queue
-│   ├── infrastructure/                 # QuTiP, LSTM, Transformer, registries
-│   └── physics/                        # Lindblad systems, T₂
+│   ├── infrastructure/                 # LSTM, Transformer, registries, noise
+│   ├── physics/                        # Lindblad systems, master equation, measures
+│   └── simulation/                     # QuTipSimulator (ISimulator adapter) and variants
 ├── paper/
 │   ├── paper_1/main.tex                # Paper 1 (single qubit)
 │   ├── paper_2/main.tex                # Paper 2 (two qubits)
@@ -136,8 +137,9 @@ and the network predicts T₂ directly from sequences.
 ```
 
 The layering is the usual dependency rule: `domain` knows nothing about
-frameworks, `application` orchestrates use cases, `infrastructure` holds QuTiP
-and PyTorch. Nothing outside `infrastructure` imports torch.
+frameworks, `application` orchestrates use cases, `infrastructure` holds
+PyTorch, `physics` and `simulation` hold QuTiP. Nothing outside
+`infrastructure` imports torch.
 
 ---
 
@@ -177,7 +179,7 @@ python app.py
 
 ```python
 from src.domain.value_objects import DissipatorConfig, QubitCount, SystemConfig
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.simulation.simulator import QuTipSimulator
 from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase

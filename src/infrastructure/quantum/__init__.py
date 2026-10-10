@@ -1,4 +1,1 @@
-"""Quantum simulation adapters."""
-from .qutip_simulator import QuTipSimulator
-
-__all__ = ["QuTipSimulator"]
+"""Measurement-noise helpers for simulated observables."""

@@ -45,7 +45,7 @@ from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.domain.value_objects import DissipatorType, InteractionType, PredictorVariant
 from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 from src.infrastructure.persistence.stores import HamiltonianModelRegistry
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.simulation.simulator import QuTipSimulator
 
 
 RESULTS_DIR = Path(__file__).parent / "results"

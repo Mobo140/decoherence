@@ -40,7 +40,7 @@ from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 from src.infrastructure.ml.physics_only_predictor import PhysicsOnlyPredictor
 from src.infrastructure.ml.stretched_exp_predictor import StretchedExpPredictor
 from src.infrastructure.ml.transformer_predictor import TransformerPredictor
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.simulation.simulator import QuTipSimulator
 
 RESULTS = Path(__file__).parent / "results" / "r13_independent_test.csv"
 VARIANTS = ["physics_only", "stretched_exp", "lstm_only", "physics_feature",

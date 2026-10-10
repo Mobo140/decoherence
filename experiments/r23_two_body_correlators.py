@@ -61,23 +61,11 @@ from src.application.generate_dataset import GenerateDatasetCommand, GenerateDat
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 from src.infrastructure.ml.transformer_predictor import TransformerPredictor
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
-from src.physics import paulis
+from src.simulation.simulator import QuTipSimulator
+from src.simulation.variants import CORR, CorrelatorSimulator
 
 RESULTS_DIR = Path(__file__).parent / "results"
-CORR = {
-    f"corr_{a}{b}": np.kron(paulis.PAULI[a], paulis.PAULI[b])
-    for a in "xyz" for b in "xyz"
-}
 J_VALUES = [0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0]
-
-
-class CorrelatorSimulator(QuTipSimulator):
-    """QuTiP simulator that also records <sigma_a x sigma_b> for all a, b."""
-
-    def _extra_observables(self, density_matrices) -> dict:
-        rhos = np.asarray(density_matrices)
-        return {name: np.real(np.einsum("tij,ji->t", rhos, op)) for name, op in CORR.items()}
 
 
 def base_features(ds):

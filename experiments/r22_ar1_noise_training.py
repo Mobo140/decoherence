@@ -58,7 +58,7 @@ from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.infrastructure.ml.lstm_predictor import LSTMPredictor
 from src.infrastructure.ml.transformer_predictor import TransformerPredictor
 from src.infrastructure.quantum.noise import ar1_filter
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.simulation.simulator import QuTipSimulator
 
 RESULTS_DIR = Path(__file__).parent / "results"
 SIGMAS = [0.0, 0.01, 0.02, 0.05, 0.10]

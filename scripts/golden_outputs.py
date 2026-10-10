@@ -33,9 +33,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 # --- Code under test (update these imports if the code moves) -------------
 from experiments._config import build_configs
 from experiments.r16_noise_aware_training import noise_augmented
-from experiments.r21_stochastic_gamma_ar1 import StochasticGammaSimulator
-from experiments.r23_two_body_correlators import CorrelatorSimulator, base_features
-from experiments.r24_entanglement_target import EntanglementSimulator, feature_set
+from experiments.r23_two_body_correlators import base_features
+from experiments.r24_entanglement_target import feature_set
 from experiments.r26_esd_occurrence import windows as esd_windows
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
@@ -47,7 +46,12 @@ from src.infrastructure.ml.stretched_exp_predictor import StretchedExpPredictor
 from src.infrastructure.ml.transformer_predictor import TransformerPredictor
 from src.infrastructure.quantum.noise import ar1_filter
 from src.infrastructure.persistence.stores import NumpyTrajectoryStore, PickleModelStore
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.simulation.simulator import QuTipSimulator
+from src.simulation.variants import (
+    CorrelatorSimulator,
+    EntanglementSimulator,
+    StochasticGammaSimulator,
+)
 # ---------------------------------------------------------------------------
 
 GOLDEN = Path(__file__).with_name("golden_outputs.json")

@@ -56,7 +56,7 @@ from src.domain.value_objects import (
     DecoherenceCriterion, DissipatorConfig, DissipatorType,
     InteractionType, PredictorVariant, QubitCount, SystemConfig,
 )
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.simulation.simulator import QuTipSimulator
 
 
 RESULTS_DIR = Path(__file__).parent / "results"

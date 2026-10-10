@@ -48,7 +48,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from experiments._config import build_configs
 from src.application.run_ablation import AblationCommand, AblationStudyUseCase
 from src.domain.value_objects import PredictorVariant
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.simulation.simulator import QuTipSimulator
 
 class ImprovedAblation(AblationStudyUseCase):
     """Mirror of the predictor factory used by E6a (``e6_2qubit_improved.py``).
