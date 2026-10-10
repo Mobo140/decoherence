@@ -15,7 +15,8 @@ P = np.array([1.5, 2.0, 3.0, 9.0])
 
 def test_registry_has_all_aliases_and_is_read_only():
     assert set(metrics.METRICS) == {
-        "r2", "mae", "rmse", "mape", "auroc", "brier", "balanced_accuracy"}
+        "r2", "mae", "rmse", "mape", "r2_unguarded", "auroc", "brier",
+        "balanced_accuracy", "auroc_pairwise"}
     with pytest.raises(TypeError):
         metrics.METRICS["r2"] = metrics.mae  # type: ignore[index]
 
@@ -89,7 +90,7 @@ def test_brier_and_balanced_accuracy():
 def test_registry_entries_take_two_arrays():
     y = np.array([0, 1, 0, 1])
     s = np.array([0.2, 0.8, 0.3, 0.7])
-    for alias in ("auroc", "brier", "balanced_accuracy"):
+    for alias in ("auroc", "brier", "balanced_accuracy", "auroc_pairwise"):
         assert isinstance(metrics.METRICS[alias](y, s), float)
-    for alias in ("r2", "mae", "rmse", "mape"):
+    for alias in ("r2", "mae", "rmse", "mape", "r2_unguarded"):
         assert isinstance(metrics.METRICS[alias](Y, P), float)

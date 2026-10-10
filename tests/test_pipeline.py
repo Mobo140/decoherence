@@ -191,3 +191,69 @@ def test_stochastic_simulator_gets_the_offset_seed():
     assert sim.rng.standard_normal() == twin.rng.standard_normal()
     other = pipeline._simulator(spec, 6)
     assert sim.rng.standard_normal() != other.rng.standard_normal()
+
+
+def test_fixed_coupling_group_takes_an_interaction():
+    sweep = (0.5, 1.0)
+    spec = pipeline.DataSpec(
+        name="t", coupling=1.0, coupling_sweep=sweep, interaction="XXZ",
+        n_per_scenario=3, criterion="coherence_energy")
+    configs = pipeline.system_configs(spec, SEED)
+    assert {c.interaction_type.value for c in configs} == {"XXZ"}
+    assert {c.decoherence_criterion.value for c in configs} == {
+        "coherence_energy"}
+    default = pipeline.system_configs(
+        dataclasses.replace(spec, interaction=None, criterion=None), SEED)
+    assert {c.interaction_type.value for c in default} == {"TFIM"}
+
+
+@pytest.mark.parametrize("changes", [
+    {"scenarios": ("B",), "interaction": "XXZ"},
+    {"scenarios": (), "coupling": 1.0, "coupling_sweep": (1.0,),
+     "interaction": "ising"},
+])
+def test_invalid_interactions_are_rejected(changes):
+    with pytest.raises(ValueError):
+        pipeline.DataSpec(name="t", **changes)
+
+
+def test_window_gap_reaches_the_dataset_builder():
+    base = _data(n_per_scenario=6, samples_per_trajectory=4)
+    gapped = dataclasses.replace(base, min_window_gap=15)
+    cache = {}
+    dataset = pipeline.generate(gapped, SEED, cache)
+    by_trajectory = {}
+    for t_obs, t_decoh in zip(dataset.t_obs, dataset.t_decoh_abs):
+        by_trajectory.setdefault(float(t_decoh), []).append(float(t_obs))
+    steps = [np.diff(np.sort(v)) / 0.1 for v in by_trajectory.values()
+             if len(v) > 1]
+    assert steps and min(s.min() for s in steps) >= 15 - 1e-6
+
+
+def test_bootstrap_columns_match_the_manual_interval():
+    from src.evaluation import metrics, stats
+    independent = _data(
+        n_per_scenario=6, train_ratio=0.0, val_ratio=0.0,
+        config_seed_offset=1000, data_seed_offset=1)
+    config = pipeline.ExperimentConfig(
+        data=_data(), model="physics_only",
+        metrics=("r2_unguarded", "auroc_pairwise"),
+        tests=(pipeline.EvalSpec(
+            data=independent,
+            bootstrap=pipeline.Bootstrap("r2_unguarded", 20)),))
+    (row,) = pipeline.run_experiment(config, SEED)
+
+    cache = {}
+    dataset = pipeline.generate(independent, SEED, cache).as_test_only()
+    model = registry.build_model("physics_only")
+    scores = backtest.evaluate(model, dataset)
+    resamples = stats.group_resample_indices(
+        scores.actuals, 20, np.random.default_rng(SEED))
+    values = stats.bootstrap_values(
+        metrics.r2_unguarded, resamples, scores.actuals, scores.predictions)
+    low, high = stats.percentile_interval(values)
+    assert (row["r2_unguarded_lo"], row["r2_unguarded_hi"]) == (low, high)
+    assert row["n_groups"] == len(np.unique(dataset.t_decoh_abs))
+    assert row["r2_unguarded"] == metrics.r2_unguarded(
+        scores.actuals, scores.predictions)
+    assert 0.0 <= row["auroc_pairwise"] <= 1.0

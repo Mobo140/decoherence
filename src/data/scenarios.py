@@ -12,6 +12,7 @@ Scenario taxonomy (see paper/description_ru.tex):
 """
 from __future__ import annotations
 
+import dataclasses
 import itertools
 
 import numpy as np
@@ -237,6 +238,23 @@ def fixed_coupling_configs(
             decoherence_criterion=criterion,
         ))
     return configs
+
+
+def with_criterion(
+    configs: list[value_objects.SystemConfig],
+    criterion: value_objects.DecoherenceCriterion,
+) -> list[value_objects.SystemConfig]:
+    """Gives every configuration another decoherence criterion.
+
+    Args:
+        configs: Configurations, e.g. one group of `build_configs`.
+        criterion: The criterion that defines T2 (the prediction target).
+
+    Returns:
+        Copies of the configurations with that criterion.
+    """
+    return [dataclasses.replace(c, decoherence_criterion=criterion)
+            for c in configs]
 
 
 def trajectory_store() -> ports.ITrajectoryStore:

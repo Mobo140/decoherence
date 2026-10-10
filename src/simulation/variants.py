@@ -6,6 +6,7 @@ physics and the decoherence-time logic untouched.
 from __future__ import annotations
 
 import numpy as np
+import qutip as qt
 
 from src.physics import measures, paulis
 from src.simulation import simulator
@@ -18,6 +19,14 @@ CORR = {
 
 # Step of the Ornstein-Uhlenbeck grid that modulates gamma(t).
 OU_GRID_DT = 0.01
+
+# Parity of the two-qubit Hamiltonian the code builds,
+# H = J sx1 sx2 + h (sz1 + sz2).
+PARITY = qt.tensor(qt.sigmaz(), qt.sigmaz())
+# Smallest norm of a projected initial state that is kept.
+MIN_SECTOR_NORM = 1e-3
+# Redraws of an initial state with a vanishing weight in the sector.
+MAX_SECTOR_DRAWS = 100
 
 
 class CorrelatorSimulator(simulator.QuTipSimulator):
@@ -90,3 +99,51 @@ class StochasticGammaSimulator(simulator.QuTipSimulator):
         base = system.get_gamma
         system.get_gamma = lambda t: base(t) * float(np.interp(t, grid, factor))
         return system
+
+
+class ParitySectorSimulator(simulator.QuTipSimulator):
+    """Projects each initial two-qubit state onto one parity sector (R6).
+
+    Only the state preparation changes; the Hamiltonian, the dissipator and
+    the integration are the ordinary ones, so any difference in the results
+    is attributable to how many sector frequencies the signal contains.
+
+    Known defect, kept because R6's recorded numbers come from it: the
+    drawn initial state is a density matrix rho, and the projector P acts
+    on it from the left only, so the prepared operator is P rho / |P rho|
+    (trace norm) instead of P rho P / tr(P rho P). It is not Hermitian and
+    its trace is below one, so the sector arms of R6 start from an
+    operator that is not a state.
+
+    Attributes:
+        sector: +1 or -1, the eigenvalue of the parity operator.
+    """
+
+    def __init__(self, sector: int) -> None:
+        """Initialises the simulator.
+
+        Args:
+            sector: Parity eigenvalue of the prepared states, +1 or -1.
+
+        Raises:
+            ValueError: If `sector` is not +1 or -1.
+        """
+        if sector not in (+1, -1):
+            raise ValueError("sector must be +1 or -1")
+        self.sector = sector
+        self._projector = (qt.qeye([2, 2]) + sector * PARITY) / 2
+
+    def _initial_state(self, config):
+        psi = super()._initial_state(config)
+        if config.n_qubits.value != 2:
+            return psi
+        # Redraw rather than renormalise a vanishing component: amplifying
+        # a near-zero projection would make the state an artefact of the
+        # noise in the discarded sector.
+        for _ in range(MAX_SECTOR_DRAWS):
+            projected = self._projector * psi
+            if projected.norm() > MIN_SECTOR_NORM:
+                return projected.unit()
+            psi = super()._initial_state(config)
+        raise RuntimeError(
+            "could not draw a state inside the requested sector")

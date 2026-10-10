@@ -8,6 +8,10 @@ Two families, distinguished by what the second argument holds:
   (probabilities or any monotone ranking): `auroc`, `brier`,
   `balanced_accuracy`.
 
+`r2_unguarded` and `auroc_pairwise` are the forms R13 and R17 recorded their
+numbers with; they sit in the registry under their own aliases so that those
+experiments can name them.
+
 Every registry entry has the signature
 `(y_true, y_pred_or_score) -> float`. Edge cases return a number, not an
 exception, so that a degenerate test split gives a row of `nan` or 0.0 in a
@@ -152,8 +156,9 @@ def balanced_accuracy(
         sk_metrics.balanced_accuracy_score(y_true, y_score >= threshold))
 
 
-REGRESSION_METRICS = ("r2", "mae", "rmse", "mape")
-CLASSIFICATION_METRICS = ("auroc", "brier", "balanced_accuracy")
+REGRESSION_METRICS = ("r2", "mae", "rmse", "mape", "r2_unguarded")
+CLASSIFICATION_METRICS = (
+    "auroc", "brier", "balanced_accuracy", "auroc_pairwise")
 
 METRICS: Mapping[str, Callable[[np.ndarray, np.ndarray], float]] = (
     types.MappingProxyType({
@@ -161,7 +166,9 @@ METRICS: Mapping[str, Callable[[np.ndarray, np.ndarray], float]] = (
         "mae": mae,
         "rmse": rmse,
         "mape": mape,
+        "r2_unguarded": r2_unguarded,
         "auroc": auroc,
         "brier": brier,
         "balanced_accuracy": balanced_accuracy,
+        "auroc_pairwise": auroc_pairwise,
     }))

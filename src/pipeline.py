@@ -28,6 +28,8 @@ from src.data import observation
 from src.data import scenarios
 from src.domain import value_objects
 from src.evaluation import backtest
+from src.evaluation import metrics
+from src.evaluation import stats
 from src.models import registry as model_registry
 from src.persistence import stores
 from src.simulation import registry as simulator_registry
@@ -76,6 +78,9 @@ class DataSpec:
             groups of one sweep are drawn one after another from a single
             generator, so the configurations of a group depend on the
             groups before it; this lists them. Must contain `coupling`.
+        interaction: Value of `InteractionType` of a fixed-coupling group,
+            or None for the default (TFIM). Not for scenarios, which fix
+            their interaction.
         n_per_scenario: Configurations drawn per scenario (or in the
             fixed-coupling group).
         n_trajectories: If set, only the first N configurations are
@@ -90,6 +95,8 @@ class DataSpec:
         window_length: Time steps per window.
         horizon: Risk horizon, also the horizon of the backtest.
         samples_per_trajectory: Windows drawn per trajectory.
+        min_window_gap: Minimum distance in time steps between the window
+            ends sampled from one trajectory; 0 for none.
         train_ratio: Share of trajectories in the train split.
         val_ratio: Share of trajectories in the validation split.
         config_seed_offset: Added to the run seed to seed the draw of the
@@ -102,6 +109,7 @@ class DataSpec:
     scenarios: tuple[str, ...] = ()
     coupling: float | None = None
     coupling_sweep: tuple[float, ...] = ()
+    interaction: str | None = None
     n_per_scenario: int = 100
     n_trajectories: int | None = None
     criterion: str | None = None
@@ -110,6 +118,7 @@ class DataSpec:
     window_length: int = 50
     horizon: float = 1.0
     samples_per_trajectory: int = 5
+    min_window_gap: int = 0
     train_ratio: float = 0.8
     val_ratio: float = 0.1
     config_seed_offset: int = 0
@@ -126,6 +135,11 @@ class DataSpec:
             raise ValueError(
                 "A coupling group takes no scenarios and must be part of "
                 "coupling_sweep")
+        if self.interaction is not None:
+            if self.coupling is None:
+                raise ValueError(
+                    "An interaction is chosen for a coupling group only")
+            value_objects.InteractionType(self.interaction)
         if self.cache not in CACHES:
             raise ValueError(f"cache must be one of {CACHES}")
         if self.cache == "disk" and self.simulator.alias != "plain":
@@ -154,6 +168,22 @@ class Augmentation:
 
 
 @dataclasses.dataclass(frozen=True)
+class Bootstrap:
+    """A 95% interval of a regression metric from resampled trajectories.
+
+    The windows of one trajectory share its decoherence time, so whole
+    groups of windows with equal true T2 are drawn with replacement.
+
+    Attributes:
+        metric: Key of the regression metrics in `metrics.METRICS`.
+        resamples: Number of bootstrap resamples.
+    """
+
+    metric: str = "r2"
+    resamples: int = 1000
+
+
+@dataclasses.dataclass(frozen=True)
 class EvalSpec:
     """One condition under which a trained model is scored.
 
@@ -164,6 +194,9 @@ class EvalSpec:
         data: Independent data to score on (all its windows are test
             windows), or None for the test split of the experiment's own
             dataset.
+        bootstrap: If set, the row also holds `<metric>_lo`, `<metric>_hi`
+            and `n_groups` (trajectories scored), drawn with a generator
+            seeded with the run seed.
         tags: Columns that describe this condition in the result row.
     """
 
@@ -171,6 +204,7 @@ class EvalSpec:
     sigma: float = 0.0
     phi: float = 0.0
     data: DataSpec | None = None
+    bootstrap: Bootstrap | None = None
     tags: Params = ()
 
 
@@ -244,16 +278,26 @@ def system_configs(
             n_per_scenario=spec.n_per_scenario, seed=config_seed)
         configs = [c for label in spec.scenarios for c in groups[label]]
     else:
-        rng = np.random.default_rng(config_seed)
-        last = spec.coupling_sweep.index(spec.coupling)
-        for coupling in spec.coupling_sweep[:last + 1]:
-            configs = scenarios.fixed_coupling_configs(
-                spec.n_per_scenario, coupling, rng)
+        configs = _coupling_group(spec, config_seed)
     if spec.criterion is not None:
-        criterion = value_objects.DecoherenceCriterion(spec.criterion)
-        configs = [dataclasses.replace(c, decoherence_criterion=criterion)
-                   for c in configs]
+        configs = scenarios.with_criterion(
+            configs, value_objects.DecoherenceCriterion(spec.criterion))
     return configs[:spec.n_trajectories]
+
+
+def _coupling_group(
+    spec: DataSpec, config_seed: int
+) -> list[value_objects.SystemConfig]:
+    """Draws the sweep up to the spec's coupling and returns its last group."""
+    interaction = value_objects.InteractionType.TFIM
+    if spec.interaction is not None:
+        interaction = value_objects.InteractionType(spec.interaction)
+    rng = np.random.default_rng(config_seed)
+    last = spec.coupling_sweep.index(spec.coupling)
+    for coupling in spec.coupling_sweep[:last + 1]:
+        configs = scenarios.fixed_coupling_configs(
+            spec.n_per_scenario, coupling, rng, interaction=interaction)
+    return configs
 
 
 def _simulator(spec: SimulatorSpec, seed: int):
@@ -296,6 +340,7 @@ def generate(
             window_length=spec.window_length,
             horizon=spec.horizon,
             samples_per_trajectory=spec.samples_per_trajectory,
+            min_window_gap=spec.min_window_gap,
             train_ratio=spec.train_ratio,
             val_ratio=spec.val_ratio,
             seed=seed + spec.data_seed_offset,
@@ -341,6 +386,20 @@ def _test_set(
     return data, spec_data.horizon
 
 
+def _interval(
+    scores: value_objects.BacktestMetrics, bootstrap: Bootstrap, seed: int
+) -> dict[str, float]:
+    """Bootstraps one metric over the scored trajectories."""
+    resamples = stats.group_resample_indices(
+        scores.actuals, bootstrap.resamples, np.random.default_rng(seed))
+    values = stats.bootstrap_values(
+        metrics.METRICS[bootstrap.metric], resamples, scores.actuals,
+        scores.predictions)
+    low, high = stats.percentile_interval(values)
+    return {f"{bootstrap.metric}_lo": low, f"{bootstrap.metric}_hi": high,
+            "n_groups": int(len(np.unique(scores.actuals)))}
+
+
 def run_experiment(
     config: ExperimentConfig,
     seed: int,
@@ -361,7 +420,8 @@ def run_experiment(
 
     Returns:
         One row per test, in order: `seed`, the arm's and the test's tags,
-        one column per metric, `n_samples` (scored windows),
+        one column per metric, the bootstrap columns if asked for,
+        `n_samples` (scored windows),
         `n_train_windows` and `n_censored` (of the training data before
         augmentation).
     """
@@ -382,6 +442,8 @@ def run_experiment(
             model, test, horizon=horizon, metrics=config.metrics)
         row = {"seed": seed, **dict(config.tags), **dict(spec.tags)}
         row.update(scores.extra)
+        if spec.bootstrap is not None:
+            row.update(_interval(scores, spec.bootstrap, seed))
         row["n_samples"] = scores.n_samples
         row["n_train_windows"] = len(base.train_idx)
         row["n_censored"] = base.metadata.get("n_censored")

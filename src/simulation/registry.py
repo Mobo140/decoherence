@@ -7,6 +7,8 @@
     entanglement      correlators plus the Wootters concurrence (R24)
     stochastic_gamma  gamma(t) times a log-normal Ornstein-Uhlenbeck factor
                       (R21); takes `s`, `tau` and `seed`
+    parity_sector     initial two-qubit states projected onto one parity
+                      sector (R6); takes `sector` (+1 or -1)
 """
 from __future__ import annotations
 
@@ -22,6 +24,7 @@ SIMULATORS: Mapping[str, type[ports.ISimulator]] = types.MappingProxyType({
     "correlators": variants.CorrelatorSimulator,
     "entanglement": variants.EntanglementSimulator,
     "stochastic_gamma": variants.StochasticGammaSimulator,
+    "parity_sector": variants.ParitySectorSimulator,
 })
 
 
