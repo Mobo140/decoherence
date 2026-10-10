@@ -225,7 +225,8 @@ def run_arms(
     args: argparse.Namespace,
     path: pathlib.Path,
     columns: Sequence[str],
-) -> None:
+    rename: Mapping[str, str] | None = None,
+) -> list[dict[str, object]]:
     """Runs the arms for the requested seeds and writes the CSV.
 
     Args:
@@ -233,12 +234,24 @@ def run_arms(
         configs: The arms in the order of the result rows.
         args: Arguments from `parse_args`; `seeds` is used.
         path: The CSV file.
-        columns: Column names in file order.
+        columns: Column names in file order (after the renaming).
+        rename: Pipeline column -> name in the CSV, for results files whose
+            columns predate the pipeline's names.
+
+    Returns:
+        All rows, renamed, with every key the pipeline produced (not only
+        the columns written), for a summary printed after the run.
     """
     print(f"{label} | seeds={args.seeds} arms={len(configs)} -> {path}",
           flush=True)
+    rows = []
     with ResultsWriter(
             path, columns, config=configs, seeds=args.seeds) as out:
         for row in pipeline.iter_rows(configs, args.seeds):
+            if rename:
+                row = {rename.get(key, key): value
+                       for key, value in row.items()}
             out.write(row)
             progress(label, row)
+            rows.append(row)
+    return rows
