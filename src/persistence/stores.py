@@ -1,6 +1,7 @@
 """File-based adapters for ITrajectoryStore and IModelStore.
 
 NumpyTrajectoryStore: trajectory collections as .npz archives.
+MemoryTrajectoryStore: trajectory collections for the life of a process.
 PickleModelStore: any IPredictor via `state_bytes` plus a kind sidecar.
 BestModelRegistry, HamiltonianModelRegistry: champion checkpoints.
 """
@@ -126,6 +127,51 @@ class NumpyTrajectoryStore(ports.ITrajectoryStore):
     def list_available(self) -> list[str]:
         """Returns the keys of all stored collections."""
         return [p.stem for p in self._root.glob("*.npz")]
+
+
+class MemoryTrajectoryStore(ports.ITrajectoryStore):
+    """Keeps trajectory collections in memory.
+
+    For runs that hand the same trajectories to several datasets, such as
+    nested training sets (R25): simulate the largest set first and every
+    smaller one is a sequence of hits. Nothing is copied or written to disk.
+    """
+
+    def __init__(self) -> None:
+        """Creates an empty store."""
+        self._collections: dict[str, list[value_objects.TrajectoryResult]] = {}
+
+    def save(
+        self, trajectories: list[value_objects.TrajectoryResult], name: str
+    ) -> None:
+        """Remembers a trajectory collection under `name`, replacing any.
+
+        Args:
+            trajectories: The trajectories to keep (not copied).
+            name: Store key.
+        """
+        self._collections[name] = list(trajectories)
+
+    def load(self, name: str) -> list[value_objects.TrajectoryResult]:
+        """Returns the collection stored under `name`.
+
+        Args:
+            name: Store key.
+
+        Returns:
+            The trajectories.
+
+        Raises:
+            FileNotFoundError: If there is no entry, so that callers treat
+                it as "not cached", as with `NumpyTrajectoryStore`.
+        """
+        if name not in self._collections:
+            raise FileNotFoundError(f"No trajectories stored as {name!r}")
+        return self._collections[name]
+
+    def list_available(self) -> list[str]:
+        """Returns the keys of all stored collections."""
+        return list(self._collections)
 
 
 def _trajectory_from_archive(
