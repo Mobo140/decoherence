@@ -13,15 +13,16 @@
 | `src/domain/` | Типы-значения (`SystemConfig`, `TrajectoryResult`, критерии) и порты | — |
 | `src/physics/` | Системы Линдблада, решение уравнения, меры, операторы Паули | `measures.coherence_l1`, `measures.concurrence`, … |
 | `src/simulation/` | Адаптер QuTiP и его варианты | `simulator.QuTipSimulator`, `variants.*` |
+| `src/persistence/` | Файловые хранилища: кэш траекторий и чекпойнты | `NumpyTrajectoryStore`, `PickleModelStore`, `BestModelRegistry`, `HamiltonianModelRegistry` |
 | `src/data/scenarios.py` | Сценарии A–E и генераторы конфигураций (`experiments/_config.py` оставлен как псевдоним для `paper/`) | `build_configs(n_per_scenario, seed)`, `fixed_coupling_configs`, `SCENARIOS` |
 | `src/data/dataset.py` | `Dataset` и операции над ним | `Dataset.with_sequences`, `Dataset.select_features`, `Dataset.drop_features`, `Dataset.as_test_only` |
 | `src/data/windows.py` | Нарезка окон и разбиение по траекториям | `build_dataset(trajectories, ...)`, `assign_splits`, `sample_window_ends` |
 | `src/data/observation.py` | **Модель наблюдения**: как из точных средних получаются входы | реестр `OBSERVATIONS`: `"exact"`, `"gaussian"`, `"ar1"`; позже `"shots"`, `"sequential"` |
 | `src/data/features.py` | Наборы признаков | реестр `FEATURE_SETS`: `"base"`, `"corr"`, `"corr_conc"`; позже `"local"` |
-| `src/models/` | Предикторы и сети; реестр по псевдониму | `build_model("transformer", **kw)`; `MODELS`: `"physics_only"`, `"stretched_exp"`, `"lstm_only"`, `"physics_lstm"`, `"physics_feature"`, `"transformer"` |
-| `src/training/` | Общий цикл обучения, ранняя остановка, нормировка, функции потерь | `LOSSES`: `"huber"`, `"mse"`, `"mae"`, `"quantile"`, `"surv_huber"`; `train(model, dataset, loss=..., ...)` |
+| `src/models/` | Предикторы и сети; реестр по псевдониму | `build_model(alias, **overrides)`; `MODELS`: `"physics_only"`, `"stretched_exp"`, `"lstm_only"`, `"physics_lstm"`, `"physics_feature"`, `"transformer"`, `"transformer_large"` |
+| `src/training/` | Общий цикл обучения (`loop.fit`: AdamW, ранняя остановка, откат к лучшим весам), нормировка (`standardize.Standardizer`), функции потерь | `LOSSES`: `"huber"`, `"mse"`, `"mae"`, `"quantile_median"`, `"surv_huber"` (+ `"quantile_<q>"` в `get_loss`); `trainer.train(model, dataset, epochs=..., batch_size=..., lr=..., seed=..., loss=...)` |
 | `src/evaluation/` | Единые метрики и бэктест, парная статистика | `METRICS`: `"r2"`, `"mae"`, `"rmse"`, `"mape"`, `"auroc"`, `"brier"`, `"balanced_accuracy"`; `evaluate(model, dataset, metrics)`; `paired_difference`, `bootstrap_ci` |
-| `src/reproducibility.py` | Одна точка фиксации случайности | `set_seed(seed)`, число потоков, сведения о версиях для записи рядом с результатами |
+| `src/reproducibility.py` | Тонкие обёртки над вызовами, которые код делает и так; новых обращений к генераторам нет | `seed_numpy_global(seed)`, `seed_torch(seed)`, `set_num_threads(n)`, `environment_info()` (версии, коммит, число потоков — для записи рядом с результатами) |
 | `src/pipeline.py` | Описание эксперимента и его запуск | `ExperimentConfig` (сценарии, число траекторий, окно, критерий, наблюдение, признаки, модель, потери, эпохи, сиды); `run_experiment(config) -> pandas.DataFrame` |
 | `experiments/` | Тонкие скрипты: набор конфигураций → `run_experiment` → CSV | общий CLI (`--seeds`, `--fast`, `--tag`) и запись результатов |
 | `notebooks/pipeline.ipynb` | Пошаговое прохождение пайплайна с вызовом этих функций | — |
@@ -30,7 +31,7 @@
 
 - **Варианты по псевдониму.** Новый вариант — новая запись в реестре, а не ветка `if` в чужом коде.
 - **Метрики только из `src/evaluation`.** Никаких локальных реализаций R², AUROC и т. п. в экспериментах.
-- **Случайность только через `set_seed` и явные генераторы.** Поведение должно совпадать с прежним, эталон `scripts/golden_outputs.py` — бит в бит.
+- **Случайность только через `src.reproducibility` и явные генераторы.** Поведение должно совпадать с прежним, эталон `scripts/golden_outputs.py` — бит в бит.
 - **Чистка не меняет числа.** Новая функциональность (`"shots"`, `"sequential"`, `"local"`) добавляется после чистки отдельным изменением.
 
 ## Конвенция знака в двухкубитной модели

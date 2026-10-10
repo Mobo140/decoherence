@@ -11,7 +11,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.domain.value_objects import DissipatorType, InteractionType
 from src.models.physics_only import PhysicsOnlyPredictor
-from src.persistence.stores import BestModelRegistry, HamiltonianModelRegistry
+from src.persistence.stores import (
+    BestModelRegistry,
+    HamiltonianModelRegistry,
+    slot_name,
+)
 
 
 def _metrics(r2: float, n: int = 10):
@@ -20,18 +24,18 @@ def _metrics(r2: float, n: int = 10):
 
 class TestNames:
     def test_1q_uses_dissipator(self):
-        assert HamiltonianModelRegistry._name(
+        assert slot_name(
             1, InteractionType.XXZ, DissipatorType.SIGMA_MINUS
         ) == "best_1q_sigma_minus"
-        assert HamiltonianModelRegistry._name(
+        assert slot_name(
             1, InteractionType.TFIM, DissipatorType.SIGMA_Z
         ) == "best_1q_sigma_z"
 
     def test_2q_uses_interaction_only(self):
-        assert HamiltonianModelRegistry._name(
+        assert slot_name(
             2, InteractionType.XXZ, DissipatorType.SIGMA_MINUS
         ) == "best_XXZ"
-        assert HamiltonianModelRegistry._name(
+        assert slot_name(
             2, InteractionType.TFIM, DissipatorType.SIGMA_MINUS
         ) == "best_TFIM"
 

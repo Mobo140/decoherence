@@ -183,7 +183,7 @@ python app.py
 ```python
 from src.domain.value_objects import DissipatorConfig, QubitCount, SystemConfig
 from src.simulation.simulator import QuTipSimulator
-from src.models.lstm import LSTMPredictor
+from src.models import registry
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.application.backtest import BacktestCommand, BacktestUseCase
@@ -203,11 +203,14 @@ dataset = GenerateDatasetUseCase(simulator).execute(
     GenerateDatasetCommand(configs=[config] * 200, window_length=50)
 )
 
-# 3. Train physics+LSTM predictor
-predictor = LSTMPredictor(use_physics_prior=True)
+# 3. Train physics+LSTM predictor (aliases: physics_only, stretched_exp,
+#    lstm_only, physics_lstm, physics_feature, transformer, transformer_large)
+predictor = registry.build_model("physics_lstm")
 TrainModelUseCase(predictor).execute(
-    TrainModelCommand(dataset=dataset, n_epochs=100)
+    TrainModelCommand(dataset=dataset, n_epochs=100, seed=0)
 )
+# or in one call: trainer.train(predictor, dataset, epochs=100,
+#                               batch_size=32, lr=1e-3, seed=0)
 
 # 4. Evaluate
 metrics = BacktestUseCase(predictor).execute(BacktestCommand(dataset=dataset))
@@ -298,7 +301,7 @@ All figures are saved as PDF to `notebooks/figs/`.
 from src.domain.ports import ILossFunction
 from src.training.losses import get_loss
 
-# Built-in losses
+# Built-in losses (aliases in src.training.losses.LOSSES)
 loss = get_loss("huber")          # HuberLoss(delta=1.0)
 loss = get_loss("mae")            # L1
 loss = get_loss("quantile_0.9")   # Pinball loss at q=0.9

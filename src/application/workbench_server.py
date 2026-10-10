@@ -36,7 +36,11 @@ from src.application.simulate_trajectory import SimulateTrajectoryCommand, Simul
 from src.domain.value_objects import DissipatorType, InteractionType
 from src.models.physics_only import PhysicsOnlyPredictor
 from src.models.physics_prior import physics_remaining
-from src.persistence.stores import BestModelRegistry, HamiltonianModelRegistry
+from src.persistence.stores import (
+    BestModelRegistry,
+    HamiltonianModelRegistry,
+    slot_label,
+)
 from src.simulation.simulator import QuTipSimulator
 
 
@@ -141,7 +145,7 @@ def _model_slots() -> list[dict]:
         meta = _ham.get_meta(nq, it, dt)
         out.append({
             "kicker": kicker,
-            "label": HamiltonianModelRegistry._label(nq, it, dt),
+            "label": slot_label(nq, it, dt),
             "n_qubits": nq,
             "interaction": it.value,
             "dissipator": dt.value,
