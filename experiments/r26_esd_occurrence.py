@@ -53,6 +53,7 @@ from sklearn.preprocessing import StandardScaler
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from experiments.r24_entanglement_target import EntanglementSimulator, _esd
+from src import reproducibility
 from src.data import features
 from src.data.scenarios import build_configs
 
@@ -64,7 +65,7 @@ REVIVAL_EPS = 1e-3
 
 def simulate(cfgs, seed):
     """Trajectories plus, per trajectory, (died, permanent)."""
-    np.random.seed(seed)
+    reproducibility.seed_numpy_global(seed)
     sim = EntanglementSimulator()
     trajs, died, permanent = [], [], []
     for c in cfgs:

@@ -40,6 +40,7 @@ import numpy as np
 import torch
 from torch import nn
 
+from src import reproducibility
 from src.data import dataset as dataset_lib
 from src.domain import ports
 from src.domain import value_objects
@@ -258,7 +259,7 @@ class LSTMPredictor(ports.IPredictor):
             # Weight init, dropout and batch shuffling all draw from
             # torch's global RNG; without this the same command gives
             # different results.
-            torch.manual_seed(options.seed)
+            reproducibility.seed_torch(options.seed)
         train_hist, val_hist = self._fit(dataset, options)
         return loop.TrainResult(
             predictor=self,

@@ -53,6 +53,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from experiments.r23_two_body_correlators import MODELS, _train
+from src import reproducibility
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.data import features
@@ -120,7 +121,7 @@ def part_b(seed, n, out_path):
                         gamma_coeffs=scale * np.array(cfg.dissipator.gamma_coeffs),
                         gamma_t_max=cfg.t_max,
                         jump_operators=[cfg.dissipator.operator_type.value])
-                    np.random.seed(seed * 100000 + i)
+                    reproducibility.seed_numpy_global(seed * 100000 + i)
                     psi = simulator.sample_initial_state(cfg)
                     rhos = simulate_two_qubit(sys_, psi, times)["density_matrices"]
                     lam = np.array([wootters_lambda(r) for r in rhos])

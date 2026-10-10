@@ -4,10 +4,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-import numpy as np
-
-from ..domain.ports import ISimulator
-from ..domain.value_objects import SystemConfig, TrajectoryResult
+from src import reproducibility
+from src.domain.ports import ISimulator
+from src.domain.value_objects import SystemConfig, TrajectoryResult
 
 
 @dataclass(frozen=True)
@@ -30,6 +29,6 @@ class SimulateTrajectoryUseCase:
 
     def execute(self, command: SimulateTrajectoryCommand) -> TrajectoryResult:
         if command.seed is not None:
-            np.random.seed(command.seed)
+            reproducibility.seed_numpy_global(command.seed)
 
         return self._simulator.simulate(command.config)

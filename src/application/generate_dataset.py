@@ -8,6 +8,7 @@ from typing import List, Optional
 
 import numpy as np
 
+from src import reproducibility
 from src.data import dataset as dataset_lib
 from src.data import windows
 from src.domain.ports import ISimulator, ITrajectoryStore
@@ -91,7 +92,7 @@ class GenerateDatasetUseCase:
         # every run and the dataset is not reproducible.  Cached trajectories
         # hide this; a cold cache does not.
         if command.seed is not None:
-            np.random.seed(command.seed)
+            reproducibility.seed_numpy_global(command.seed)
 
         trajectories: List[TrajectoryResult] = []
         for i, cfg in enumerate(command.configs):

@@ -53,6 +53,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from src import reproducibility
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
@@ -149,7 +150,7 @@ def part_c(seed, n, out_path):
                                   (DecoherenceCriterion.COHERENCE_ENERGY, "t2e")):
                     out = []
                     for c in (cfg, scaled):
-                        np.random.seed(seed * 100000 + i)
+                        reproducibility.seed_numpy_global(seed * 100000 + i)
                         traj = sim.simulate(dataclasses.replace(c, decoherence_criterion=crit))
                         out.append((traj.t_decoh, traj.censored))
                     row[tag], row[f"{tag}_scaled"] = out[0][0], out[1][0]

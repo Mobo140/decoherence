@@ -26,12 +26,12 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 
 import numpy as np
-import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # --- Code under test (update these imports if the code moves) -------------
 from experiments.r26_esd_occurrence import windows as esd_windows
+from src import reproducibility
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
@@ -85,7 +85,7 @@ def _metrics(m) -> list[str]:
 
 
 def compute() -> dict:
-    torch.set_num_threads(1)
+    reproducibility.set_num_threads(1)
     out: dict = {}
     g = build_configs(n_per_scenario=6, seed=11)
 
@@ -97,17 +97,17 @@ def compute() -> dict:
             crits += [DecoherenceCriterion.COHERENCE_ENERGY, DecoherenceCriterion.CONCURRENCE,
                       DecoherenceCriterion.ENTANGLEMENT_DEATH]
         for c in crits:
-            np.random.seed(5)
+            reproducibility.seed_numpy_global(5)
             cfg = dataclasses.replace(g[sc][1], decoherence_criterion=c)
             out[f"sim/{sc}/{c.value}"] = _traj(sim.simulate(cfg))
 
     # Experiment-specific simulators.
-    np.random.seed(5)
+    reproducibility.seed_numpy_global(5)
     out["sim/corr"] = _traj(CorrelatorSimulator().simulate(g["E"][2]))
-    np.random.seed(5)
+    reproducibility.seed_numpy_global(5)
     out["sim/ent"] = _traj(EntanglementSimulator().simulate(
         dataclasses.replace(g["D"][2], decoherence_criterion=DecoherenceCriterion.ENTANGLEMENT_DEATH)))
-    np.random.seed(5)
+    reproducibility.seed_numpy_global(5)
     out["sim/stochastic_gamma"] = _traj(StochasticGammaSimulator(0.3, 0.5, seed=3).simulate(g["B"][2]))
 
     # Noise model.
@@ -130,7 +130,7 @@ def compute() -> dict:
     # Classification windows (R26).
     trajs = []
     for i, c in enumerate(g["D"][:4]):
-        np.random.seed(100 + i)
+        reproducibility.seed_numpy_global(100 + i)
         trajs.append(EntanglementSimulator().simulate(
             dataclasses.replace(c, decoherence_criterion=DecoherenceCriterion.ENTANGLEMENT_DEATH)))
     X, owner, tob = esd_windows(trajs, "corr_conc")

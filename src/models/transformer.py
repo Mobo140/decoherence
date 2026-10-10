@@ -34,6 +34,7 @@ import torch
 from torch import nn
 from torch.utils import data as torch_data
 
+from src import reproducibility
 from src.data import dataset as dataset_lib
 from src.domain import ports
 from src.domain import value_objects
@@ -235,7 +236,7 @@ class TransformerPredictor(ports.IPredictor):
         if options.seed is not None:
             # See LSTMPredictor.train: torch's global RNG drives weight
             # init, dropout and batch shuffling.
-            torch.manual_seed(options.seed)
+            reproducibility.seed_torch(options.seed)
         train_hist, val_hist = self._fit(dataset, options)
         return loop.TrainResult(
             predictor=self,
