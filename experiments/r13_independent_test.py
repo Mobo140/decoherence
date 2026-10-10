@@ -14,101 +14,97 @@ receives T_phys as an input scalar but predicts the whole remaining time
 (no residual output). Comparing it with physics_lstm separates "T_phys is
 a useful feature" from "the formula + correction output structure".
 
-Writes ONLY to experiments/results/r13_independent_test.csv.
+R^2 and AUROC are recorded in the forms of `metrics.r2_unguarded` and
+`metrics.auroc_pairwise`, as in the published CSV.
+
+Writes ONLY to experiments/results/r13_independent_test*.csv.
+Each CSV is accompanied by <name>.csv.provenance.json (configuration,
+seeds, software environment).
 
 Usage
 -----
-    python -m experiments.r13_independent_test --fast
+    python -m experiments.r13_independent_test --fast --tag smoke
     python -m experiments.r13_independent_test --seeds 42 43 44
 """
 from __future__ import annotations
 
 import argparse
-import csv
-import sys
-import time
-from pathlib import Path
+import dataclasses
 
-import numpy as np
+from experiments import common
+from src import pipeline
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+SCENARIOS = ("A", "B", "C")
+VARIANTS = ("physics_only", "stretched_exp", "lstm_only", "physics_feature",
+            "physics_lstm", "transformer")
+COLUMNS = ("seed", "scenario", "variant", "r2", "r2_lo", "r2_hi", "mae",
+           "auroc", "n_eval_traj", "n_eval_windows")
+# Pipeline column -> CSV column of the published file.
+RENAMES = {
+    "r2_unguarded": "r2", "r2_unguarded_lo": "r2_lo",
+    "r2_unguarded_hi": "r2_hi", "auroc_pairwise": "auroc",
+    "n_groups": "n_eval_traj", "n_samples": "n_eval_windows",
+}
+WINDOW_LENGTH = 20
 
-from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
-from src.application.train_model import TrainModelCommand, TrainModelUseCase
-from src.data.scenarios import build_configs, trajectory_store
-from src.evaluation import backtest, metrics, stats
-from src.models import registry
-from src.simulation.simulator import QuTipSimulator
 
-RESULTS = Path(__file__).parent / "results" / "r13_independent_test.csv"
-VARIANTS = ["physics_only", "stretched_exp", "lstm_only", "physics_feature",
-            "physics_lstm", "transformer"]
+def arms(
+    n_train: int, n_eval: int, n_boot: int, epochs: int
+) -> list[pipeline.ExperimentConfig]:
+    """Declares one arm per scenario and variant.
+
+    Every model is trained on the scenario's own training set and scored on
+    all windows of independent trajectories (generator seed + 1000).
+
+    Args:
+        n_train: Training trajectories per scenario.
+        n_eval: Independent trajectories per scenario.
+        n_boot: Bootstrap resamples of the R^2 interval.
+        epochs: Training epochs.
+
+    Returns:
+        The arms in the order of the result rows.
+    """
+    configs = []
+    for scenario in SCENARIOS:
+        data = pipeline.DataSpec(
+            name=f"r13_train_{scenario}", scenarios=(scenario,),
+            n_per_scenario=n_train, cache="disk",
+            window_length=WINDOW_LENGTH)
+        independent = dataclasses.replace(
+            data, name=f"r13_eval_{scenario}", n_per_scenario=n_eval,
+            train_ratio=0.0, val_ratio=0.0, config_seed_offset=1000,
+            data_seed_offset=1000)
+        tests = (pipeline.EvalSpec(
+            data=independent,
+            bootstrap=pipeline.Bootstrap("r2_unguarded", n_boot)),)
+        configs += [
+            pipeline.ExperimentConfig(
+                data=data, model=variant, epochs=epochs,
+                metrics=("r2_unguarded", "mae", "auroc_pairwise"),
+                tests=tests,
+                tags=(("scenario", scenario), ("variant", variant)))
+            for variant in VARIANTS
+        ]
+    return configs
+
+
+def add_flags(parser: argparse.ArgumentParser) -> None:
+    """Adds the sizes of the sets to the common flags."""
+    parser.add_argument("--n-train", type=int, default=100)
+    parser.add_argument("--n-eval", type=int, default=400)
+    parser.add_argument("--n-boot", type=int, default=1000)
 
 
 def main() -> None:
-    p = argparse.ArgumentParser()
-    p.add_argument("--seeds", type=int, nargs="+", default=[42, 43, 44])
-    p.add_argument("--n-train", type=int, default=100)
-    p.add_argument("--n-eval", type=int, default=400)
-    p.add_argument("--n-boot", type=int, default=1000)
-    p.add_argument("--fast", action="store_true")
-    p.add_argument("--out", type=str, default=str(RESULTS))
-    a = p.parse_args()
-    if a.fast:
-        a.n_train, a.n_eval, a.n_boot = 30, 30, 50
-    epochs = 10 if a.fast else 100
-
-    sim, store = QuTipSimulator(), trajectory_store()
-    gen = GenerateDatasetUseCase(sim, store=store)
-    fields = ["seed", "scenario", "variant", "r2", "r2_lo", "r2_hi", "mae",
-              "auroc", "n_eval_traj", "n_eval_windows"]
-    with open(a.out, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=fields)
-        w.writeheader()
-        for seed in a.seeds:
-            t0 = time.time()
-            train_groups = build_configs(n_per_scenario=a.n_train, seed=seed)
-            eval_groups = build_configs(n_per_scenario=a.n_eval, seed=seed + 1000)
-            for sc in "ABC":
-                train_ds = gen.execute(GenerateDatasetCommand(
-                    configs=train_groups[sc], window_length=20, horizon=1.0,
-                    samples_per_trajectory=5, seed=seed,
-                    dataset_name=f"r13_train_{seed}_{sc}"))
-                eval_ds = gen.execute(GenerateDatasetCommand(
-                    configs=eval_groups[sc], window_length=20, horizon=1.0,
-                    samples_per_trajectory=5, seed=seed + 1000,
-                    train_ratio=0.0, val_ratio=0.0,
-                    dataset_name=f"r13_eval_{seed}_{sc}"))
-                y, lab = eval_ds.t_decoh_abs.astype(float), eval_ds.risk_labels
-                # windows of one trajectory share T2: group by it for the bootstrap
-                n_traj = len(np.unique(eval_ds.t_decoh_abs))
-                boots = stats.group_resample_indices(
-                    eval_ds.t_decoh_abs, a.n_boot, np.random.default_rng(seed))
-                for name in VARIANTS:
-                    pred = registry.build_model(name)
-                    if name not in ("physics_only", "stretched_exp"):
-                        TrainModelUseCase(pred).execute(TrainModelCommand(
-                            dataset=train_ds, n_epochs=epochs, batch_size=32,
-                            learning_rate=1e-3, regression_loss="huber",
-                            verbose=False, seed=seed))
-                    pt, pr = backtest.predict_windows(
-                        pred, eval_ds, np.arange(len(eval_ds.sequences)))
-                    bs = stats.bootstrap_values(
-                        metrics.r2_unguarded, boots, y, pt)
-                    r2_lo, r2_hi = stats.percentile_interval(bs)
-                    row = {"seed": seed, "scenario": sc, "variant": name,
-                           "r2": metrics.r2_unguarded(y, pt),
-                           "r2_lo": r2_lo, "r2_hi": r2_hi,
-                           "mae": metrics.mae(y, pt),
-                           "auroc": metrics.auroc_pairwise(lab, pr),
-                           "n_eval_traj": int(n_traj),
-                           "n_eval_windows": len(y)}
-                    w.writerow(row)
-                    f.flush()
-                    print(f"R13 | seed={seed} {sc} {name:<16} R2={row['r2']:.3f} "
-                          f"[{row['r2_lo']:.3f}, {row['r2_hi']:.3f}] "
-                          f"MAE={row['mae']:.3f} AUROC={row['auroc']:.3f}", flush=True)
-            print(f"R13 | seed {seed} done [{time.time() - t0:.0f}s]", flush=True)
+    args = common.parse_args(__doc__, extra=add_flags)
+    if args.fast:
+        args.n_train, args.n_eval, args.n_boot = 30, 30, 50
+    epochs = 10 if args.fast else 100
+    common.run_arms(
+        "R13", arms(args.n_train, args.n_eval, args.n_boot, epochs), args,
+        common.results_path("r13_independent_test", args), COLUMNS,
+        rename=RENAMES)
 
 
 if __name__ == "__main__":
