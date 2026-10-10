@@ -16,7 +16,7 @@ so a script that declares its arms gets the numbers it got before.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Hashable, Iterable, Iterator, Sequence
+from collections.abc import Callable, Hashable, Iterable, Iterator, Sequence
 
 import numpy as np
 import pandas as pd
@@ -215,7 +215,11 @@ class ExperimentConfig:
     tags: Params = ()
 
 
-def _memoised(cache: dict[Hashable, object], key: Hashable, build):
+def _memoised(
+    cache: dict[Hashable, object],
+    key: Hashable,
+    build: Callable[[], object],
+):
     """Returns cache[key], building and storing it on first use."""
     if key not in cache:
         cache[key] = build()
