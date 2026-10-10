@@ -24,110 +24,87 @@ in R24 (generator seed + 1000). Censored trajectories (still entangled at
 t_max) are dropped, as everywhere.
 
 Writes ONLY to experiments/results/r25_esd_data_scaling*.csv.
+Each CSV is accompanied by <name>.csv.provenance.json (configuration,
+seeds, software environment).
 
 Usage
 -----
-    python -m experiments.r25_esd_data_scaling --fast
+    python -m experiments.r25_esd_data_scaling --fast --tag smoke
     python -m experiments.r25_esd_data_scaling --seeds 42 --scenario D --tag D42
 """
 from __future__ import annotations
 
 import argparse
-import csv
-import sys
-import time
-from pathlib import Path
+import dataclasses
 
-import numpy as np
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
+from experiments import common
 from experiments.r23_two_body_correlators import BATCH_SIZE, LEARNING_RATE
-from experiments.r24_entanglement_target import esd_configs
-from src.application.backtest import BacktestCommand, BacktestUseCase
-from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
-from src.data import features
-from src.data.scenarios import build_configs
-from src.domain.ports import ITrajectoryStore
-from src.models import registry
-from src.simulation.variants import EntanglementSimulator
-from src.training import trainer
+from experiments.r24_entanglement_target import ESD
+from src import pipeline
 
-RESULTS_DIR = Path(__file__).parent / "results"
-SIZES = [250, 500, 1000, 2000, 4000]
-FEATURES = ["base", "corr", "corr_conc"]
+SIZES = (250, 500, 1000, 2000, 4000)
+FEATURES = ("base", "corr", "corr_conc")
+COLUMNS = ("seed", "scenario", "n_traj", "features", "r2", "mae", "auroc",
+           "n_samples", "n_train_windows", "n_censored")
 
 
-class MemoryStore(ITrajectoryStore):
-    """Per-process trajectory store: the larger set is simulated first, so
-    every smaller one is a sequence of hits and the initial-state stream is
-    never shifted (cf. the partial-cache note in R23)."""
+def arms(
+    scenario: str, sizes: tuple[int, ...], n_eval: int, epochs: int
+) -> list[pipeline.ExperimentConfig]:
+    """Declares the learning-curve arms of one scenario.
 
-    def __init__(self):
-        self._d = {}
+    The training sets are nested: the configurations of the largest set
+    are drawn once and each smaller set is the first N of them. The arms
+    run from the largest size down and keep their trajectories in memory,
+    so the smaller sets are hits and the stream of initial states is never
+    shifted. Every model is scored on the same independent trajectories
+    (generator seed + 1000).
 
-    def save(self, trajectories, name):
-        self._d[name] = list(trajectories)
+    Args:
+        scenario: "D" or "E".
+        sizes: Training-set sizes in trajectories.
+        n_eval: Independent trajectories for scoring.
+        epochs: Training epochs.
 
-    def load(self, name):
-        if name not in self._d:
-            raise FileNotFoundError(name)
-        return self._d[name]
+    Returns:
+        The arms in the order of the result rows.
+    """
+    pool = pipeline.DataSpec(
+        name="r25", scenarios=(scenario,), n_per_scenario=max(sizes),
+        criterion=ESD.value, cache="memory",
+        simulator=pipeline.SimulatorSpec("entanglement"), window_length=20)
+    independent = dataclasses.replace(
+        pool, name="r25_eval", n_per_scenario=n_eval, cache="none",
+        train_ratio=0.0, val_ratio=0.0, config_seed_offset=1000,
+        data_seed_offset=1)
+    tests = (pipeline.EvalSpec(data=independent),)
+    return [
+        pipeline.ExperimentConfig(
+            data=dataclasses.replace(pool, n_trajectories=n),
+            model="transformer_large", features=feats, epochs=epochs,
+            batch_size=BATCH_SIZE, learning_rate=LEARNING_RATE, tests=tests,
+            tags=(("scenario", scenario), ("n_traj", n),
+                  ("features", feats)))
+        for n in sorted(sizes, reverse=True)
+        for feats in FEATURES
+    ]
 
-    def list_available(self):
-        return list(self._d)
 
-
-def run(seed, sc, sizes, n_eval, epochs, w, f):
-    store = MemoryStore()
-    gen = GenerateDatasetUseCase(EntanglementSimulator(), store=store)
-    cfgs = esd_configs(build_configs(n_per_scenario=max(sizes), seed=seed))[sc]
-    eval_cfgs = esd_configs(
-        build_configs(n_per_scenario=n_eval, seed=seed + 1000))[sc]
-    ts = time.time()
-    ev = gen.execute(GenerateDatasetCommand(
-        configs=eval_cfgs, window_length=20, horizon=1.0, samples_per_trajectory=5,
-        seed=seed + 1, train_ratio=0.0, val_ratio=0.0, dataset_name=f"r25_eval_{seed}_{sc}")
-    ).as_test_only()
-    for n in sorted(sizes, reverse=True):          # largest first: smaller sets are cache hits
-        tr = gen.execute(GenerateDatasetCommand(
-            configs=cfgs[:n], window_length=20, horizon=1.0, samples_per_trajectory=5,
-            seed=seed, dataset_name=f"r25_{seed}_{sc}_{n}"))
-        print(f"R25 | seed={seed} {sc} n={n} windows={len(tr.sequences)} "
-              f"censored={tr.metadata.get('n_censored')} [{time.time() - ts:.0f}s]", flush=True)
-        for feats in FEATURES:
-            pred = trainer.train(
-                registry.build_model("transformer_large"),
-                features.select(tr, feats), epochs=epochs,
-                batch_size=BATCH_SIZE, lr=LEARNING_RATE, seed=seed)
-            m = BacktestUseCase(pred).execute(BacktestCommand(dataset=features.select(ev, feats), horizon=1.0))
-            w.writerow({"seed": seed, "scenario": sc, "n_traj": n, "features": feats,
-                        "r2": m.r2, "mae": m.mae, "auroc": m.risk_auroc,
-                        "n_samples": m.n_samples, "n_train_windows": len(tr.train_idx),
-                        "n_censored": tr.metadata.get("n_censored")})
-            f.flush()
-            print(f"R25 | seed={seed} {sc} n={n} {feats:<9} R2={m.r2:.3f} MAE={m.mae:.3f} "
-                  f"[{time.time() - ts:.0f}s]", flush=True)
+def add_flags(parser: argparse.ArgumentParser) -> None:
+    """Adds the choice of scenarios to the common flags."""
+    parser.add_argument("--scenario", choices=["D", "E", "DE"],
+                        default="DE")
 
 
 def main() -> None:
-    p = argparse.ArgumentParser()
-    p.add_argument("--seeds", type=int, nargs="+", default=[42, 43, 44])
-    p.add_argument("--scenario", choices=["D", "E", "DE"], default="DE")
-    p.add_argument("--fast", action="store_true")
-    p.add_argument("--tag", type=str, default="")
-    a = p.parse_args()
-    sizes, n_eval, epochs = ([20, 40], 20, 5) if a.fast else (SIZES, 200, 150)
-    sfx = (f"_{a.tag}" if a.tag else "") + ("_fast" if a.fast else "")
-    out = RESULTS_DIR / f"r25_esd_data_scaling{sfx}.csv"
-    print(f"R25 | seeds={a.seeds} scenarios={a.scenario} sizes={sizes}", flush=True)
-    with out.open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["seed", "scenario", "n_traj", "features", "r2", "mae",
-                                          "auroc", "n_samples", "n_train_windows", "n_censored"])
-        w.writeheader()
-        for seed in a.seeds:
-            for sc in a.scenario:
-                run(seed, sc, sizes, n_eval, epochs, w, f)
+    args = common.parse_args(__doc__, extra=add_flags)
+    sizes, n_eval, epochs = (
+        ((20, 40), 20, 5) if args.fast else (SIZES, 200, 150))
+    configs = [config for scenario in args.scenario
+               for config in arms(scenario, sizes, n_eval, epochs)]
+    common.run_arms(
+        "R25", configs, args,
+        common.results_path("r25_esd_data_scaling", args), COLUMNS)
 
 
 if __name__ == "__main__":

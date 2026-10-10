@@ -33,140 +33,157 @@ Bloch vectors, so inputs should matter more than for T2.
 
 Writes ONLY to experiments/results/r24_entanglement_target*.csv and
 r24b_esd_statistics*.csv.
+Each CSV is accompanied by <name>.csv.provenance.json (configuration,
+seeds, software environment).
 
 Usage
 -----
-    python -m experiments.r24_entanglement_target --fast
+    python -m experiments.r24_entanglement_target --fast --tag smoke
     python -m experiments.r24_entanglement_target --part a --seeds 42 --tag a42
 """
 from __future__ import annotations
 
 import argparse
-import csv
 import dataclasses
-import sys
-import time
-from pathlib import Path
+import pathlib
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from experiments.r23_two_body_correlators import BATCH_SIZE, LEARNING_RATE, MODELS
+from experiments import common
+from experiments.r23_two_body_correlators import (
+    BATCH_SIZE, LEARNING_RATE, MODELS)
+from src import pipeline
 from src import reproducibility
-from src.application.backtest import BacktestCommand, BacktestUseCase
-from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
-from src.data import features
-from src.data.scenarios import build_configs, fixed_coupling_configs
-from src.domain.value_objects import DecoherenceCriterion, InteractionType
-from src.models import registry
-from src.physics.lindblad_systems import TwoQubitSystem
-from src.physics.measures import wootters_lambda
-from src.physics.simulate_qutip import simulate_two_qubit
+from src.data import scenarios
+from src.domain import value_objects
+from src.physics import lindblad_systems
+from src.physics import measures
+from src.physics import simulate_qutip
 from src.simulation import simulator
-from src.simulation.variants import EntanglementSimulator
-from src.training import trainer
 
-RESULTS_DIR = Path(__file__).parent / "results"
-ESD = DecoherenceCriterion.ENTANGLEMENT_DEATH
+ESD = value_objects.DecoherenceCriterion.ENTANGLEMENT_DEATH
+COLUMNS = ("seed", "scenario", "model", "features", "test", "r2", "mae",
+           "auroc", "n_samples", "n_censored")
 
 
 def esd_configs(groups):
     """Scenario groups D and E with entanglement death as the criterion."""
-    return {sc: [dataclasses.replace(c, decoherence_criterion=ESD) for c in groups[sc]]
+    return {sc: [dataclasses.replace(c, decoherence_criterion=ESD)
+                 for c in groups[sc]]
             for sc in ("D", "E")}
 
 
-def part_a(seed, n_per, n_eval, epochs, w, f):
-    gen = GenerateDatasetUseCase(EntanglementSimulator(), store=None)
-    groups = esd_configs(build_configs(n_per_scenario=n_per, seed=seed))
-    eval_groups = esd_configs(
-        build_configs(n_per_scenario=n_eval, seed=seed + 1000))
-    for sc in ("D", "E"):
-        ts = time.time()
-        full = gen.execute(GenerateDatasetCommand(
-            configs=groups[sc], window_length=20, horizon=1.0,
-            samples_per_trajectory=5, seed=seed, dataset_name=f"r24a_{seed}_{sc}"))
-        full_ev = gen.execute(GenerateDatasetCommand(
-            configs=eval_groups[sc], window_length=20, horizon=1.0,
-            samples_per_trajectory=5, seed=seed + 1, train_ratio=0.0, val_ratio=0.0,
-            dataset_name=f"r24a_eval_{seed}_{sc}")).as_test_only()
-        print(f"R24a | seed={seed} {sc} data [{time.time() - ts:.0f}s] "
-              f"censored={full.metadata.get('n_censored')} windows={len(full.sequences)}",
-              flush=True)
+def part_a(
+    n_per: int, n_eval: int, epochs: int
+) -> list[pipeline.ExperimentConfig]:
+    """Declares the single-scenario arms of part (a).
+
+    Same configurations, seeds and initial states as R23 (a); the three
+    input sets are cut from one simulation.
+
+    Args:
+        n_per: Training trajectories per scenario.
+        n_eval: Independent trajectories per scenario.
+        epochs: Training epochs.
+
+    Returns:
+        The arms in the order of the result rows.
+    """
+    arms = []
+    for scenario in ("D", "E"):
+        data = pipeline.DataSpec(
+            name="r24a", scenarios=(scenario,), n_per_scenario=n_per,
+            criterion=ESD.value,
+            simulator=pipeline.SimulatorSpec("entanglement"),
+            window_length=20)
+        independent = dataclasses.replace(
+            data, name="r24a_eval", n_per_scenario=n_eval, train_ratio=0.0,
+            val_ratio=0.0, config_seed_offset=1000, data_seed_offset=1)
+        tests = (
+            pipeline.EvalSpec(tags=(("test", "own"),)),
+            pipeline.EvalSpec(
+                data=independent, tags=(("test", "independent"),)),
+        )
         for feats in ("base", "corr", "corr_conc"):
-            tr = features.select(full, feats)
-            ev = features.select(full_ev, feats)
             for model, alias in MODELS.items():
-                pred = trainer.train(
-                    registry.build_model(alias), tr, epochs=epochs,
-                    batch_size=BATCH_SIZE, lr=LEARNING_RATE, seed=seed)
-                for split, ds in (("own", tr), ("independent", ev)):
-                    m = BacktestUseCase(pred).execute(BacktestCommand(dataset=ds, horizon=1.0))
-                    w.writerow({"seed": seed, "scenario": sc, "model": model,
-                                "features": feats, "test": split, "r2": m.r2, "mae": m.mae,
-                                "auroc": m.risk_auroc, "n_samples": m.n_samples,
-                                "n_censored": full.metadata.get("n_censored")})
-                    print(f"R24a | seed={seed} {sc} {model:<11} {feats:<9} {split:<11} "
-                          f"R2={m.r2:.3f} AUROC={m.risk_auroc:.3f}", flush=True)
-                f.flush()
+                arms.append(pipeline.ExperimentConfig(
+                    data=data, model=alias, features=feats, epochs=epochs,
+                    batch_size=BATCH_SIZE, learning_rate=LEARNING_RATE,
+                    tests=tests,
+                    tags=(("scenario", scenario), ("model", model),
+                          ("features", feats))))
+    return arms
 
 
-def part_b(seed, n, out_path):
-    times = None
+def part_b(seed: int, n: int, out_path: pathlib.Path) -> None:
+    """Measures ESD statistics and the response of T_ESD to a 2% rate change.
+
+    Not an `ExperimentConfig` arm: nothing is trained. For each (system, J)
+    it records the share of trajectories that reach ESD, the revival of
+    entanglement after it, and T_ESD at the rate and at 1.02 times the
+    rate. Writes the CSV.
+
+    Args:
+        seed: Seed of the configurations and the initial states.
+        n: Configurations per (system, J).
+        out_path: The CSV file.
+    """
     rows = []
-    for inter in (InteractionType.XXZ, InteractionType.TFIM):
+    for inter in (value_objects.InteractionType.XXZ,
+                  value_objects.InteractionType.TFIM):
         rng = np.random.default_rng(seed)
-        for J in (0.2, 0.8, 1.5):
-            for i, cfg in enumerate(fixed_coupling_configs(n, J, rng, interaction=inter)):
-                times = np.linspace(0.0, cfg.t_max, int(round(cfg.t_max / cfg.dt)) + 1)
-                row = {"seed": seed, "system": inter.value, "J": J, "index": i}
+        for coupling in (0.2, 0.8, 1.5):
+            configs = scenarios.fixed_coupling_configs(
+                n, coupling, rng, interaction=inter)
+            for i, cfg in enumerate(configs):
+                times = np.linspace(
+                    0.0, cfg.t_max, int(round(cfg.t_max / cfg.dt)) + 1)
+                row = {"seed": seed, "system": inter.value, "J": coupling,
+                       "index": i}
                 for tag, scale in (("", 1.0), ("_scaled", 1.02)):
-                    sys_ = TwoQubitSystem(
+                    system = lindblad_systems.TwoQubitSystem(
                         J=cfg.J, interaction_type=cfg.interaction_type.value,
-                        gamma_coeffs=scale * np.array(cfg.dissipator.gamma_coeffs),
+                        gamma_coeffs=scale * np.array(
+                            cfg.dissipator.gamma_coeffs),
                         gamma_t_max=cfg.t_max,
                         jump_operators=[cfg.dissipator.operator_type.value])
                     reproducibility.seed_numpy_global(seed * 100000 + i)
                     psi = simulator.sample_initial_state(cfg)
-                    rhos = simulate_two_qubit(sys_, psi, times)["density_matrices"]
-                    lam = np.array([wootters_lambda(r) for r in rhos])
-                    t_esd, cens = simulator.sudden_death_time(times, lam)
-                    after = lam[times > t_esd] if not cens else np.array([])
+                    rhos = simulate_qutip.simulate_two_qubit(
+                        system, psi, times)["density_matrices"]
+                    lam = np.array([measures.wootters_lambda(r)
+                                    for r in rhos])
+                    t_esd, censored = simulator.sudden_death_time(times, lam)
+                    after = (lam[times > t_esd] if not censored
+                             else np.array([]))
                     row[f"c0{tag}"] = max(0.0, lam[0])
                     row[f"t_esd{tag}"] = t_esd
-                    row[f"censored{tag}"] = cens
+                    row[f"censored{tag}"] = censored
                     row[f"revival{tag}"] = bool((after > 1e-3).any())
                 rows.append(row)
-            print(f"R24b | seed={seed} {inter.value} J={J} done", flush=True)
-    with out_path.open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0]))
-        w.writeheader()
-        w.writerows(rows)
+            print(f"R24b | seed={seed} {inter.value} J={coupling} done",
+                  flush=True)
+    common.write_results(
+        rows, out_path, seeds=[seed],
+        config="R24 (b): ESD statistics and the response of T_ESD to a "
+               f"2% larger gamma(t), {n} configurations per (system, J)")
+
+
+def add_flags(parser: argparse.ArgumentParser) -> None:
+    """Adds the choice of part to the common flags."""
+    parser.add_argument("--part", choices=["a", "b"], default="a")
 
 
 def main() -> None:
-    p = argparse.ArgumentParser()
-    p.add_argument("--seeds", type=int, nargs="+", default=[42, 43, 44])
-    p.add_argument("--part", choices=["a", "b"], default="a")
-    p.add_argument("--fast", action="store_true")
-    p.add_argument("--tag", type=str, default="")
-    a = p.parse_args()
-    n_per, n_eval, epochs = (30, 20, 5) if a.fast else (500, 200, 150)
-    sfx = (f"_{a.tag}" if a.tag else "") + ("_fast" if a.fast else "")
-    print(f"R24 | seeds={a.seeds} part={a.part} epochs={epochs}", flush=True)
-    if a.part == "b":
-        part_b(a.seeds[0], 10 if a.fast else 100, RESULTS_DIR / f"r24b_esd_statistics{sfx}.csv")
+    args = common.parse_args(__doc__, extra=add_flags)
+    n_per, n_eval, epochs = (30, 20, 5) if args.fast else (500, 200, 150)
+    if args.part == "b":
+        part_b(args.seeds[0], 10 if args.fast else 100,
+               common.results_path("r24b_esd_statistics", args))
         return
-    out = RESULTS_DIR / f"r24_entanglement_target{sfx}.csv"
-    with out.open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["seed", "scenario", "model", "features", "test",
-                                          "r2", "mae", "auroc", "n_samples", "n_censored"])
-        w.writeheader()
-        for seed in a.seeds:
-            ts = time.time()
-            part_a(seed, n_per, n_eval, epochs, w, f)
-            print(f"R24 | seed={seed} done [{time.time() - ts:.0f}s]", flush=True)
+    common.run_arms(
+        "R24", part_a(n_per, n_eval, epochs), args,
+        common.results_path("r24_entanglement_target", args), COLUMNS)
 
 
 if __name__ == "__main__":
