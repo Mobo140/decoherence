@@ -46,6 +46,7 @@ from src.infrastructure.ml.physics_only_predictor import PhysicsOnlyPredictor
 from src.infrastructure.ml.stretched_exp_predictor import StretchedExpPredictor
 from src.infrastructure.ml.transformer_predictor import TransformerPredictor
 from src.infrastructure.quantum.noise import ar1_filter
+from src.infrastructure.persistence.stores import NumpyTrajectoryStore, PickleModelStore
 from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
 # ---------------------------------------------------------------------------
 
@@ -150,6 +151,27 @@ def compute() -> dict:
         TransformerPredictor(d_model=32, n_heads=4, n_layers=1, dim_ff=64), feature_set(ds_2q, "corr"))
     out["model/lstm_2q_gated"] = run(
         LSTMPredictor(use_physics_prior=True, adaptive_prior_r2_threshold=0.7), base_features(ds_2q))
+
+    # Stored artefacts must keep loading: every checkpoint predicts on fixed
+    # windows, and a few cached trajectories load unchanged.
+    store = PickleModelStore("checkpoints")
+    for ckpt in sorted(Path("checkpoints").glob("*.pt")):
+        pred = store.load(ckpt.stem)
+        n_feat = 18 if "2q" in ckpt.stem or "2qubit" in ckpt.stem else 5
+        ds = ds_2q if n_feat == 18 else ds_1q
+        preds = []
+        for i in range(min(5, len(ds.sequences))):
+            w = ds.sequences[i]
+            try:
+                r = pred.predict(w, float(ds.t_obs[i]), 1.0)
+                preds.append(r.t_decoh_predicted)
+            except Exception as exc:  # record failures too, they must not change
+                preds.append(type(exc).__name__)
+        out[f"ckpt/{ckpt.stem}"] = [type(pred).__name__] + [
+            repr(float(x)) if not isinstance(x, str) else x for x in preds]
+    traj_store = NumpyTrajectoryStore()
+    for name in sorted(traj_store.list_available())[:5]:
+        out[f"cache/{name}"] = [_traj(t) for t in traj_store.load(name)[:2]]
     return out
 
 
