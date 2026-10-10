@@ -22,8 +22,8 @@ from src.domain.value_objects import (
     QubitCount,
     SystemConfig,
 )
-from src.infrastructure.ml.lstm_predictor import LSTMPredictor
-from src.infrastructure.ml.physics_only_predictor import PhysicsOnlyPredictor
+from src.models.lstm import LSTMPredictor
+from src.models.physics_only import PhysicsOnlyPredictor
 from src.simulation.simulator import QuTipSimulator
 
 

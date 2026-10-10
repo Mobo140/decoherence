@@ -7,8 +7,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .batching import _add_log, _batch_physics, _loader
-from .residual_net import _ResidualNet
+from src.models.lstm_data import add_log, make_loader
+from src.models.physics_prior import batch_physics
+from src.models.residual_net import ResidualNet
 
 R2_SCALE_FLOOR = 0.05
 
@@ -25,7 +26,7 @@ def fit_predictor(predictor, ds, n_epochs, batch_size, lr, verbose, regression_l
         rem = ds.remaining_time[idx]
         t   = ds.t_obs[idx]
         r   = ds.risk_labels[idx]
-        slopes, logcs, phys, r2s = _batch_physics(
+        slopes, logcs, phys, r2s = batch_physics(
             X, ds.feature_names, predictor._dt, t, predictor.t_max,
             adaptive_r2_threshold=predictor.adaptive_prior_r2_threshold,
         )
@@ -33,7 +34,7 @@ def fit_predictor(predictor, ds, n_epochs, batch_size, lr, verbose, regression_l
             phys    = np.zeros_like(phys)
             slopes  = np.zeros_like(slopes)
         residuals = (rem - phys if predictor.residual_output else rem).astype(np.float32)
-        X_aug = _add_log(X, ds.feature_names)
+        X_aug = add_log(X, ds.feature_names)
         # Context codes: use dataset arrays if available, else zeros.
         int_codes = (ds.interaction_type_codes[idx]
                      if len(ds.interaction_type_codes) == len(ds.sequences)
@@ -88,13 +89,13 @@ def fit_predictor(predictor, ds, n_epochs, batch_size, lr, verbose, regression_l
 
     n_feat = X_tr.shape[-1]
     n_physics = 8 if predictor.use_J_scalar else 7
-    predictor._net = _ResidualNet(
+    predictor._net = ResidualNet(
         n_feat, predictor.hidden_size, predictor.num_layers, predictor.dropout, n_physics=n_physics,
     ).to(predictor._device)
 
     opt   = torch.optim.AdamW(predictor._net.parameters(), lr=lr, weight_decay=1e-3)
     sched = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, factor=0.5, patience=10, min_lr=1e-5)
-    from .loss_functions import SurvHuberLoss, get_loss
+    from src.training.losses import SurvHuberLoss, get_loss
     use_surv = bool(c_tr.any())
     _reg_name = "huber" if regression_loss == "surv_huber" else regression_loss
     reg_loss_fn = get_loss(_reg_name).as_torch()
@@ -131,8 +132,8 @@ def fit_predictor(predictor, ds, n_epochs, batch_size, lr, verbose, regression_l
 
     feat_std_t = torch.tensor(predictor._feature_std, dtype=torch.float32).to(predictor._device)
 
-    tr_ld = _loader(X_tr, res_tr, t_tr, sl_tr, lc_tr, ph_tr, r2_tr, ic_tr, dc_tr, j_tr, r_tr, rem_tr, c_tr, batch_size, True)
-    va_ld = _loader(X_va, res_va, t_va, sl_va, lc_va, ph_va, r2_va, ic_va, dc_va, j_va, r_va, rem_va, c_va, batch_size, False)
+    tr_ld = make_loader(X_tr, res_tr, t_tr, sl_tr, lc_tr, ph_tr, r2_tr, ic_tr, dc_tr, j_tr, r_tr, rem_tr, c_tr, batch_size, True)
+    va_ld = make_loader(X_va, res_va, t_va, sl_va, lc_va, ph_va, r2_va, ic_va, dc_va, j_va, r_va, rem_va, c_va, batch_size, False)
 
     train_hist, val_hist = [], []
     best_val, best_st, pat = float("inf"), None, 0

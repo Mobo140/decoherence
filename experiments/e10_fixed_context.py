@@ -73,7 +73,7 @@ def _save_csv(rows: list, path: Path, fieldnames: list) -> None:
 
 def run_e10a(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True) -> list:
     """Cross-system physics_lstm with corrected system-type codes."""
-    from src.infrastructure.ml.lstm_predictor import LSTMPredictor
+    from src.models.lstm import LSTMPredictor
 
     print("=== E10a: training physics_lstm on D+E mixture (fixed 4-class codes) ===")
 
@@ -155,7 +155,7 @@ def run_e10a(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True)
 
 def run_e10b(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True) -> list:
     """Cross-system Transformer with E8c config."""
-    from src.infrastructure.ml.transformer_predictor import TransformerPredictor
+    from src.models.transformer import TransformerPredictor
 
     print("=== E10b: training Transformer on D+E mixture (E8c config) ===")
 

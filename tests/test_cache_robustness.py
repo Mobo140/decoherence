@@ -23,7 +23,7 @@ from src.domain.value_objects import (
     SystemConfig,
     TrajectoryResult,
 )
-from src.infrastructure.persistence.stores import NumpyTrajectoryStore
+from src.persistence.stores import NumpyTrajectoryStore
 
 
 def _cfg() -> SystemConfig:

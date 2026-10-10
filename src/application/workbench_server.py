@@ -34,9 +34,9 @@ from src.application.job_queue import JobQueue
 from src.application.predict_decoherence import PredictDecoherenceCommand, PredictDecoherenceUseCase
 from src.application.simulate_trajectory import SimulateTrajectoryCommand, SimulateTrajectoryUseCase
 from src.domain.value_objects import DissipatorType, InteractionType
-from src.infrastructure.ml.physics_only_predictor import PhysicsOnlyPredictor
-from src.infrastructure.ml.physics_prior import physics_remaining
-from src.infrastructure.persistence.stores import BestModelRegistry, HamiltonianModelRegistry
+from src.models.physics_only import PhysicsOnlyPredictor
+from src.models.physics_prior import physics_remaining
+from src.persistence.stores import BestModelRegistry, HamiltonianModelRegistry
 from src.simulation.simulator import QuTipSimulator
 
 

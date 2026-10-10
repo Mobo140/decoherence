@@ -25,7 +25,7 @@ from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.data.scenarios import build_configs, trajectory_store
-from src.infrastructure.ml.lstm_predictor import LSTMPredictor
+from src.models.lstm import LSTMPredictor
 from src.simulation.simulator import QuTipSimulator
 
 TAUS = [0.0, 0.3, 0.5, 0.7, 0.9]

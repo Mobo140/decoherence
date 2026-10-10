@@ -80,7 +80,7 @@ def run_e7a(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
 
     class TransformerCrossSystem(CrossSystemUseCase):
         def _build_predictor(self):
-            from src.infrastructure.ml.transformer_predictor import TransformerPredictor
+            from src.models.transformer import TransformerPredictor
             # Larger Transformer: d_model=128, 4 heads, 3 layers, ff=512
             return TransformerPredictor(
                 d_model=128, n_heads=4, n_layers=3, dim_ff=512, dropout=0.1,
@@ -123,7 +123,7 @@ def run_e7a(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
 
 def run_e7b(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
     """Sweep τ for physics_lstm on D and E to find optimal threshold."""
-    from src.infrastructure.ml.lstm_predictor import LSTMPredictor
+    from src.models.lstm import LSTMPredictor
 
     thresholds = [0.0, 0.3, 0.5, 0.7, 0.9]
     scenarios = ["D", "E"]
@@ -201,7 +201,7 @@ def run_e7c(simulator, n_per_J: int, n_epochs: int, verbose: bool = True,
     ``interaction=InteractionType.XXZ`` to run the same sweep on the
     Heisenberg model.
     """
-    from src.infrastructure.ml.transformer_predictor import TransformerPredictor
+    from src.models.transformer import TransformerPredictor
 
     if J_values is None:
         J_values = [0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0]

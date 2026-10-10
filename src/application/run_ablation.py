@@ -135,10 +135,10 @@ class AblationStudyUseCase:
     # ------------------------------------------------------------------
 
     def _build_predictor(self, variant: PredictorVariant, command: AblationCommand) -> IPredictor:
-        from ..infrastructure.ml.lstm_predictor import LSTMPredictor
-        from ..infrastructure.ml.physics_only_predictor import PhysicsOnlyPredictor
-        from ..infrastructure.ml.stretched_exp_predictor import StretchedExpPredictor
-        from ..infrastructure.ml.transformer_predictor import TransformerPredictor
+        from src.models.lstm import LSTMPredictor
+        from src.models.physics_only import PhysicsOnlyPredictor
+        from src.models.stretched_exp import StretchedExpPredictor
+        from src.models.transformer import TransformerPredictor
 
         if variant == PredictorVariant.PHYSICS_ONLY:
             t_max = max((c.t_max for c in command.configs), default=100.0)

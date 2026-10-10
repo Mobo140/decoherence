@@ -18,9 +18,9 @@ from src.domain.value_objects import (
     SystemConfig,
     TrajectoryResult,
 )
-from src.infrastructure.ml.physics_only_predictor import PhysicsOnlyPredictor
-from src.infrastructure.ml.stretched_exp_predictor import StretchedExpPredictor
-from src.infrastructure.persistence.stores import (
+from src.models.physics_only import PhysicsOnlyPredictor
+from src.models.stretched_exp import StretchedExpPredictor
+from src.persistence.stores import (
     NumpyTrajectoryStore,
     PickleModelStore,
     infer_predictor_kind,
@@ -68,11 +68,11 @@ def test_lstm_from_bytes_old_4_physics_scalars():
 
     import torch
 
-    from src.infrastructure.ml.lstm_predictor import LSTMPredictor
-    from src.infrastructure.ml.residual_net import _ResidualNet
+    from src.models.lstm import LSTMPredictor
+    from src.models.residual_net import ResidualNet
 
     hidden, n_raw, n_in = 64, 5, 7
-    net = _ResidualNet(n_in, hidden, 1, 0.0, n_physics=4)
+    net = ResidualNet(n_in, hidden, 1, 0.0, n_physics=4)
     buf = io.BytesIO()
     torch.save(
         {
@@ -106,7 +106,7 @@ def test_lstm_from_bytes_old_4_physics_scalars():
 
 
 def test_best_registry_swallows_bad_checkpoint(tmp_path):
-    from src.infrastructure.persistence.stores import BestModelRegistry
+    from src.persistence.stores import BestModelRegistry
 
     (tmp_path / "best_1qubit.pt").write_bytes(b"not-a-checkpoint")
     assert BestModelRegistry(root=tmp_path).get_predictor(1) is None
@@ -143,8 +143,8 @@ def test_load_old_checkpoint_without_kind_file(tmp_path):
 
 
 def test_variant_of_predictor_classes():
-    from src.infrastructure.ml.lstm_predictor import LSTMPredictor
-    from src.infrastructure.ml.transformer_predictor import TransformerPredictor
+    from src.models.lstm import LSTMPredictor
+    from src.models.transformer import TransformerPredictor
 
     assert _variant_of(TransformerPredictor()) == PredictorVariant.TRANSFORMER
     assert _variant_of(PhysicsOnlyPredictor()) == PredictorVariant.PHYSICS_ONLY
@@ -183,10 +183,10 @@ def test_as_test_only_puts_every_window_in_test_idx():
 
 
 def _untrained_transformer():
-    from src.infrastructure.ml.transformer_predictor import TransformerPredictor, _TransformerNet
+    from src.models.transformer import TransformerPredictor, TransformerNet
 
     p = TransformerPredictor(d_model=32, n_heads=4, n_layers=1, dim_ff=64, dropout=0.0)
-    p._net = _TransformerNet(
+    p._net = TransformerNet(
         n_features=5, d_model=32, n_heads=4, n_layers=1, dim_ff=64, dropout=0.0,
     )
     p._feature_mean = np.zeros(5, dtype=np.float32)
@@ -198,7 +198,7 @@ def _untrained_transformer():
 
 
 def test_store_roundtrip_transformer(tmp_path):
-    from src.infrastructure.ml.transformer_predictor import TransformerPredictor
+    from src.models.transformer import TransformerPredictor
 
     pred = _untrained_transformer()
     store = PickleModelStore(root=tmp_path)
@@ -210,7 +210,7 @@ def test_store_roundtrip_transformer(tmp_path):
 
 
 def test_load_transformer_without_kind_sidecar(tmp_path):
-    from src.infrastructure.ml.transformer_predictor import TransformerPredictor
+    from src.models.transformer import TransformerPredictor
 
     pred = _untrained_transformer()
     (tmp_path / "legacy_tf.pt").write_bytes(pred.state_bytes())

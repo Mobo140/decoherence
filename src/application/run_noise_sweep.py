@@ -122,5 +122,5 @@ class NoiseSweepUseCase:
 
     def _build_predictor(self):
         """Factory for the predictor used in training. Override to customise."""
-        from ..infrastructure.ml.lstm_predictor import LSTMPredictor
+        from src.models.lstm import LSTMPredictor
         return LSTMPredictor(use_physics_prior=True)

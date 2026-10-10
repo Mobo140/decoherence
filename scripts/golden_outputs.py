@@ -39,11 +39,11 @@ from src.data.features import select as feature_set
 from src.data.observation import ar1_filter, noise_augmented
 from src.data.scenarios import build_configs
 from src.domain.value_objects import DecoherenceCriterion
-from src.infrastructure.ml.lstm_predictor import LSTMPredictor
-from src.infrastructure.ml.physics_only_predictor import PhysicsOnlyPredictor
-from src.infrastructure.ml.stretched_exp_predictor import StretchedExpPredictor
-from src.infrastructure.ml.transformer_predictor import TransformerPredictor
-from src.infrastructure.persistence.stores import NumpyTrajectoryStore, PickleModelStore
+from src.models.lstm import LSTMPredictor
+from src.models.physics_only import PhysicsOnlyPredictor
+from src.models.stretched_exp import StretchedExpPredictor
+from src.models.transformer import TransformerPredictor
+from src.persistence.stores import NumpyTrajectoryStore, PickleModelStore
 from src.simulation.simulator import QuTipSimulator
 from src.simulation.variants import (
     CORR,

@@ -125,7 +125,9 @@ and the network predicts T₂ directly from sequences.
 │   ├── domain/                         # value objects, ports — no torch/qutip
 │   ├── application/                    # use-cases + experiment_catalog / job_queue
 │   ├── data/                           # scenarios A–E, Dataset, windows, observation models, feature sets
-│   ├── infrastructure/                 # LSTM, Transformer, registries, stores
+│   ├── models/                         # predictors, nets, registry.build_model(alias)
+│   ├── training/                       # losses (LOSSES), shared epoch loop, standardisation
+│   ├── persistence/                    # trajectory cache and checkpoint stores
 │   ├── physics/                        # Lindblad systems, master equation, measures
 │   └── simulation/                     # QuTipSimulator (ISimulator adapter) and variants
 ├── paper/
@@ -138,9 +140,9 @@ and the network predicts T₂ directly from sequences.
 ```
 
 The layering is the usual dependency rule: `domain` knows nothing about
-frameworks, `application` orchestrates use cases, `infrastructure` holds
-PyTorch, `physics` and `simulation` hold QuTiP. Nothing outside
-`infrastructure` imports torch.
+frameworks, `application` orchestrates use cases, `models` and `training`
+hold PyTorch, `physics` and `simulation` hold QuTiP, `persistence` holds the
+file stores.
 
 ---
 
@@ -181,7 +183,7 @@ python app.py
 ```python
 from src.domain.value_objects import DissipatorConfig, QubitCount, SystemConfig
 from src.simulation.simulator import QuTipSimulator
-from src.infrastructure.ml.lstm_predictor import LSTMPredictor
+from src.models.lstm import LSTMPredictor
 from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.application.backtest import BacktestCommand, BacktestUseCase
@@ -294,7 +296,7 @@ All figures are saved as PDF to `notebooks/figs/`.
 
 ```python
 from src.domain.ports import ILossFunction
-from src.infrastructure.ml.loss_functions import get_loss
+from src.training.losses import get_loss
 
 # Built-in losses
 loss = get_loss("huber")          # HuberLoss(delta=1.0)

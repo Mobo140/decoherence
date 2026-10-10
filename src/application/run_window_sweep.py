@@ -85,7 +85,7 @@ class WindowSweepUseCase:
                     print(f"  Skipping f={f:.2f} — no test samples.")
                 continue
 
-            from ..infrastructure.ml.lstm_predictor import LSTMPredictor
+            from src.models.lstm import LSTMPredictor
             predictor = LSTMPredictor(use_physics_prior=True)
 
             train_uc = TrainModelUseCase(predictor)

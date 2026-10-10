@@ -97,9 +97,9 @@ def _ablation(simulator, groups, scenarios, n_epochs, suffix, verbose=True):
         # We monkey-patch _build_predictor via subclass to inject these.
         class ImprovedAblation(AblationStudyUseCase):
             def _build_predictor(self, variant, command):
-                from src.infrastructure.ml.lstm_predictor import LSTMPredictor
-                from src.infrastructure.ml.physics_only_predictor import PhysicsOnlyPredictor
-                from src.infrastructure.ml.transformer_predictor import TransformerPredictor
+                from src.models.lstm import LSTMPredictor
+                from src.models.physics_only import PhysicsOnlyPredictor
+                from src.models.transformer import TransformerPredictor
                 if variant == PredictorVariant.PHYSICS_ONLY:
                     return PhysicsOnlyPredictor(t_max=max(c.t_max for c in command.configs))
                 if variant == PredictorVariant.LSTM_ONLY:
@@ -142,7 +142,7 @@ def _noise_sweep(simulator, groups, scenarios, n_epochs, suffix, verbose=True,
     Defaults reproduce the published run; the keyword-only arguments let R8
     replicate it across seeds without duplicating the configuration.
     """
-    from src.infrastructure.ml.lstm_predictor import LSTMPredictor
+    from src.models.lstm import LSTMPredictor
     results_dir = Path(__file__).parent / "results"
     configs = [cfg for s in scenarios for cfg in groups[s]]
 
@@ -185,7 +185,7 @@ def _noise_sweep(simulator, groups, scenarios, n_epochs, suffix, verbose=True,
 
 def _cross_system(simulator, groups, train_scenarios, eval_scenarios, n_epochs, suffix, verbose=True):
     """Run E6c: cross-system generalisation with improved model."""
-    from src.infrastructure.ml.lstm_predictor import LSTMPredictor
+    from src.models.lstm import LSTMPredictor
     results_dir = Path(__file__).parent / "results"
 
     train_configs = [cfg for s in train_scenarios for cfg in groups[s]]

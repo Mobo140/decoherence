@@ -10,8 +10,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.domain.value_objects import DissipatorType, InteractionType
-from src.infrastructure.ml.physics_only_predictor import PhysicsOnlyPredictor
-from src.infrastructure.persistence.stores import BestModelRegistry, HamiltonianModelRegistry
+from src.models.physics_only import PhysicsOnlyPredictor
+from src.persistence.stores import BestModelRegistry, HamiltonianModelRegistry
 
 
 def _metrics(r2: float, n: int = 10):

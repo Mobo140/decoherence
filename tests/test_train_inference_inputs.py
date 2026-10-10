@@ -8,7 +8,7 @@ import numpy as np
 import torch
 
 from src.data.dataset import Dataset
-from src.infrastructure.ml.lstm_predictor import LSTMPredictor
+from src.models.lstm import LSTMPredictor
 
 
 def _toy_dataset(n=60, L=20, seed=0):
@@ -65,7 +65,7 @@ def test_training_windows_are_standardised_like_inference():
 def test_near_constant_fit_quality_scalar_is_not_blown_up():
     """R²_OLS is ~constant on clean single-qubit windows; its scale must be
     floored so that measurement noise does not produce inputs of order 100."""
-    from src.infrastructure.ml.training import R2_SCALE_FLOOR
+    from src.models.lstm_fit import R2_SCALE_FLOOR
     ds = _toy_dataset()
     p = LSTMPredictor(use_physics_prior=True)
     p.train(ds, n_epochs=1, batch_size=64, lr=1e-3, seed=0, verbose=False)

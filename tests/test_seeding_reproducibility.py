@@ -105,7 +105,7 @@ def test_train_model_command_accepts_a_seed():
 
 def test_training_with_the_same_seed_gives_identical_weights():
     torch = pytest.importorskip("torch")
-    from src.infrastructure.ml.lstm_predictor import LSTMPredictor
+    from src.models.lstm import LSTMPredictor
 
     ds = _dataset(5)
     weights = []
@@ -120,7 +120,7 @@ def test_training_with_the_same_seed_gives_identical_weights():
 def test_training_without_a_seed_is_not_pinned():
     """Guards the test above from passing for the wrong reason."""
     torch = pytest.importorskip("torch")
-    from src.infrastructure.ml.lstm_predictor import LSTMPredictor
+    from src.models.lstm import LSTMPredictor
 
     ds = _dataset(5)
     weights = []

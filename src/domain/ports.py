@@ -2,7 +2,7 @@
 
 Following the Ports & Adapters (Hexagonal) pattern:
 - Ports live in the domain layer.
-- Concrete adapters live in infrastructure.
+- Concrete adapters live in models, persistence and simulation.
 - The application layer depends only on ports, never on adapters directly.
 """
 from __future__ import annotations
@@ -108,7 +108,7 @@ class IModelStore(ABC):
 class ILossFunction(ABC):
     """Port: pluggable scalar loss for training predictors.
 
-    Concrete implementations live in infrastructure/ml/loss_functions.py.
+    Concrete implementations live in training/losses.py.
     The application layer depends only on this interface, making it trivial
     to swap Huber → Quantile → custom without touching training logic.
     """

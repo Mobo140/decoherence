@@ -43,8 +43,8 @@ from src.application.run_cross_system import CrossSystemCommand, CrossSystemUseC
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.data.scenarios import build_configs, trajectory_store
 from src.domain.value_objects import DissipatorType, InteractionType, PredictorVariant
-from src.infrastructure.ml.lstm_predictor import LSTMPredictor
-from src.infrastructure.persistence.stores import HamiltonianModelRegistry
+from src.models.lstm import LSTMPredictor
+from src.persistence.stores import HamiltonianModelRegistry
 from src.simulation.simulator import QuTipSimulator
 
 

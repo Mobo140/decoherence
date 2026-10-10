@@ -53,14 +53,24 @@ from typing import Optional
 import numpy as np
 import torch
 
-from ...domain.ports import IPredictor
-from ...domain.value_objects import PredictionResult
-from .batching import _add_log, _ns
-from .physics_only_predictor import remaining_to_risk
-from .physics_prior import _n_physics_from_state, physics_remaining
-from .residual_net import _ResidualNet
+from src.domain.ports import IPredictor
+from src.domain.value_objects import PredictionResult
+from src.models.lstm_data import add_log, scalar_tensor
+from src.models.physics_prior import physics_remaining, remaining_to_risk
+from src.models.residual_net import ResidualNet
 
 __all__ = ["LSTMPredictor"]
+
+
+def n_physics_from_state(state_dict: dict, hidden_size: int) -> int | None:
+    """Infers how many physics scalars a checkpoint concatenated (4/7/8)."""
+    weight = state_dict.get("regression_head.0.weight")
+    if weight is None:
+        return None
+    n = int(weight.shape[1] - hidden_size * 2)
+    if n < 1:
+        return None
+    return n
 
 
 @dataclass
@@ -110,7 +120,7 @@ class LSTMPredictor(IPredictor):
     # that separates "useful feature" from "residual output").
     residual_output: bool = True
 
-    _net: Optional[_ResidualNet] = field(default=None, init=False, repr=False)
+    _net: Optional[ResidualNet] = field(default=None, init=False, repr=False)
     _feature_mean: Optional[np.ndarray] = field(default=None, init=False, repr=False)
     _feature_std: Optional[np.ndarray] = field(default=None, init=False, repr=False)
     _t_obs_mean: float = field(default=0.0, init=False, repr=False)
@@ -158,15 +168,15 @@ class LSTMPredictor(IPredictor):
         self._net.eval()
         with torch.no_grad():
             x = self._norm_window(window)
-            t_n   = _ns(t_obs,    self._t_obs_mean,  self._t_obs_std,   self._device)
-            sl_n  = _ns(slope,    self._slope_mean,  self._slope_std,   self._device)
-            lc_n  = _ns(log_coh,  self._logc_mean,   self._logc_std,    self._device)
-            ph_n  = _ns(phys_rem, self._phys_mean,   self._phys_std,    self._device)
-            r2_n  = _ns(ols_r2,   self._r2_mean,     self._r2_std,      self._device)
-            it_n  = _ns(self.inference_interaction_code, self._ic_mean, self._ic_std, self._device)
-            dt_n  = _ns(self.inference_dissipator_code,  self._dc_mean, self._dc_std, self._device)
+            t_n   = scalar_tensor(t_obs,    self._t_obs_mean,  self._t_obs_std,   self._device)
+            sl_n  = scalar_tensor(slope,    self._slope_mean,  self._slope_std,   self._device)
+            lc_n  = scalar_tensor(log_coh,  self._logc_mean,   self._logc_std,    self._device)
+            ph_n  = scalar_tensor(phys_rem, self._phys_mean,   self._phys_std,    self._device)
+            r2_n  = scalar_tensor(ols_r2,   self._r2_mean,     self._r2_std,      self._device)
+            it_n  = scalar_tensor(self.inference_interaction_code, self._ic_mean, self._ic_std, self._device)
+            dt_n  = scalar_tensor(self.inference_dissipator_code,  self._dc_mean, self._dc_std, self._device)
             j_n = (
-                _ns(self.inference_J, self._j_mean, self._j_std, self._device)
+                scalar_tensor(self.inference_J, self._j_mean, self._j_std, self._device)
                 if self.use_J_scalar else None
             )
 
@@ -186,7 +196,7 @@ class LSTMPredictor(IPredictor):
         )
 
     def train(self, dataset: object, **kwargs) -> object:
-        from ...application.train_model import TrainModelResult
+        from src.application.train_model import TrainModelResult
         from src.data.dataset import Dataset as DS
         assert isinstance(dataset, DS)
         ds: DS = dataset
@@ -260,11 +270,11 @@ class LSTMPredictor(IPredictor):
             use_J_scalar=ckpt.get("use_J_scalar", False),
             inference_J=ckpt.get("inference_J", 0.0),
         )
-        n_physics = _n_physics_from_state(ckpt["state_dict"], ckpt["hidden_size"])
+        n_physics = n_physics_from_state(ckpt["state_dict"], ckpt["hidden_size"])
         if n_physics is None:
             n_physics = 8 if p.use_J_scalar else 7
         p.use_J_scalar = n_physics >= 8
-        net = _ResidualNet(n_features=ckpt["n_features"], hidden_size=ckpt["hidden_size"],
+        net = ResidualNet(n_features=ckpt["n_features"], hidden_size=ckpt["hidden_size"],
                            num_layers=ckpt["num_layers"], dropout=ckpt["dropout"],
                            n_physics=n_physics)
         net.load_state_dict(ckpt["state_dict"])
@@ -299,14 +309,14 @@ class LSTMPredictor(IPredictor):
 
     def _fit(self, ds, n_epochs, batch_size, lr, verbose, regression_loss: str = "huber"):
         """Delegates to training.fit_predictor."""
-        from .training import fit_predictor
+        from src.models.lstm_fit import fit_predictor
         return fit_predictor(self, ds, n_epochs, batch_size, lr, verbose, regression_loss)
 
     def _norm_window(self, window: np.ndarray) -> torch.Tensor:
         # Pad raw features to the dimension seen at training time.
         # coherence_l1 and purity are always last 2 raw columns; insert zeros
         # before them (same convention as generate_dataset padding).
-        n_raw_expected = self._net.lstm.input_size - 2  # _add_log appends 2 cols
+        n_raw_expected = self._net.lstm.input_size - 2  # add_log appends 2 cols
         if window.shape[-1] < n_raw_expected:
             n_pad = n_raw_expected - window.shape[-1]
             window = np.concatenate(
@@ -315,7 +325,7 @@ class LSTMPredictor(IPredictor):
                  window[:, -2:]],
                 axis=-1,
             )
-        w = _add_log(window[np.newaxis], [])[0]
+        w = add_log(window[np.newaxis], [])[0]
         normed = (w - self._feature_mean) / self._feature_std
         return torch.tensor(normed, dtype=torch.float32).unsqueeze(0).to(self._device)
 

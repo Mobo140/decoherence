@@ -1,4 +1,4 @@
-"""Application layer: use-cases that orchestrate domain and infrastructure."""
+"""Application layer: use-cases that orchestrate domain, models and persistence."""
 from .simulate_trajectory import SimulateTrajectoryCommand, SimulateTrajectoryUseCase
 from .generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
 from .train_model import TrainModelCommand, TrainModelUseCase, TrainModelResult

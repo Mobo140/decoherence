@@ -18,7 +18,7 @@ import numpy as np
 
 from src.domain import ports
 from src.domain import value_objects
-from src.infrastructure.persistence import stores
+from src.persistence import stores
 
 SCENARIOS = {
     "A": "1-qubit, sigma_-, constant gamma",

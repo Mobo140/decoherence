@@ -36,9 +36,9 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
-from ...domain.ports import IPredictor
-from ...domain.value_objects import PredictionResult
-from .physics_only_predictor import remaining_to_risk
+from src.domain.ports import IPredictor
+from src.domain.value_objects import PredictionResult
+from src.models.physics_prior import remaining_to_risk
 
 
 # ---------------------------------------------------------------------------
@@ -67,7 +67,7 @@ class _SinusoidalPE(nn.Module):
 # Transformer model
 # ---------------------------------------------------------------------------
 
-class _TransformerNet(nn.Module):
+class TransformerNet(nn.Module):
     """Encoder-only Transformer for decoherence time prediction."""
 
     def __init__(
@@ -140,7 +140,7 @@ class TransformerPredictor(IPredictor):
     dropout: float = 0.1
     t_max: float = 10.0
 
-    _net: Optional[_TransformerNet] = field(default=None, init=False, repr=False)
+    _net: Optional[TransformerNet] = field(default=None, init=False, repr=False)
     _feature_mean: Optional[np.ndarray] = field(default=None, init=False, repr=False)
     _feature_std: Optional[np.ndarray] = field(default=None, init=False, repr=False)
     _target_mean: float = field(default=0.0, init=False, repr=False)
@@ -173,7 +173,7 @@ class TransformerPredictor(IPredictor):
         )
 
     def train(self, dataset: object, **kwargs) -> object:
-        from ...application.train_model import TrainModelResult
+        from src.application.train_model import TrainModelResult
         from src.data.dataset import Dataset as DS
         assert isinstance(dataset, DS)
         ds: DS = dataset
@@ -223,7 +223,7 @@ class TransformerPredictor(IPredictor):
             n_layers=ckpt["n_layers"], dim_ff=ckpt["dim_ff"],
             dropout=ckpt["dropout"],
         )
-        net = _TransformerNet(
+        net = TransformerNet(
             n_features=ckpt["n_features"], d_model=ckpt["d_model"],
             n_heads=ckpt["n_heads"], n_layers=ckpt["n_layers"],
             dim_ff=ckpt["dim_ff"], dropout=ckpt["dropout"],
@@ -243,7 +243,7 @@ class TransformerPredictor(IPredictor):
     # ------------------------------------------------------------------
 
     def _fit(self, ds, n_epochs, batch_size, lr, verbose, loss_name: str):
-        from .loss_functions import get_loss
+        from src.training.losses import get_loss
 
         X_tr = ds.sequences[ds.train_idx]
         X_va = ds.sequences[ds.val_idx]
@@ -258,7 +258,7 @@ class TransformerPredictor(IPredictor):
         self._target_std   = float(rem_tr.std()) + 1e-8
 
         n_feat = X_tr.shape[-1]
-        self._net = _TransformerNet(
+        self._net = TransformerNet(
             n_feat, self.d_model, self.n_heads, self.n_layers,
             self.dim_ff, self.dropout,
         ).to(self._device)

@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.data.dataset import Dataset
 from src.domain.value_objects import PredictionResult
-from src.infrastructure.ml.physics_only_predictor import PhysicsOnlyPredictor
+from src.models.physics_only import PhysicsOnlyPredictor
 
 
 class _ConstPredictor(PhysicsOnlyPredictor):

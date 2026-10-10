@@ -54,8 +54,8 @@ from src.application.generate_dataset import GenerateDatasetCommand, GenerateDat
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.data import observation
 from src.data.scenarios import build_configs, trajectory_store
-from src.infrastructure.ml.lstm_predictor import LSTMPredictor
-from src.infrastructure.ml.transformer_predictor import TransformerPredictor
+from src.models.lstm import LSTMPredictor
+from src.models.transformer import TransformerPredictor
 from src.simulation.simulator import QuTipSimulator
 
 RESULTS_DIR = Path(__file__).parent / "results"

@@ -13,8 +13,8 @@ from typing import Dict, List, Type
 
 import numpy as np
 
-from ...domain.ports import IModelStore, ITrajectoryStore, IPredictor
-from ...domain.value_objects import (
+from src.domain.ports import IModelStore, ITrajectoryStore, IPredictor
+from src.domain.value_objects import (
     DecoherenceCriterion,
     DissipatorConfig,
     DissipatorType,
@@ -341,10 +341,10 @@ class HamiltonianModelRegistry:
 
 def predictor_class_registry() -> Dict[str, Type[IPredictor]]:
     """Lazy map class-name → IPredictor. Avoids importing torch at module import."""
-    from ...infrastructure.ml.lstm_predictor import LSTMPredictor
-    from ...infrastructure.ml.physics_only_predictor import PhysicsOnlyPredictor
-    from ...infrastructure.ml.stretched_exp_predictor import StretchedExpPredictor
-    from ...infrastructure.ml.transformer_predictor import TransformerPredictor
+    from src.models.lstm import LSTMPredictor
+    from src.models.physics_only import PhysicsOnlyPredictor
+    from src.models.stretched_exp import StretchedExpPredictor
+    from src.models.transformer import TransformerPredictor
 
     return {
         "LSTMPredictor": LSTMPredictor,

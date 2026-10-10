@@ -37,7 +37,7 @@ class TrainModelUseCase:
     """Delegate training to the injected IPredictor, then optionally persist it.
 
     The use-case is intentionally thin: all ML specifics live in the
-    infrastructure adapter that implements IPredictor.train().
+    predictor that implements IPredictor.train().
     """
 
     def __init__(

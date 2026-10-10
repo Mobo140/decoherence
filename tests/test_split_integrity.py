@@ -179,7 +179,7 @@ def test_min_window_gap_is_enforced_within_a_trajectory():
 def test_normalisation_statistics_come_from_training_rows_only():
     """Fitting the scaler on all rows would leak test information."""
     torch = pytest.importorskip("torch")
-    from src.infrastructure.ml.lstm_predictor import LSTMPredictor
+    from src.models.lstm import LSTMPredictor
 
     ds = _build(n_traj=12)
     predictor = LSTMPredictor(hidden_size=8, num_layers=1, dropout=0.0)

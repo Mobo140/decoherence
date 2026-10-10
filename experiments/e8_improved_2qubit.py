@@ -102,9 +102,9 @@ def run_e8a(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
 
         class E8Ablation(AblationStudyUseCase):
             def _build_predictor(self, variant, command):
-                from src.infrastructure.ml.lstm_predictor import LSTMPredictor
-                from src.infrastructure.ml.physics_only_predictor import PhysicsOnlyPredictor
-                from src.infrastructure.ml.transformer_predictor import TransformerPredictor
+                from src.models.lstm import LSTMPredictor
+                from src.models.physics_only import PhysicsOnlyPredictor
+                from src.models.transformer import TransformerPredictor
                 if variant == PredictorVariant.PHYSICS_ONLY:
                     return PhysicsOnlyPredictor(t_max=max(c.t_max for c in command.configs))
                 if variant == PredictorVariant.LSTM_ONLY:
@@ -151,7 +151,7 @@ def run_e8a(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
 
 def run_e8b(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
     """Noise robustness: improved physics_lstm on D+E mixture."""
-    from src.infrastructure.ml.lstm_predictor import LSTMPredictor
+    from src.models.lstm import LSTMPredictor
 
     configs = groups["D"] + groups["E"]
     cmd = NoiseSweepCommand(
@@ -203,7 +203,7 @@ def run_e8c(simulator, groups, n_epochs: int, verbose: bool = True,
     Defaults reproduce the published run; see _noise_sweep in
     e6_2qubit_improved.py for why the keyword-only arguments exist.
     """
-    from src.infrastructure.ml.lstm_predictor import LSTMPredictor
+    from src.models.lstm import LSTMPredictor
 
     cmd = CrossSystemCommand(
         train_configs=groups["D"] + groups["E"],

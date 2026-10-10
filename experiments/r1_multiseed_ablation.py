@@ -60,9 +60,9 @@ class ImprovedAblation(AblationStudyUseCase):
     """
 
     def _build_predictor(self, variant, command):
-        from src.infrastructure.ml.lstm_predictor import LSTMPredictor
-        from src.infrastructure.ml.physics_only_predictor import PhysicsOnlyPredictor
-        from src.infrastructure.ml.transformer_predictor import TransformerPredictor
+        from src.models.lstm import LSTMPredictor
+        from src.models.physics_only import PhysicsOnlyPredictor
+        from src.models.transformer import TransformerPredictor
         if variant == PredictorVariant.PHYSICS_ONLY:
             return PhysicsOnlyPredictor(t_max=max(c.t_max for c in command.configs))
         if variant == PredictorVariant.LSTM_ONLY:

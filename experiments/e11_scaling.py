@@ -107,7 +107,7 @@ def run_e11a(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True,
     """Defaults reproduce the published E11a run; the keyword-only arguments
     exist so R3 can replicate it across seeds and window lengths without
     duplicating the configuration (see experiments/r3_multiseed_scaling.py)."""
-    from src.infrastructure.ml.transformer_predictor import TransformerPredictor
+    from src.models.transformer import TransformerPredictor
 
     WINDOW  = window
     MIN_GAP = 10
@@ -158,7 +158,7 @@ def run_e11b(simulator, groups_1000, n_epochs: int, verbose: bool = True,
     """Defaults reproduce the published E11b run; see run_e11a for why the
     keyword-only arguments exist. Training-set size is chosen by the caller
     through ``groups_1000``, which is what R3 varies."""
-    from src.infrastructure.ml.lstm_predictor import LSTMPredictor
+    from src.models.lstm import LSTMPredictor
 
     WINDOW  = 20
     MIN_GAP = 15
