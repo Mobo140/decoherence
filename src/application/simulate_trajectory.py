@@ -1,34 +1,49 @@
-"""Use-case: simulate a single quantum trajectory."""
+"""Use case: simulate a single quantum trajectory."""
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Optional
+import dataclasses
 
 from src import reproducibility
-from src.domain.ports import ISimulator
-from src.domain.value_objects import SystemConfig, TrajectoryResult
+from src.domain import ports
+from src.domain import value_objects
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class SimulateTrajectoryCommand:
-    """Input for the SimulateTrajectoryUseCase."""
+    """Input of `SimulateTrajectoryUseCase`.
 
-    config: SystemConfig
-    seed: Optional[int] = None
+    Attributes:
+        config: The system to simulate.
+        seed: Seeds numpy's global generator, which draws the initial
+            state; `None` leaves it alone.
+    """
+
+    config: value_objects.SystemConfig
+    seed: int | None = None
 
 
 class SimulateTrajectoryUseCase:
-    """Simulate one Lindblad trajectory given a SystemConfig.
+    """Simulates one Lindblad trajectory of a SystemConfig."""
 
-    Dependencies are injected via the constructor so the use-case
-    remains independent of any concrete framework.
-    """
+    def __init__(self, simulator: ports.ISimulator) -> None:
+        """Wires the use case.
 
-    def __init__(self, simulator: ISimulator) -> None:
+        Args:
+            simulator: Simulates the configuration.
+        """
         self._simulator = simulator
 
-    def execute(self, command: SimulateTrajectoryCommand) -> TrajectoryResult:
+    def execute(
+        self, command: SimulateTrajectoryCommand
+    ) -> value_objects.TrajectoryResult:
+        """Simulates the configuration.
+
+        Args:
+            command: What to simulate.
+
+        Returns:
+            The trajectory.
+        """
         if command.seed is not None:
             reproducibility.seed_numpy_global(command.seed)
-
         return self._simulator.simulate(command.config)
