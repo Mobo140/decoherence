@@ -82,7 +82,10 @@ CATALOG: list[ExperimentEntry] = [
         ("e8c_cross_system.csv",), status="superseded",
         note="E8b (noise sweep) raised NameError for an undefined seed "
              "until it became a parameter, so no E8b result was ever "
-             "committed."),
+             "committed. run_e8c now passes its seed to the command; "
+             "before, every call trained and split with seed 42 (the "
+             "committed e8c_cross_system.csv is a seed-42 run, so it "
+             "is unaffected)."),
     ExperimentEntry(
         "E9", "Context codes", "experiments.e9_context_injection",
         "-", "C5", "D, E",
@@ -161,7 +164,12 @@ CATALOG: list[ExperimentEntry] = [
         "R8", "Noise sweep and scaling across seeds (checks E6b/E8c)",
         "experiments.r8_noise_and_scaling",
         "-", "-", "D, E",
-        ("r8_noise_and_scaling.csv",), status="replication"),
+        ("r8_noise_and_scaling.csv",), status="replication",
+        note="The committed rows of the e8c arm were produced while "
+             "run_e8c ignored its seed argument, so the training and "
+             "split seed was 42 in every replicate; only the "
+             "configurations varied. They are not independent "
+             "replications."),
     ExperimentEntry(
         "R9", "Target modulation by H (simulation only)",
         "experiments.r9_target_modulation",

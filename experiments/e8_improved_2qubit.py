@@ -190,7 +190,8 @@ def run_e8c(simulator, groups, n_epochs: int, verbose: bool = True,
         groups: Scenario label -> configurations.
         n_epochs: Training epochs.
         verbose: Whether to print training progress.
-        seed: Seed of the configurations' datasets and of training.
+        seed: Seed of the datasets and of training; evaluation uses
+            `seed + 1`.
 
     Returns:
         One row per evaluation scenario, with the keys of
@@ -209,7 +210,7 @@ def run_e8c(simulator, groups, n_epochs: int, verbose: bool = True,
         batch_size=64,
         lr=5e-4,
         regression_loss="huber",
-        seed=42,
+        seed=seed,
         verbose=verbose,
         min_window_gap=MIN_GAP,
     ))
