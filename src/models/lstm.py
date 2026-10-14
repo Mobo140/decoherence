@@ -185,6 +185,7 @@ class LSTMPredictor(ports.IPredictor):
 
     @property
     def is_trained(self) -> bool:
+        """True once the network has been trained."""
         return self.net is not None
 
     def predict(

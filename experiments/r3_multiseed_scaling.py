@@ -29,9 +29,9 @@ protocol (E11's ``_eval_per_scenario``), so arms differ in one factor:
 The arms call ``run_e11a`` / ``run_e11b`` directly rather than copying
 their configuration, so the probe cannot drift away from the experiment
 it replicates. Those functions return rows and write nothing, so the
-champion CSVs cannot be touched.  ``e7a_w50`` is *not* E7a: it applies E7a's window inside
-E11a's protocol, and so isolates the window without reproducing E7a's
-published number.
+champion CSVs cannot be touched.  ``e7a_w50`` is *not* E7a: it applies
+E7a's window inside E11a's protocol, and so isolates the window without
+reproducing E7a's published number.
 
 Writes ONLY to experiments/results/r3_multiseed_scaling[_<tag>][_fast].csv.
 

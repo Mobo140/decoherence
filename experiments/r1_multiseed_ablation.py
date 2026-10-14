@@ -12,7 +12,8 @@ judged against run-to-run spread.
 
 Safety
 ------
-Writes ONLY to experiments/results/r1_multiseed_ablation[_<tag>][_fast].csv.  It never touches
+Writes ONLY to
+experiments/results/r1_multiseed_ablation[_<tag>][_fast].csv.  It never touches
 the champion CSVs (e6_*_improved.csv etc.) that back the paper tables --
 re-running e6_2qubit_improved.py directly would overwrite them, which is why
 this is a separate entry point.
@@ -33,7 +34,8 @@ Usage
 -----
     python -m experiments.r1_multiseed_ablation --fast
     python -m experiments.r1_multiseed_ablation --seeds 42 43 44
-    python -m experiments.r1_multiseed_ablation --seeds 42 43 44 --n-per 150 --epochs 40
+    python -m experiments.r1_multiseed_ablation --seeds 42 43 44 \\
+        --n-per 150 --epochs 40
 """
 from __future__ import annotations
 

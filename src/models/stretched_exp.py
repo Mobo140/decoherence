@@ -34,6 +34,7 @@ class StretchedExpPredictor(ports.IPredictor):
 
     @property
     def is_trained(self) -> bool:
+        """Always True: the baseline needs no training."""
         return True
 
     def train(self, dataset: object, **kwargs) -> object:
@@ -81,9 +82,11 @@ class StretchedExpPredictor(ports.IPredictor):
         )
 
     def state_bytes(self) -> bytes:
+        """Serialises the constructor arguments (nothing is trained)."""
         return json.dumps({"t_max": self.t_max, "dt": self.dt}).encode()
 
     @classmethod
     def from_bytes(cls, data: bytes) -> StretchedExpPredictor:
+        """Rebuilds a predictor from `state_bytes`."""
         d = json.loads(data.decode())
         return cls(t_max=d["t_max"], dt=d["dt"])

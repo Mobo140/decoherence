@@ -1,4 +1,4 @@
-"""R20 — the energy-basis target on the Heisenberg model and on the cross-system model.
+"""R20 — the energy-basis target: Heisenberg model and cross-system model.
 
 Why
 ---
@@ -33,7 +33,8 @@ not accepted because there are two files). Each CSV is accompanied by
 Usage
 -----
     python -m experiments.r20_energy_target_xxz --fast --tag smoke
-    python -m experiments.r20_energy_target_xxz --arms xxz_coh --seeds 42 --tag s42
+    python -m experiments.r20_energy_target_xxz --arms xxz_coh --seeds 42 \\
+        --tag s42
 """
 from __future__ import annotations
 

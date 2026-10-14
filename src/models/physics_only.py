@@ -45,6 +45,7 @@ class PhysicsOnlyPredictor(ports.IPredictor):
 
     @property
     def is_trained(self) -> bool:
+        """Always True: the baseline needs no training."""
         return True
 
     def predict(
@@ -75,10 +76,12 @@ class PhysicsOnlyPredictor(ports.IPredictor):
         return self
 
     def state_bytes(self) -> bytes:
+        """Serialises the constructor arguments (nothing is trained)."""
         return struct.pack("ddd", self.t_max, self.dt, self.risk_k)
 
     @classmethod
     def from_bytes(cls, data: bytes) -> PhysicsOnlyPredictor:
+        """Rebuilds a predictor from `state_bytes`."""
         t_max, dt, risk_k = struct.unpack("ddd", data)
         return cls(t_max=t_max, dt=dt, risk_k=risk_k)
 

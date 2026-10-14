@@ -1,10 +1,9 @@
-"""Domain value objects: immutable, self-validating descriptors of the domain."""
+"""Domain value objects: immutable, self-validating descriptors."""
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -17,21 +16,29 @@ ONE_OVER_E: float = 1.0 / math.e  # ≈ 0.3679
 # ---------------------------------------------------------------------------
 
 class QubitCount(int, Enum):
+    """Number of qubits of a system."""
+
     ONE = 1
     TWO = 2
 
 
 class DissipatorType(str, Enum):
+    """Jump operator of the dissipator."""
+
     SIGMA_MINUS = "sigma_minus"
     SIGMA_Z = "sigma_z"
 
 
 class InteractionType(str, Enum):
+    """Two-qubit interaction Hamiltonian."""
+
     XXZ = "XXZ"
     TFIM = "TFIM"
 
 
 class DecoherenceCriterion(str, Enum):
+    """Quantity whose decay defines the decoherence time T2."""
+
     COHERENCE = "coherence"
     PURITY = "purity"
     # l1-coherence in the eigenbasis of H (two qubits): insensitive to the
@@ -59,8 +66,8 @@ class DissipatorConfig:
     """
 
     operator_type: DissipatorType = DissipatorType.SIGMA_MINUS
-    gamma_const: Optional[float] = None
-    gamma_coeffs: Optional[Tuple[float, ...]] = None  # frozen → tuple, not list
+    gamma_const: float | None = None
+    gamma_coeffs: tuple[float, ...] | None = None  # frozen → tuple, not list
 
     def __post_init__(self) -> None:
         if self.gamma_const is None and self.gamma_coeffs is None:
@@ -69,8 +76,10 @@ class DissipatorConfig:
             )
         if self.gamma_const is not None and self.gamma_const < 0:
             raise ValueError("gamma_const must be non-negative.")
-        if self.gamma_coeffs is not None and any(c < 0 for c in self.gamma_coeffs):
-            raise ValueError("All Bernstein coefficients must be non-negative.")
+        if self.gamma_coeffs is not None and any(
+                c < 0 for c in self.gamma_coeffs):
+            raise ValueError(
+                "All Bernstein coefficients must be non-negative.")
 
     # convenience constructors ------------------------------------------------
 
@@ -80,14 +89,32 @@ class DissipatorConfig:
         gamma: float,
         operator_type: DissipatorType = DissipatorType.SIGMA_MINUS,
     ) -> "DissipatorConfig":
+        """Builds a dissipator with a constant rate.
+
+        Args:
+            gamma: The rate, non-negative.
+            operator_type: The jump operator.
+
+        Returns:
+            The configuration.
+        """
         return cls(operator_type=operator_type, gamma_const=gamma)
 
     @classmethod
     def time_dependent(
         cls,
-        coeffs: Tuple[float, ...],
+        coeffs: tuple[float, ...],
         operator_type: DissipatorType = DissipatorType.SIGMA_MINUS,
     ) -> "DissipatorConfig":
+        """Builds a dissipator with a Bernstein-polynomial rate.
+
+        Args:
+            coeffs: Non-negative Bernstein coefficients of gamma(t).
+            operator_type: The jump operator.
+
+        Returns:
+            The configuration.
+        """
         return cls(operator_type=operator_type, gamma_coeffs=coeffs)
 
 
@@ -132,7 +159,7 @@ class TrajectoryResult:
     """
 
     times: np.ndarray
-    observables: Dict[str, np.ndarray]
+    observables: dict[str, np.ndarray]
     t_decoh: float
     system_config: SystemConfig
     # True: 1/e threshold was not crossed by t_max; t_decoh is a lower bound.
@@ -143,7 +170,7 @@ class TrajectoryResult:
     # ------------------------------------------------------------------
 
     @property
-    def feature_names(self) -> List[str]:
+    def feature_names(self) -> list[str]:
         """Observable names used as ML features (excludes density matrices)."""
         return [k for k in self.observables if k != "density_matrices"]
 
@@ -181,7 +208,7 @@ class NoiseConfig:
     """
 
     sigma: float = 0.0
-    seed: Optional[int] = None
+    seed: int | None = None
 
     def __post_init__(self) -> None:
         if self.sigma < 0:
@@ -194,7 +221,8 @@ class PredictorVariant(str, Enum):
     PHYSICS_ONLY = "physics_only"          # OLS-slope formula, no ML
     LSTM_ONLY = "lstm_only"                # BiLSTM without physics prior
     PHYSICS_LSTM = "physics_lstm"          # Residual: physics + LSTM (default)
-    TRANSFORMER = "transformer"            # Pure Transformer (2505.06928 baseline)
+    # Pure Transformer (2505.06928 baseline).
+    TRANSFORMER = "transformer"
     STRETCHED_EXP = "stretched_exp"        # curve_fit baseline, no ML
 
 
@@ -232,7 +260,8 @@ class AblationResult:
     risk_auroc: float
     n_samples: int
 
-    def as_dict(self) -> Dict:
+    def as_dict(self) -> dict:
+        """Returns the result as a flat row of the results CSVs."""
         return {
             "name": self.spec.name,
             "variant": self.spec.predictor_variant.value,
@@ -272,9 +301,10 @@ class BacktestMetrics:
     n_samples: int
     predictions: np.ndarray
     actuals: np.ndarray
-    extra: Dict[str, float] = field(default_factory=dict)
+    extra: dict[str, float] = field(default_factory=dict)
 
     def summary(self) -> str:
+        """Returns the metrics as one line of text."""
         return (
             f"BacktestMetrics(n={self.n_samples}  "
             f"MAE={self.mae:.4f}  RMSE={self.rmse:.4f}  "

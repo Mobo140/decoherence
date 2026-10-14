@@ -58,14 +58,18 @@ PUBLISHED = {
 
 # The claims worth testing, as (scenario, better, worse, published margin).
 CLAIMS = [
-    ("A", "physics_only", "physics_lstm", 0.0239, "C1: formula exact at const gamma"),
-    ("B", "physics_lstm", "physics_only", 0.1915, "C2: prior + residual beats formula (B)"),
-    ("C", "physics_lstm", "physics_only", 0.0107, "C2: prior + residual beats formula (C)"),
-    ("A", "physics_lstm", "lstm_only",    1.4218, "C2: prior is essential (A)"),
-    ("B", "physics_lstm", "lstm_only",    0.9355, "C2: prior is essential (B)"),
-    ("C", "physics_lstm", "lstm_only",    1.0048, "C2: prior is essential (C)"),
-    ("A", "physics_lstm", "transformer",  0.1765, "residual preferred at const gamma"),
-    ("C", "transformer",  "physics_lstm", 0.0052, "Transformer edge on C"),
+    ("A", "physics_only", "physics_lstm", 0.0239,
+     "C1: formula exact at const gamma"),
+    ("B", "physics_lstm", "physics_only", 0.1915,
+     "C2: prior + residual beats formula (B)"),
+    ("C", "physics_lstm", "physics_only", 0.0107,
+     "C2: prior + residual beats formula (C)"),
+    ("A", "physics_lstm", "lstm_only", 1.4218, "C2: prior is essential (A)"),
+    ("B", "physics_lstm", "lstm_only", 0.9355, "C2: prior is essential (B)"),
+    ("C", "physics_lstm", "lstm_only", 1.0048, "C2: prior is essential (C)"),
+    ("A", "physics_lstm", "transformer", 0.1765,
+     "residual preferred at const gamma"),
+    ("C", "transformer", "physics_lstm", 0.0052, "Transformer edge on C"),
 ]
 
 

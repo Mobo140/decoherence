@@ -43,6 +43,7 @@ class HuberLossFunction(ports.ILossFunction):
 
     @property
     def name(self) -> str:
+        """Short label with the loss parameters."""
         return f"huber(delta={self.delta})"
 
     def __call__(
@@ -54,6 +55,7 @@ class HuberLossFunction(ports.ILossFunction):
         return float(loss.item())
 
     def as_torch(self) -> nn.Module:
+        """Returns the equivalent torch module for training."""
         return nn.HuberLoss(delta=self.delta, reduction="mean")
 
 
@@ -63,6 +65,7 @@ class MSELossFunction(ports.ILossFunction):
 
     @property
     def name(self) -> str:
+        """Short label with the loss parameters."""
         return "mse"
 
     def __call__(
@@ -71,6 +74,7 @@ class MSELossFunction(ports.ILossFunction):
         return float(np.mean((predictions - targets) ** 2))
 
     def as_torch(self) -> nn.Module:
+        """Returns the equivalent torch module for training."""
         return nn.MSELoss(reduction="mean")
 
 
@@ -80,6 +84,7 @@ class MAELossFunction(ports.ILossFunction):
 
     @property
     def name(self) -> str:
+        """Short label with the loss parameters."""
         return "mae"
 
     def __call__(
@@ -88,6 +93,7 @@ class MAELossFunction(ports.ILossFunction):
         return float(np.mean(np.abs(predictions - targets)))
 
     def as_torch(self) -> nn.Module:
+        """Returns the equivalent torch module for training."""
         return nn.L1Loss(reduction="mean")
 
 
@@ -114,6 +120,7 @@ class QuantileLossFunction(ports.ILossFunction):
 
     @property
     def name(self) -> str:
+        """Short label with the loss parameters."""
         return f"quantile(q={self.quantile})"
 
     def __call__(
@@ -124,6 +131,7 @@ class QuantileLossFunction(ports.ILossFunction):
             np.mean(np.maximum(self.quantile * e, (self.quantile - 1) * e)))
 
     def as_torch(self) -> nn.Module:
+        """Returns the equivalent torch module for training."""
         q = self.quantile
 
         class _QuantileLoss(nn.Module):
@@ -203,6 +211,7 @@ class SurvHuberLossFunction(ports.ILossFunction):
 
     @property
     def name(self) -> str:
+        """Short label with the loss parameters."""
         return f"surv_huber(delta={self.delta})"
 
     def __call__(
@@ -211,6 +220,7 @@ class SurvHuberLossFunction(ports.ILossFunction):
         return HuberLossFunction(delta=self.delta)(predictions, targets)
 
     def as_torch(self) -> nn.Module:
+        """Returns the equivalent torch module for training."""
         return SurvHuberLoss(delta=self.delta)
 
 

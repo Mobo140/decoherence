@@ -84,7 +84,8 @@ def _first_crossing(rel: np.ndarray) -> float | None:
     i = below[0]
     if i == 0:
         return float(TIMES[0])
-    return float(TIMES[i - 1] + (rel[i - 1] - THR) / (rel[i - 1] - rel[i] + 1e-12) * DT)
+    step = (rel[i - 1] - THR) / (rel[i - 1] - rel[i] + 1e-12)
+    return float(TIMES[i - 1] + step * DT)
 
 
 def _unitary_min(H: np.ndarray, psi0: np.ndarray) -> float:
@@ -128,7 +129,8 @@ def part2(n_traj: int, seed: int) -> list[dict]:
             shapes = itertools.cycle(SHAPES)
             t2, t2e, gaps, nonmono, censored = [], [], [], 0, 0
             for _ in range(n_traj):
-                coeffs = np.array(bernstein_coeffs(next(shapes), rng, gamma_max=0.8))
+                coeffs = np.array(bernstein_coeffs(
+                    next(shapes), rng, gamma_max=0.8))
                 system = TwoQubitSystem(J=J, interaction_type=model,
                                         gamma_coeffs=coeffs, gamma_t_max=T_MAX)
                 psi = qt.Qobj(_haar(rng).reshape(-1, 1), dims=[[2, 2], [1, 1]])
@@ -168,8 +170,10 @@ def part2(n_traj: int, seed: int) -> list[dict]:
                 "mean_T2": float(np.mean(a)) if n else float("nan"),
                 "std_T2": float(np.std(a)) if n else float("nan"),
             })
-            print(f"R9 | {model} J={J}: nonmono={rows[-1]['frac_nonmonotone']:.2f} "
-                  f"gap={rows[-1]['mean_gap']:.2f} corr={corr:.3f}", flush=True)
+            row = rows[-1]
+            print(f"R9 | {model} J={J}: "
+                  f"nonmono={row['frac_nonmonotone']:.2f} "
+                  f"gap={row['mean_gap']:.2f} corr={corr:.3f}", flush=True)
     return rows
 
 

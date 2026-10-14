@@ -22,9 +22,9 @@ if windows of trajectories that never die could end anywhere while those
 of dying ones must end before death, the classifier could read the label
 off the window's position in time. The classifier is trained on all
 t_obs pooled and scored separately at each t_obs, so a base rate that
-changes with t_obs cannot inflate the AUROC. Classifiers: gradient-boosted trees and
-logistic regression on the flattened window, with the three input sets of
-R24 (base / + correlators / + correlators + concurrence). Metrics: AUROC,
+changes with t_obs cannot inflate the AUROC. Classifiers: gradient-boosted
+trees and logistic regression on the flattened window, with the three
+input sets of R24 (base / + correlators / + correlators + concurrence). Metrics: AUROC,
 Brier score and balanced accuracy at 0.5, with the class balance. Three
 seeds.
 
