@@ -44,23 +44,20 @@ Usage
     python -m experiments.r9_target_modulation          # ~5 min on a laptop
     python -m experiments.r9_target_modulation --fast   # smoke test
 
-Writes ONLY to experiments/results/r9_target_modulation.csv.
+Writes ONLY to experiments/results/r9_target_modulation[_<tag>][_fast].csv.
 """
 from __future__ import annotations
 
-import argparse
-import csv
 import itertools
-from pathlib import Path
+from collections.abc import Sequence
 
 import numpy as np
 import qutip as qt
 
+from experiments import common
 from src.data.scenarios import bernstein_coeffs
 from src.evaluation import stats
 from src.physics.lindblad_systems import TwoQubitSystem
-
-RESULTS = Path(__file__).parent / "results" / "r9_target_modulation.csv"
 
 T_MAX, DT = 20.0, 0.1
 TIMES = np.linspace(0.0, T_MAX, int(round(T_MAX / DT)) + 1)
@@ -176,23 +173,26 @@ def part2(n_traj: int, seed: int) -> list[dict]:
     return rows
 
 
-def main() -> None:
-    p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    p.add_argument("--n-states", type=int, default=400)
-    p.add_argument("--n-traj", type=int, default=150)
-    p.add_argument("--seed", type=int, default=0)
-    p.add_argument("--fast", action="store_true")
-    a = p.parse_args()
-    if a.fast:
-        a.n_states, a.n_traj = 20, 6
-    rows = part1(a.n_states, a.seed) + part2(a.n_traj, a.seed + 1)
-    keys = sorted({k for r in rows for k in r}, key=lambda k: (k not in ("part", "model", "J", "n"), k))
-    RESULTS.parent.mkdir(parents=True, exist_ok=True)
-    with RESULTS.open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=keys)
-        w.writeheader()
-        w.writerows(rows)
-    print(f"R9 | wrote {RESULTS}")
+def _add_flags(parser) -> None:
+    parser.add_argument("--n-states", type=int, default=400)
+    parser.add_argument("--n-traj", type=int, default=150)
+    parser.add_argument("--seed", type=int, default=0)
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    """Runs both parts and writes the CSV."""
+    args = common.parse_args(
+        __doc__.split("\n")[0], extra=_add_flags, argv=argv, seeds=None)
+    n_states, n_traj = (20, 6) if args.fast else (args.n_states, args.n_traj)
+    rows = part1(n_states, args.seed) + part2(n_traj, args.seed + 1)
+    columns = sorted(
+        {k for r in rows for k in r},
+        key=lambda k: (k not in ("part", "model", "J", "n"), k))
+    path = common.results_path("r9_target_modulation", args)
+    common.write_results(
+        rows, path, columns=columns, seeds=[args.seed, args.seed + 1],
+        config={"n_states": n_states, "n_traj": n_traj, "J_grid": J_GRID})
+    print(f"R9 | wrote {path}")
 
 
 if __name__ == "__main__":

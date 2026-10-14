@@ -23,8 +23,8 @@ lead = T2 - t_alarm:
     early     lead > 2        (premature)
     missed    the alarm never fires before T2
 
-Writes ONLY to experiments/results/r18_alarm_timing_bins.csv and
-experiments/results/r18_alarm_timing_alarm.csv.
+Writes ONLY to experiments/results/r18_alarm_timing_bins[_<tag>][_fast].csv
+and experiments/results/r18_alarm_timing_alarm[_<tag>][_fast].csv.
 
 Usage
 -----
@@ -33,107 +33,151 @@ Usage
 """
 from __future__ import annotations
 
-import argparse
-import csv
-import sys
-from pathlib import Path
+from collections.abc import Sequence
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
-from src.application.train_model import TrainModelCommand, TrainModelUseCase
-from src.data.scenarios import build_configs, trajectory_store
+from experiments import common
+from src.application import generate_dataset
+from src.application import train_model
+from src.data import scenarios as scenario_lib
 from src.evaluation import backtest
 from src.models import registry
-from src.simulation.simulator import QuTipSimulator
+from src.simulation import simulator as simulator_lib
 
-RES = Path(__file__).parent / "results"
-BINS = [(0.0, 0.4), (0.4, 0.5), (0.5, 0.6), (0.6, 0.7), (0.7, 0.8), (0.8, 0.9), (0.9, 1.0)]
+BIN_COLUMNS = (
+    "seed", "scenario", "model", "p_lo", "p_hi", "n_windows",
+    "median_rel_err", "frac_within_10pct")
+ALARM_COLUMNS = (
+    "seed", "scenario", "model", "n_traj", "on_time", "early", "missed",
+    "median_lead", "median_alarm_p", "median_first_p")
+BINS = ((0.0, 0.4), (0.4, 0.5), (0.5, 0.6), (0.6, 0.7), (0.7, 0.8),
+        (0.8, 0.9), (0.9, 1.0))
 MODELS = ("physics_only", "stretched_exp", "lstm_only", "physics_lstm",
           "transformer")
+# The alarm fires when the predicted remaining time is at most this.
+ALARM_REMAINING = 1.0
+# Lead times above this count as a premature alarm.
+EARLY_LEAD = 2.0
 
 
-def main() -> None:
-    p = argparse.ArgumentParser()
-    p.add_argument("--seeds", type=int, nargs="+", default=[42, 43, 44])
-    p.add_argument("--n-eval", type=int, default=200)
-    p.add_argument("--fast", action="store_true")
-    p.add_argument("--tag", type=str, default="", help="suffix for the output files")
-    a = p.parse_args()
-    n_train, n_eval, epochs = (30, 20, 5) if a.fast else (100, a.n_eval, 100)
-    gen = GenerateDatasetUseCase(QuTipSimulator(), store=trajectory_store())
-    fb = (RES / f"r18_alarm_timing_bins{a.tag}.csv").open("w", newline="")
-    fa = (RES / f"r18_alarm_timing_alarm{a.tag}.csv").open("w", newline="")
-    wb = csv.DictWriter(fb, fieldnames=["seed", "scenario", "model", "p_lo", "p_hi",
-                                        "n_windows", "median_rel_err", "frac_within_10pct"])
-    wa = csv.DictWriter(fa, fieldnames=["seed", "scenario", "model", "n_traj", "on_time",
-                                        "early", "missed", "median_lead", "median_alarm_p",
-                                        "median_first_p"])
-    wb.writeheader(); wa.writeheader()
-    for seed in a.seeds:
-        train_g = build_configs(n_per_scenario=n_train, seed=seed)
-        eval_g = build_configs(n_per_scenario=n_eval, seed=seed + 2000)
-        for sc in "BC":
-            train_ds = gen.execute(GenerateDatasetCommand(
-                configs=train_g[sc], window_length=20, horizon=1.0, samples_per_trajectory=5,
-                seed=seed, dataset_name=f"r18_train_{seed}_{sc}"))
-            # every admissible window end of every evaluation trajectory
-            ev = gen.execute(GenerateDatasetCommand(
-                configs=eval_g[sc], window_length=20, horizon=1.0, samples_per_trajectory=10_000,
-                seed=seed + 2000, train_ratio=0.0, val_ratio=0.0,
-                dataset_name=f"r18_eval_{seed}_{sc}"))
-            idx = ev.test_idx
-            T2 = ev.t_decoh_abs[idx].astype(float)
-            tobs = ev.t_obs[idx].astype(float)
-            _, traj = np.unique(T2, return_inverse=True)
-            prog = tobs / T2
-            for name in MODELS:
-                pred = registry.build_model(name)
-                if name not in ("physics_only", "stretched_exp"):
-                    TrainModelUseCase(pred).execute(TrainModelCommand(
-                        dataset=train_ds, n_epochs=epochs, batch_size=32, learning_rate=1e-3,
-                        regression_loss="huber", verbose=False, seed=seed))
-                T2_hat, _ = backtest.predict_windows(pred, ev, idx)
-                rel = np.abs(T2_hat - T2) / T2
-                for lo, hi in BINS:
-                    m = (prog >= lo) & (prog < hi)
-                    if m.sum() == 0:
-                        continue
-                    wb.writerow({"seed": seed, "scenario": sc, "model": name, "p_lo": lo,
-                                 "p_hi": hi, "n_windows": int(m.sum()),
-                                 "median_rel_err": float(np.median(rel[m])),
-                                 "frac_within_10pct": float(np.mean(rel[m] < 0.10))})
-                rem_hat = T2_hat - tobs
-                on = early = missed = 0
-                leads, alarm_p, first_p = [], [], []
-                for k in range(traj.max() + 1):
-                    sel = np.where(traj == k)[0]
-                    sel = sel[np.argsort(tobs[sel])]
-                    first_p.append(prog[sel[0]])
-                    fired = sel[rem_hat[sel] <= 1.0]
-                    if fired.size == 0:
-                        missed += 1
-                        continue
-                    j = fired[0]
-                    lead = T2[j] - tobs[j]
-                    leads.append(lead); alarm_p.append(prog[j])
-                    if lead > 2.0:
-                        early += 1
-                    else:
-                        on += 1
-                n = traj.max() + 1
-                row = {"seed": seed, "scenario": sc, "model": name, "n_traj": int(n),
-                       "on_time": on / n, "early": early / n, "missed": missed / n,
-                       "median_lead": float(np.median(leads)) if leads else float("nan"),
-                       "median_alarm_p": float(np.median(alarm_p)) if alarm_p else float("nan"),
-                       "median_first_p": float(np.median(first_p))}
-                wa.writerow(row); fa.flush(); fb.flush()
-                print(f"R18 | seed={seed} {sc} {name:<13} on_time={row['on_time']:.2f} "
-                      f"early={row['early']:.2f} missed={row['missed']:.2f} "
-                      f"lead={row['median_lead']:.2f} first_p={row['median_first_p']:.2f}", flush=True)
-    fb.close(); fa.close()
+def _bin_rows(seed, scenario, model, progress, rel_err):
+    """Yields the accuracy per bin of elapsed lifetime fraction."""
+    for low, high in BINS:
+        in_bin = (progress >= low) & (progress < high)
+        if in_bin.sum() == 0:
+            continue
+        yield {
+            "seed": seed, "scenario": scenario, "model": model,
+            "p_lo": low, "p_hi": high, "n_windows": int(in_bin.sum()),
+            "median_rel_err": float(np.median(rel_err[in_bin])),
+            "frac_within_10pct": float(np.mean(rel_err[in_bin] < 0.10)),
+        }
+
+
+def _alarm_row(seed, scenario, model, trajectory, t2, t_obs, progress,
+               remaining_hat):
+    """Summarises when the alarm first fires on each test trajectory."""
+    on_time = early = missed = 0
+    leads, alarm_progress, first_progress = [], [], []
+    for k in range(trajectory.max() + 1):
+        windows = np.where(trajectory == k)[0]
+        windows = windows[np.argsort(t_obs[windows])]
+        first_progress.append(progress[windows[0]])
+        fired = windows[remaining_hat[windows] <= ALARM_REMAINING]
+        if fired.size == 0:
+            missed += 1
+            continue
+        j = fired[0]
+        lead = t2[j] - t_obs[j]
+        leads.append(lead)
+        alarm_progress.append(progress[j])
+        if lead > EARLY_LEAD:
+            early += 1
+        else:
+            on_time += 1
+    n = trajectory.max() + 1
+    return {
+        "seed": seed, "scenario": scenario, "model": model,
+        "n_traj": int(n),
+        "on_time": on_time / n, "early": early / n, "missed": missed / n,
+        "median_lead": float(np.median(leads)) if leads else float("nan"),
+        "median_alarm_p": (
+            float(np.median(alarm_progress)) if alarm_progress
+            else float("nan")),
+        "median_first_p": float(np.median(first_progress)),
+    }
+
+
+def _run_cell(generator, seed, scenario, train_groups, eval_groups, epochs,
+              bins_out, alarm_out) -> None:
+    """Trains and scores every model on one seed and scenario."""
+    train_ds = generator.execute(generate_dataset.GenerateDatasetCommand(
+        configs=train_groups[scenario], window_length=20, horizon=1.0,
+        samples_per_trajectory=5, seed=seed,
+        dataset_name=f"r18_train_{seed}_{scenario}"))
+    # Every admissible window end of every evaluation trajectory.
+    ev = generator.execute(generate_dataset.GenerateDatasetCommand(
+        configs=eval_groups[scenario], window_length=20, horizon=1.0,
+        samples_per_trajectory=10_000, seed=seed + 2000,
+        train_ratio=0.0, val_ratio=0.0,
+        dataset_name=f"r18_eval_{seed}_{scenario}"))
+    idx = ev.test_idx
+    t2 = ev.t_decoh_abs[idx].astype(float)
+    t_obs = ev.t_obs[idx].astype(float)
+    _, trajectory = np.unique(t2, return_inverse=True)
+    progress = t_obs / t2
+    for name in MODELS:
+        predictor = registry.build_model(name)
+        if name not in ("physics_only", "stretched_exp"):
+            train_model.TrainModelUseCase(predictor).execute(
+                train_model.TrainModelCommand(
+                    dataset=train_ds, n_epochs=epochs, batch_size=32,
+                    learning_rate=1e-3, regression_loss="huber",
+                    verbose=False, seed=seed))
+        t2_hat, _ = backtest.predict_windows(predictor, ev, idx)
+        rel_err = np.abs(t2_hat - t2) / t2
+        for row in _bin_rows(seed, scenario, name, progress, rel_err):
+            bins_out.write(row)
+        row = _alarm_row(seed, scenario, name, trajectory, t2, t_obs,
+                         progress, t2_hat - t_obs)
+        alarm_out.write(row)
+        print(f"R18 | seed={seed} {scenario} {name:<13} "
+              f"on_time={row['on_time']:.2f} early={row['early']:.2f} "
+              f"missed={row['missed']:.2f} lead={row['median_lead']:.2f} "
+              f"first_p={row['median_first_p']:.2f}", flush=True)
+
+
+def _add_flags(parser) -> None:
+    parser.add_argument("--n-eval", type=int, default=200)
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    """Scores accuracy and alarm timing and writes the two CSVs."""
+    args = common.parse_args(
+        __doc__, extra=_add_flags, argv=argv, out=False)
+    n_train, n_eval, epochs = (
+        (30, 20, 5) if args.fast else (100, args.n_eval, 100))
+    config = {"n_train": n_train, "n_eval": n_eval, "epochs": epochs,
+              "models": MODELS}
+    generator = generate_dataset.GenerateDatasetUseCase(
+        simulator_lib.QuTipSimulator(),
+        store=scenario_lib.trajectory_store())
+    bins_path = common.results_path("r18_alarm_timing_bins", args)
+    alarm_path = common.results_path("r18_alarm_timing_alarm", args)
+    with common.ResultsWriter(
+            bins_path, BIN_COLUMNS, config=config, seeds=args.seeds
+    ) as bins_out, common.ResultsWriter(
+            alarm_path, ALARM_COLUMNS, config=config, seeds=args.seeds
+    ) as alarm_out:
+        for seed in args.seeds:
+            train_groups = scenario_lib.build_configs(
+                n_per_scenario=n_train, seed=seed)
+            eval_groups = scenario_lib.build_configs(
+                n_per_scenario=n_eval, seed=seed + 2000)
+            for scenario in "BC":
+                _run_cell(generator, seed, scenario, train_groups,
+                          eval_groups, epochs, bins_out, alarm_out)
 
 
 if __name__ == "__main__":

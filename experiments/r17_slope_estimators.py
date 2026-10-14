@@ -16,35 +16,31 @@ Estimators:
   ssa_ols   SSA denoising (embedding 10, leading component), then ols_log
   holt      Holt double exponential smoothing of log C, final trend
 
-Writes ONLY to experiments/results/r17_slope_estimators.csv.
+Writes ONLY to experiments/results/r17_slope_estimators[_<tag>][_fast].csv.
 
 Usage
 -----
+    python -m experiments.r17_slope_estimators --fast
     python -m experiments.r17_slope_estimators
 """
-
 from __future__ import annotations
 
-import csv
-from pathlib import Path
+from collections.abc import Sequence
 
 import numpy as np
 
-from src.application.generate_dataset import (
-    GenerateDatasetCommand,
-    GenerateDatasetUseCase,
-)
-from src.data.scenarios import build_configs, trajectory_store
+from experiments import common
+from src.application import generate_dataset
+from src.data import scenarios as scenario_lib
 from src.evaluation import metrics
-from src.simulation.simulator import QuTipSimulator
+from src.simulation import simulator as simulator_lib
 
 DT = 0.1
 TMAX = 20.0
 WINDOW = 50
-SEEDS = (42, 43, 44)
+COLUMNS = ("estimator", "sigma", "seed", "r2")
 SIGMAS = (0.0, 0.01, 0.02, 0.05, 0.10)
 ESTIMATORS = ("ols_log", "wls_log", "exp_fit", "ssa_ols", "holt")
-OUTPUT_CSV = Path(__file__).parent / "results" / "r17_slope_estimators.csv"
 
 
 def ols(t: np.ndarray, y: np.ndarray, w: np.ndarray | None = None) -> float:
@@ -129,18 +125,24 @@ def estimate_t2(c: np.ndarray, t: np.ndarray, t_obs: float) -> dict:
     }
 
 
-def run() -> dict:
+def run(seeds: Sequence[int], n_per: int = 100) -> dict:
     """Scores every estimator for every seed and noise level.
+
+    Args:
+        seeds: Seeds of the configurations, datasets and noise.
+        n_per: Trajectories per scenario.
 
     Returns:
         Dictionary mapping (estimator, sigma) to the list of R2 scores,
         one per seed.
     """
-    gen = GenerateDatasetUseCase(QuTipSimulator(), store=trajectory_store())
+    generator = generate_dataset.GenerateDatasetUseCase(
+        simulator_lib.QuTipSimulator(),
+        store=scenario_lib.trajectory_store())
     res = {}
-    for seed in SEEDS:
-        groups = build_configs(n_per_scenario=100, seed=seed)
-        ds = gen.execute(GenerateDatasetCommand(
+    for seed in seeds:
+        groups = scenario_lib.build_configs(n_per_scenario=n_per, seed=seed)
+        ds = generator.execute(generate_dataset.GenerateDatasetCommand(
             configs=groups["B"] + groups["C"], window_length=WINDOW,
             horizon=1.0, samples_per_trajectory=5, seed=seed,
             dataset_name=f"slopenoise_{seed}"))
@@ -164,14 +166,13 @@ def run() -> dict:
     return res
 
 
-def write_csv(res: dict, path: Path) -> None:
-    """Writes the scores as estimator, sigma, seed, r2 rows."""
-    with path.open("w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["estimator", "sigma", "seed", "r2"])
-        for (name, sigma), vals in res.items():
-            for seed, v in zip(SEEDS, vals):
-                w.writerow([name, sigma, seed, v])
+def to_rows(res: dict, seeds: Sequence[int]) -> list[dict[str, object]]:
+    """Flattens the scores to estimator, sigma, seed, r2 rows."""
+    return [
+        {"estimator": name, "sigma": sigma, "seed": seed, "r2": value}
+        for (name, sigma), values in res.items()
+        for seed, value in zip(seeds, values)
+    ]
 
 
 def print_table(res: dict) -> None:
@@ -186,9 +187,17 @@ def print_table(res: dict) -> None:
         print(f"{name:<9}{cells}")
 
 
-def main() -> None:
-    res = run()
-    write_csv(res, OUTPUT_CSV)
+def main(argv: Sequence[str] | None = None) -> None:
+    """Scores the estimators and writes the CSV."""
+    args = common.parse_args(__doc__, argv=argv)
+    n_per = 20 if args.fast else 100
+    res = run(args.seeds, n_per)
+    common.write_results(
+        to_rows(res, args.seeds),
+        common.results_path("r17_slope_estimators", args),
+        columns=COLUMNS, seeds=args.seeds,
+        config={"n_per": n_per, "window": WINDOW, "sigmas": SIGMAS,
+                "estimators": ESTIMATORS})
     print_table(res)
 
 
