@@ -45,6 +45,11 @@ runs/
 wandb/
 experiments/logs_*.txt
 
+# Smoke (--fast) outputs of the experiment scripts and their provenance;
+# the provenance of full runs is kept next to the CSV it describes.
+experiments/results/*_fast*.csv
+experiments/results/*_fast*.csv.provenance.json
+
 # LaTeX build (sources + PDF живут в paper/paper_1 и paper/paper_2)
 *.aux
 *.fdb_latexmk

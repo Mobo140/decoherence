@@ -14,6 +14,7 @@ setup(
         'qutip>=5.0.0',
         'torch>=2.0.0',
         'scipy>=1.10.0',
+        'pandas>=2.0.0',
         'scikit-learn>=1.3.0',
         'fastapi>=0.110.0',
         'pydantic>=2.0.0',
@@ -21,7 +22,7 @@ setup(
     ],
     extras_require={
         # notebooks/figures.ipynb
-        'notebook': ['matplotlib>=3.7.0', 'pandas>=2.0.0'],
+        'notebook': ['matplotlib>=3.7.0'],
         # tests/ (fastapi's TestClient needs httpx)
         'test': ['pytest', 'httpx>=0.27.0'],
     },
