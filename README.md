@@ -20,13 +20,14 @@ Physical Review Applied)
     - [Why γ(t) cannot be assumed known](#why-γt-cannot-be-assumed-known)
     - [Analytical baseline (constant γ, σ₋)](#analytical-baseline-constant-γ-σ)
   - [Model architecture](#model-architecture)
-  - [Project structure](#project-structure)
+  - [Architecture](#architecture)
   - [Installation](#installation)
   - [Quick start](#quick-start)
     - [1. Interactive UI](#1-interactive-ui)
     - [2. Programmatic API](#2-programmatic-api)
     - [3. Single inference](#3-single-inference)
   - [Running experiments](#running-experiments)
+    - [Reproducing a paper table](#reproducing-a-paper-table)
     - [Scenario taxonomy](#scenario-taxonomy)
   - [Analysing results](#analysing-results)
   - [Plugging in a custom loss](#plugging-in-a-custom-loss)
@@ -110,39 +111,73 @@ and the network predicts T₂ directly from sequences.
 
 ---
 
-## Project structure
+## Architecture
+
+The pipeline is the three-layer picture *physics → observation model →
+forecast*. Each step is a function or a registry where a variant is chosen
+by a string alias; scripts and the notebook assemble the pipeline from
+these only. Details: `notes/architecture.md`; style rules:
+`notes/code_guidelines.md`.
+
+```
+scenario → simulation → observation → features → windows → model → loss → training → metrics
+```
 
 ```
 .
-├── app.py                              # FastAPI workbench: 7 screens
-├── static/workbench.css
-├── experiments/
-│   ├── _config.py                      # alias of src/data/scenarios (paper figures)
-│   ├── e1_ablation.py … e14_inject_J.py
-│   ├── run_all.py                      # Paper 1 suite (E1–E5)
-│   └── results/                        # CSV from completed runs
+├── app.py                          # FastAPI workbench, 7 screens
 ├── src/
-│   ├── domain/                         # value objects, ports — no torch/qutip
-│   ├── application/                    # use-cases + experiment_catalog / job_queue
-│   ├── data/                           # scenarios A–E, Dataset, windows, observation models, feature sets
-│   ├── models/                         # predictors, nets, registry.build_model(alias)
-│   ├── training/                       # losses (LOSSES), shared epoch loop, standardisation
-│   ├── persistence/                    # trajectory cache and checkpoint stores
-│   ├── physics/                        # Lindblad systems, master equation, measures
-│   └── simulation/                     # QuTipSimulator (ISimulator adapter) and variants
-├── paper/
-│   ├── paper_1/main.tex                # Paper 1 (single qubit)
-│   ├── paper_2/main.tex                # Paper 2 (two qubits)
-│   └── description_ru.tex              # what both papers do, in Russian
+│   ├── domain/                     # value objects and ports; no torch/qutip
+│   ├── physics/                    # Lindblad systems, measures, Pauli operators
+│   ├── simulation/                 # QuTipSimulator; registry SIMULATORS
+│   ├── data/                       # scenarios A–E, Dataset, windows,
+│   │                               #   observation.py (OBSERVATIONS),
+│   │                               #   features.py (FEATURE_SETS)
+│   ├── models/                     # predictors; registry MODELS, build_model(alias)
+│   ├── training/                   # shared loop, standardisation, LOSSES
+│   ├── evaluation/                 # METRICS, backtest, paired statistics
+│   ├── persistence/                # trajectory cache, checkpoint stores
+│   ├── pipeline.py                 # ExperimentConfig / run_experiment
+│   ├── reproducibility.py          # seeding, environment_info()
+│   └── application/                # use cases, experiment catalog, workbench
+├── experiments/
+│   ├── common.py                   # harness: CLI, results path, provenance
+│   ├── e1_…e14_*.py, r1_…r27_*.py  # one script per experiment
+│   ├── run_paper1.py, run_all.py   # chains of experiments
+│   └── results/                    # CSV (+ .provenance.json) of finished runs
+├── notebooks/                      # pipeline.ipynb (walkthrough), figures.ipynb
+├── scripts/golden_outputs.py       # regression check against golden_outputs.json
 ├── tests/
-├── checkpoints/
-└── requirements.txt
+├── paper/                          # LaTeX sources of the papers
+└── checkpoints/
 ```
 
-The layering is the usual dependency rule: `domain` knows nothing about
-frameworks, `application` orchestrates use cases, `models` and `training`
-hold PyTorch, `physics` and `simulation` hold QuTiP, `persistence` holds the
-file stores.
+**Registries.** `models.registry.build_model("physics_lstm", **overrides)`,
+`simulation.registry.build_simulator("correlators")`, and the alias tables
+`OBSERVATIONS` (`exact`, `gaussian`, `ar1`), `FEATURE_SETS`, `LOSSES`,
+`evaluation.metrics.METRICS`. A new variant is a new entry, not an `if`.
+
+**Pipeline.** `pipeline.ExperimentConfig` describes one arm (data, model,
+loss, epochs, feature set, tests); `pipeline.run_experiment(config, seed)`
+returns one row per test, `iter_rows` / `run_seeds` run arms over seeds.
+
+**Harness.** Experiment scripts share `experiments.common`: `parse_args`
+(`--seeds`, `--fast`, `--tag`, `--out`), `results_path`, and
+`ResultsWriter` / `write_results`, which write the CSV and a
+`<csv>.provenance.json` with the configuration, seeds and software
+versions. `--fast` is a smoke run on reduced data and writes
+`*_fast.csv`, which is git-ignored and never touches a published file.
+
+**Notebook.** `notebooks/pipeline.ipynb` walks through the pipeline stage by
+stage with the same functions; it writes nothing to disk.
+
+**Golden check.** `python -m scripts.golden_outputs` recomputes a fixed set
+of numbers (simulation, windows, training, metrics) and must print
+`golden outputs identical`; it guards refactors against changing results.
+
+The dependency rule: `domain` knows no framework, `application` orchestrates
+use cases, `models` and `training` hold PyTorch, `physics` and `simulation`
+hold QuTiP, `persistence` holds the file stores.
 
 ---
 
@@ -154,7 +189,7 @@ source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Key dependencies: `qutip`, `torch`, `fastapi`, `numpy`, `scipy`, `scikit-learn`
+Key dependencies: `qutip`, `torch`, `pandas`, `fastapi`, `numpy`, `scipy`, `scikit-learn`
 
 ---
 
@@ -171,7 +206,7 @@ python app.py
 | Screen | What it does |
 | --- | --- |
 | **01 Dashboard** | Champion R² A–E (Paper 1 done, TFIM 0.575 / цель 0.70) |
-| **02 Runs** | Каталог E1–E14 и R1–R8, CSV, Compare, Replay `--fast` / full |
+| **02 Runs** | Каталог E1–E14 и R1–R27, CSV, Compare, Replay `--fast` / full |
 | **03 Models** | `HamiltonianModelRegistry` (best_XXZ / best_TFIM / 1q) |
 | **04 Simulate** | Пресет сценария A–E (тот же `build_configs`) |
 | **05 Train** | Очередь eN в фоне, UI не блокируется |
@@ -238,28 +273,52 @@ if events:
 
 ## Running experiments
 
-Paper 1 = E1–E5. Paper 2 = E6–E14. Replay from the UI (**02 Runs**) or:
+Paper 1 = E1–E5. Paper 2 = E6–E14. Replay from the UI (**02 Runs**) or from
+the shell; every script is a module:
 
 ```bash
-python experiments/run_all.py --fast          # Paper 1 smoke
+python -m experiments.run_paper1 --fast        # Paper 1 smoke (writes *_fast.csv)
 python -m experiments.e8_improved_2qubit --fast
-python -m experiments.e14_inject_J --fast
+python -m experiments.r22_ar1_noise_training --seeds 42 43 44
+make help                                      # the same commands as make targets
 ```
 
-CSV → `experiments/results/`. Catalog and champions: `src/application/experiment_catalog.py`.
+Common flags: `--seeds`, `--fast`, `--tag` (suffix of the result name),
+`--out` (result file name); some scripts add their own (`--scenarios`,
+`--n-per`, …; see `--help`). CSV and provenance go to `experiments/results/`.
+Catalog and champions: `src/application/experiment_catalog.py`.
 
 - **E1** C1, C2 — physics_only / lstm_only / physics_lstm / transformer × A–E
 - **E2** C3 — window fraction sweep
 - **E3** C4 — measurement noise σ
 - **E4** C5 — train on mixture, eval per scenario
 - **E5** — direct T₂ vs inverse γ-reconstruction
-- **E6–E8** — 2-qubit scale-up; E8c is TFIM R² champion (0.575)
+- **E6–E8** — 2-qubit scale-up; E8c is the TFIM R² champion (0.575)
 - **E9–E11** — context codes, Transformer AUROC, scaling (E11a XXZ R²=0.817)
 - **E12–E14** — stretched-exp baseline, survival loss, inject J
-- **R1–R8** — replications that check the experiments above across seeds
-  rather than producing results of their own. Every published table survived
-  them; several of the conclusions built on top of those tables did not.
-  `paper/description_ru.tex` lists each probe and its outcome.
+- **R1–R27** — replications and follow-up probes that check the experiments
+  above across seeds rather than producing results of their own. Every
+  published table survived them; several conclusions built on top of those
+  tables did not. `paper/description_ru.tex` lists each probe and its
+  outcome.
+
+### Reproducing a paper table
+
+1. Run the script that writes the table's CSV (the catalog lists it).
+2. Compare with the committed CSV in `experiments/results/`; the provenance
+   file next to it records the arguments and the software environment.
+
+| Table | Command | Result file |
+| --- | --- | --- |
+| Paper 1, ablation (single run) | `python -m experiments.run_paper1` | `e1_ablation_p1.csv` |
+| Paper 1, ablation with CIs | `python -m experiments.r13_independent_test` | `r13_independent_test.csv` |
+| Paper 2, cross-system champion | `python -m experiments.e11_scaling --e11a` | `e11a_cross_system.csv` |
+| Paper 2, champion across seeds | `python -m experiments.r3_multiseed_scaling` | `r3_multiseed_scaling.csv` |
+
+Trajectories are cached in `data/trajectories/`. The cache key does not
+contain the simulator variant, and a cache hit does not advance numpy's
+global generator, so numbers depend on the cache state; for a before/after
+comparison run each side from its own directory with a cold cache.
 
 ### Scenario taxonomy
 
@@ -342,12 +401,15 @@ TrainModelUseCase(predictor).execute(
 ## Tests
 
 ```bash
-python -m pytest tests/
+python -m pytest tests/ -q        # or: make test
+python -m scripts.golden_outputs  # or: make golden
 ```
 
-138 tests. Covers physics (T₂, Lindblad, censoring), predictors, Hamiltonian
-registry, survival backtest, inject-J, and the experiment catalog / dashboard
-HTML, plus the invariants that make the reported metrics meaningful:
+246 tests (`pytest.ini` puts the repository root on the path). They cover
+physics (T₂, Lindblad, censoring), predictors, the registries, the Hamiltonian
+model registry, survival backtest, inject-J, the experiment harness and
+catalog, the notebook, and the invariants that make the reported metrics
+meaningful:
 
 - **Split integrity** — the train/val/test split is trajectory-level (several
   windows share one trajectory's T₂, so a per-window split would leak), no
@@ -359,9 +421,10 @@ HTML, plus the invariants that make the reported metrics meaningful:
   experiment script builds a training command without a seed.
 - **Catalog integrity** — ids unique and matching the labels the papers cite,
   declared CSVs present, modules importable.
-- **Replication fidelity** — R1/R2 mirror the hyperparameters of the
-  experiments they check, R3–R5 call those experiments rather than copying
-  them, and no probe can write a champion CSV.
+- **Replication fidelity** — R1 and R2 build the predictors of the
+  experiments they check, R3 and R4 call those experiments rather than
+  copying them, and an experiment function returns rows instead of writing a
+  champion CSV.
 
 ---
 
