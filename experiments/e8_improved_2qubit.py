@@ -138,8 +138,8 @@ def run_e8a(simulator, groups, n_epochs: int,
     return rows
 
 
-def run_e8b(simulator, groups, n_epochs: int,
-            verbose: bool = True) -> list[dict[str, object]]:
+def run_e8b(simulator, groups, n_epochs: int, verbose: bool = True,
+            *, seed: int = 42) -> list[dict[str, object]]:
     """E8b: noise robustness of the improved model on the D+E mixture.
 
     Args:
@@ -147,6 +147,7 @@ def run_e8b(simulator, groups, n_epochs: int,
         groups: Scenario label -> configurations.
         n_epochs: Training epochs.
         verbose: Whether to print training progress.
+        seed: Seed of the dataset, training and noise.
 
     Returns:
         One row per sigma, with the keys of `RESULT_COLUMNS`.

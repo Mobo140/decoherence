@@ -79,7 +79,10 @@ CATALOG: list[ExperimentEntry] = [
     ExperimentEntry(
         "E8c", "Improved 2q training", "experiments.e8_improved_2qubit",
         "2", "C4, C5", "D, E",
-        ("e8c_cross_system.csv",), status="superseded"),
+        ("e8c_cross_system.csv",), status="superseded",
+        note="E8b (noise sweep) raised NameError for an undefined seed "
+             "until it became a parameter, so no E8b result was ever "
+             "committed."),
     ExperimentEntry(
         "E9", "Context codes", "experiments.e9_context_injection",
         "-", "C5", "D, E",
