@@ -85,7 +85,10 @@ CATALOG: list[ExperimentEntry] = [
              "committed. run_e8c now passes its seed to the command; "
              "before, every call trained and split with seed 42 (the "
              "committed e8c_cross_system.csv is a seed-42 run, so it "
-             "is unaffected)."),
+             "is unaffected). E8a raised ValueError at its last variant "
+             "(stretched_exp) after training the others; it now builds "
+             "that baseline through the model registry and adds a "
+             "stretched_exp row per scenario."),
     ExperimentEntry(
         "E9", "Context codes", "experiments.e9_context_injection",
         "-", "C5", "D, E",

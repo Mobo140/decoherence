@@ -75,17 +75,19 @@ def _ablation_predictor(
     *,
     tau: float,
 ) -> ports.IPredictor:
-    """Builds the predictor of one E8a variant for a scenario's τ."""
+    """Builds the predictor of one E8a variant for a scenario's τ.
+
+    The variants without an E8 setting (physics_only, stretched_exp) come
+    from the registry through the use case's default factory.
+    """
     variants = value_objects.PredictorVariant
-    if variant == variants.PHYSICS_ONLY:
-        return run_ablation.default_predictor(variant, command)
     if variant == variants.LSTM_ONLY:
         return registry.build_model("lstm_only", **_LSTM_SIZE, **_TRAINING)
     if variant == variants.PHYSICS_LSTM:
         return _improved_lstm(tau)
     if variant == variants.TRANSFORMER:
         return registry.build_model("transformer_large")
-    raise ValueError(variant)
+    return run_ablation.default_predictor(variant, command)
 
 
 def run_e8a(simulator, groups, n_epochs: int,
