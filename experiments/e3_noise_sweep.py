@@ -12,7 +12,7 @@ C4: Adding Gaussian noise σ_noise to observables degrades MAE sub-linearly;
 
 Scenarios
 ---------
-Default: B, C (time-dep γ). Optional: D, E via --scenarios.
+Default: B, C, D (time-dep γ). Choose with --scenarios.
 
 Metrics
 -------
@@ -21,70 +21,90 @@ Train on clean trajectories; noise is added at inference only.
 
 Output
 ------
-experiments/results/e3_noise_sweep_{suffix}.csv
-columns: scenario, noise_sigma, r2, mae, auroc
+experiments/results/e3_noise_sweep[_<tag>][_fast].csv
+columns: name, variant, window_fraction, noise_sigma, mae, rmse, r2, mape,
+auroc, n_samples (Paper 1 uses --scenarios B C --tag p1).
 
 Usage
 -----
-    python -m experiments.e3_noise_sweep
-    python -m experiments.e3_noise_sweep --scenarios D E --suffix p2
+    python -m experiments.e3_noise_sweep --fast
+    python -m experiments.e3_noise_sweep --scenarios B C --tag p1
 """
 from __future__ import annotations
 
-import csv
-import sys
-from pathlib import Path
+from collections.abc import Sequence
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+from experiments import common
+from src.application import run_noise_sweep
+from src.data import scenarios as scenario_lib
+from src.simulation import simulator as simulator_lib
 
-from src.application.run_noise_sweep import NoiseSweepCommand, NoiseSweepUseCase
-from src.data.scenarios import build_configs, trajectory_store
-from src.simulation.simulator import QuTipSimulator
+COLUMNS = ("name", "variant", "window_fraction", "noise_sigma", "mae",
+           "rmse", "r2", "mape", "auroc", "n_samples")
+SIGMAS = (0.0, 0.01, 0.02, 0.05, 0.10)
+AUROC_TARGET = 0.90
 
 
-def main(scenarios: list | None = None, suffix: str = "") -> None:
-    results_dir = Path(__file__).parent / "results"
-    results_dir.mkdir(exist_ok=True)
+def run(
+    scenarios: Sequence[str] = ("B", "C", "D"),
+    n_per: int = 100,
+    *,
+    seed: int = 42,
+    n_epochs: int = 100,
+) -> list[dict[str, object]]:
+    """Trains on clean data and scores each noise level.
 
-    simulator = QuTipSimulator()
-    groups = build_configs(n_per_scenario=100, seed=42)
-    # Default: B+C+D (mixed 1-qubit/2-qubit time-dep)
-    if scenarios is None:
-        scenarios = ["B", "C", "D"]
-    configs = [cfg for s in scenarios for cfg in groups[s]]
+    Args:
+        scenarios: Scenario labels pooled into one dataset.
+        n_per: Trajectories per scenario.
+        seed: Seed of the configurations, dataset, training and noise.
+        n_epochs: Training epochs.
 
-    cmd = NoiseSweepCommand(
+    Returns:
+        One row per sigma with the keys of `COLUMNS`.
+    """
+    groups = scenario_lib.build_configs(n_per_scenario=n_per, seed=seed)
+    configs = [cfg for label in scenarios for cfg in groups[label]]
+    results = run_noise_sweep.NoiseSweepUseCase(
+        simulator_lib.QuTipSimulator(), store=scenario_lib.trajectory_store()
+    ).execute(run_noise_sweep.NoiseSweepCommand(
         configs=configs,
-        sigmas=[0.0, 0.01, 0.02, 0.05, 0.10],
+        sigmas=list(SIGMAS),
         window_length=50,
         horizon=1.0,
         samples_per_trajectory=5,
-        n_epochs=100,
+        n_epochs=n_epochs,
         batch_size=32,
         lr=1e-3,
         regression_loss="huber",
-        seed=42,
+        seed=seed,
         verbose=True,
-    )
+    ))
+    return [result.as_dict() for result in results]
 
-    results = NoiseSweepUseCase(simulator, store=trajectory_store()).execute(cmd)
 
-    fname = f"e3_noise_sweep{suffix}.csv" if suffix else "e3_noise_sweep.csv"
-    out_path = results_dir / fname
-    fieldnames = ["name", "variant", "window_fraction", "noise_sigma",
-                  "mae", "rmse", "r2", "mape", "auroc", "n_samples"]
-    with open(out_path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-        writer.writeheader()
-        writer.writerows([r.as_dict() for r in results])
+def _add_flags(parser) -> None:
+    parser.add_argument("--scenarios", nargs="+", default=["B", "C", "D"])
 
-    print(f"\nResults saved to {out_path}")
 
+def main(argv: Sequence[str] | None = None) -> None:
+    """Runs E3 and writes its CSV."""
+    args = common.parse_args(
+        __doc__, extra=_add_flags, argv=argv, seeds=None)
+    n_per, n_epochs = (30, 10) if args.fast else (100, 100)
+    rows = run(args.scenarios, n_per, n_epochs=n_epochs)
+    path = common.results_path("e3_noise_sweep", args)
+    common.write_results(
+        rows, path, columns=COLUMNS, seeds=[42],
+        config={"scenarios": args.scenarios, "n_per": n_per,
+                "sigmas": SIGMAS, "n_epochs": n_epochs})
+    print(f"\nResults saved to {path}")
     print(f"\n{'σ_noise':>9} {'R²':>8} {'MAE':>8} {'AUROC':>8}")
     print("-" * 38)
-    for r in results:
-        flag = " ✓" if r.risk_auroc >= 0.90 else " ✗"
-        print(f"{r.spec.noise.sigma:>9.3f} {r.r2:>8.4f} {r.mae:>8.4f} {r.risk_auroc:>8.4f}{flag}")
+    for row in rows:
+        flag = " ✓" if row["auroc"] >= AUROC_TARGET else " ✗"
+        print(f"{row['noise_sigma']:>9.3f} {row['r2']:>8.4f} "
+              f"{row['mae']:>8.4f} {row['auroc']:>8.4f}{flag}")
 
 
 if __name__ == "__main__":

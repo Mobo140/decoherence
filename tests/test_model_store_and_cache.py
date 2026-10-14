@@ -10,7 +10,7 @@ from src.application.generate_dataset import (
     GenerateDatasetUseCase,
     trajectory_cache_key,
 )
-from src.application.run_cross_system import _variant_of
+from src.application.run_cross_system import variant_of
 from src.domain.value_objects import (
     DissipatorConfig,
     PredictorVariant,
@@ -146,11 +146,11 @@ def test_variant_of_predictor_classes():
     from src.models.lstm import LSTMPredictor
     from src.models.transformer import TransformerPredictor
 
-    assert _variant_of(TransformerPredictor()) == PredictorVariant.TRANSFORMER
-    assert _variant_of(PhysicsOnlyPredictor()) == PredictorVariant.PHYSICS_ONLY
-    assert _variant_of(StretchedExpPredictor()) == PredictorVariant.STRETCHED_EXP
-    assert _variant_of(LSTMPredictor(use_physics_prior=False)) == PredictorVariant.LSTM_ONLY
-    assert _variant_of(LSTMPredictor()) == PredictorVariant.PHYSICS_LSTM
+    assert variant_of(TransformerPredictor()) == PredictorVariant.TRANSFORMER
+    assert variant_of(PhysicsOnlyPredictor()) == PredictorVariant.PHYSICS_ONLY
+    assert variant_of(StretchedExpPredictor()) == PredictorVariant.STRETCHED_EXP
+    assert variant_of(LSTMPredictor(use_physics_prior=False)) == PredictorVariant.LSTM_ONLY
+    assert variant_of(LSTMPredictor()) == PredictorVariant.PHYSICS_LSTM
 
 
 def test_e7a_csv_variant_is_transformer():

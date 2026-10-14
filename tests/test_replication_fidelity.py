@@ -11,7 +11,11 @@ import ast
 import inspect
 from pathlib import Path
 
+from experiments import e6_2qubit_improved
+from experiments import e7_paper2_extended
 from experiments.e11_scaling import run_e11a, run_e11b
+from src.application import run_ablation
+from src.domain.value_objects import PredictorVariant
 
 EXPERIMENTS = Path(__file__).resolve().parents[1] / "experiments"
 
@@ -24,87 +28,84 @@ def _defaults(func):
     }
 
 
+def _calls(path: Path, name: str) -> list:
+    tree = ast.parse(path.read_text())
+    return [
+        n for n in ast.walk(tree)
+        if isinstance(n, ast.Call)
+        and (getattr(n.func, "id", None) == name
+             or getattr(n.func, "attr", None) == name)
+    ]
+
+
 def test_run_e11a_defaults_reproduce_the_published_run():
     d = _defaults(run_e11a)
     assert d["seed"] == 42
     assert d["window"] == 20, "published E11a uses window 20"
-    assert d["out_path"] is None, "by default it must write the champion CSV"
     assert d["eval_groups"] is None, (
-        "by default evaluation must use the training configurations, as published"
+        "by default evaluation must use the training configurations, as "
+        "published"
     )
+
+
+def test_experiment_functions_do_not_choose_a_file():
+    """They return rows; only the script's main writes a CSV, so a
+    replication cannot overwrite a champion file by calling them."""
+    for func in (run_e11a, run_e11b):
+        assert "out_path" not in inspect.signature(func).parameters
 
 
 def test_r4_scores_disjoint_configurations():
     """R4 measures configuration overlap, so its unseen arm must genuinely
     use a different generator seed -- not the training configurations."""
-    src = (EXPERIMENTS / "r4_config_overlap.py").read_text()
-    tree = ast.parse(src)
-    calls = [
-        n for n in ast.walk(tree)
-        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
-        and n.func.id == "run_e11a"
-    ]
+    calls = _calls(EXPERIMENTS / "r4_config_overlap.py", "run_e11a")
     assert calls, "no arm calls found"
     for call in calls:
         kwargs = {k.arg for k in call.keywords}
-        assert {"out_path", "seed", "eval_groups"} <= kwargs, (
-            f"line {call.lineno}: R4 arm is missing out_path/seed/eval_groups"
+        assert {"seed", "eval_groups"} <= kwargs, (
+            f"line {call.lineno}: R4 arm is missing seed/eval_groups"
         )
-    assert "CONFIG_SEED_OFFSET" in src
     from experiments.r4_config_overlap import CONFIG_SEED_OFFSET
     assert CONFIG_SEED_OFFSET != 0, "fresh configs would equal the training ones"
 
 
 def test_run_e11b_defaults_reproduce_the_published_run():
-    d = _defaults(run_e11b)
-    assert d["seed"] == 42
-    assert d["out_path"] is None
+    assert _defaults(run_e11b)["seed"] == 42
 
 
 def test_r3_calls_the_experiment_rather_than_copying_it():
     """If R3 rebuilt the configuration itself it could drift from E11."""
-    src = (EXPERIMENTS / "r3_multiseed_scaling.py").read_text()
-    assert "from experiments.e11_scaling import run_e11a, run_e11b" in src
-    assert "run_e11a(" in src and "run_e11b(" in src
+    path = EXPERIMENTS / "r3_multiseed_scaling.py"
+    assert _calls(path, "run_e11a") and _calls(path, "run_e11b")
+    for name in ("run_e11a", "run_e11b"):
+        for call in _calls(path, name):
+            assert "seed" in {k.arg for k in call.keywords}, (
+                f"line {call.lineno}: arm is not seeded")
 
 
-def test_r3_never_writes_the_champion_csvs():
-    """Its arms run the champion functions, so the output path must be
-    redirected on every call."""
-    src = (EXPERIMENTS / "r3_multiseed_scaling.py").read_text()
-    tree = ast.parse(src)
-    calls = [
-        n for n in ast.walk(tree)
-        if isinstance(n, ast.Call)
-        and isinstance(n.func, ast.Name)
-        and n.func.id in {"run_e11a", "run_e11b"}
-    ]
-    assert calls, "no arm calls found"
-    for call in calls:
-        kwargs = {k.arg for k in call.keywords}
-        assert "out_path" in kwargs, f"line {call.lineno}: champion CSV not redirected"
-        assert "seed" in kwargs, f"line {call.lineno}: arm is not seeded"
-
-
-def test_r1_mirrors_e6a_hyperparameters():
-    """R1 measures E6a's spread, so it must build E6a's predictors."""
+def test_r1_replicates_e6a_predictors():
+    """R1 measures E6a's spread, so it must build the predictors of E6a."""
     r1 = (EXPERIMENTS / "r1_multiseed_ablation.py").read_text()
-    e6a = (EXPERIMENTS / "e6_2qubit_improved.py").read_text()
-    for marker in ("hidden_size=128", "num_layers=2", "dropout=0.3",
-                   "adaptive_prior_r2_threshold=0.7"):
-        assert marker in e6a, f"E6a no longer uses {marker}; update R1"
-        assert marker in r1, f"R1 does not mirror E6a's {marker}"
-    assert "AblationStudyUseCase(simulator=simulator)" not in r1, (
+    assert "e6_2qubit_improved.improved_ablation_predictor" in r1, (
         "R1 would build default predictors instead of E6a's"
     )
+    command = run_ablation.AblationCommand(configs=[])
+    for variant, threshold in ((PredictorVariant.LSTM_ONLY, 0.0),
+                               (PredictorVariant.PHYSICS_LSTM, 0.7)):
+        model = e6_2qubit_improved.improved_ablation_predictor(
+            variant, command)
+        assert (model.hidden_size, model.num_layers, model.dropout) == (
+            128, 2, 0.3)
+        assert model.adaptive_prior_r2_threshold == threshold
 
 
-def test_r2_mirrors_e7b_hyperparameters():
+def test_r2_replicates_e7b_predictors():
     r2 = (EXPERIMENTS / "r2_multiseed_tau.py").read_text()
-    e7b = (EXPERIMENTS / "e7_paper2_extended.py").read_text()
-    for marker in ("hidden_size=128", "num_layers=2", "dropout=0.3"):
-        assert marker in e7b, f"E7b no longer uses {marker}; update R2"
-        assert marker in r2, f"R2 does not mirror E7b's {marker}"
+    assert "e7_paper2_extended.tau_predictor" in r2
+    model = e7_paper2_extended.tau_predictor(0.3)
+    assert (model.hidden_size, model.num_layers, model.dropout) == (
+        128, 2, 0.3)
+    assert model.adaptive_prior_r2_threshold == 0.3
 
 
 def _code_strings(path: Path) -> set:

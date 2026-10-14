@@ -20,12 +20,13 @@ Two comparisons do rest on thin margins, both on scenario C:
 
 For scale, replication dissolved margins of 0.037 and 0.04 in Paper 2.
 
-This probe calls e1_ablation.main rather than rebuilding the command, so
+This probe calls e1_ablation.run rather than rebuilding the command, so
 it cannot drift from the experiment it replicates -- E1 uses the base
 AblationStudyUseCase, whose default predictors are what Paper 1 reports,
 so unlike R1 there is no override to mirror.
 
-Writes ONLY to experiments/results/r7_multiseed_1qubit.csv.
+Writes ONLY to experiments/results/r7_multiseed_1qubit[_<tag>][_fast].csv
+(R11 is this script with --n-per 500 --out r11_1qubit_500traj.csv).
 
 Usage
 -----
@@ -34,20 +35,16 @@ Usage
 """
 from __future__ import annotations
 
-import argparse
-import csv
-import sys
 import time
 from collections import defaultdict
-from pathlib import Path
+from collections.abc import Sequence
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-import experiments.e1_ablation as e1
+from experiments import common
+from experiments import e1_ablation
 from src.evaluation import stats
 
-RESULTS_DIR = Path(__file__).parent / "results"
-SCRATCH = RESULTS_DIR / "_r7_scratch.csv"
+COLUMNS = ("seed", "scenario", "variant", "r2", "mae", "auroc")
+SCENARIOS = ("A", "B", "C")
 
 # Published single-run values (e1_ablation_p1.csv), for the comparison column.
 PUBLISHED = {
@@ -72,67 +69,36 @@ CLAIMS = [
 ]
 
 
-def _append(path: Path, row: dict, first: bool) -> None:
-    path.parent.mkdir(exist_ok=True)
-    with path.open("w" if first else "a", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(row.keys()))
-        if first:
-            w.writeheader()
-        w.writerow(row)
+def _add_flags(parser) -> None:
+    parser.add_argument("--n-per", type=int, default=100,
+                        help="trajectories per scenario (R11 uses 500)")
 
 
-def main() -> None:
-    p = argparse.ArgumentParser()
-    p.add_argument("--seeds", type=int, nargs="+", default=[42, 43, 44])
-    p.add_argument("--fast", action="store_true")
-    p.add_argument("--out", type=str, default="r7_multiseed_1qubit.csv")
-    p.add_argument("--n-per", type=int, default=100,
-                   help="trajectories per scenario (R11 uses 500)")
-    a = p.parse_args()
-
-    n_per = 30 if a.fast else a.n_per
-    out = RESULTS_DIR / a.out
-
-    print(f"R7 | seeds={a.seeds} n_per={n_per} scenarios=A,B,C")
-    print(f"writing -> {out}  (champion CSVs untouched)\n", flush=True)
-
-    first, t0, collected = True, time.time(), []
-    for seed in a.seeds:
-        ts = time.time()
-        print(f"--- seed {seed} ---", flush=True)
-        rows = e1.main(scenarios=["A", "B", "C"], n_per=n_per,
-                       seed=seed, out_path=SCRATCH)
-        for r in rows:
-            row = {"seed": seed, "scenario": r["scenario"],
-                   "variant": r["variant"], "r2": r["r2"],
-                   "mae": r["mae"], "auroc": r["auroc"]}
-            _append(out, row, first)
-            first = False
-            collected.append(row)
-        print(f"    [{time.time() - ts:.0f}s]", flush=True)
-
-    SCRATCH.unlink(missing_ok=True)
-
-    by = defaultdict(dict)
-    for r in collected:
-        by[(r["scenario"], r["variant"])][r["seed"]] = float(r["r2"])
+def _summarise(collected: Sequence[dict[str, object]]) -> None:
+    """Prints mean R2 per cell and the paired claims over the seeds."""
+    by_cell = defaultdict(dict)
+    for row in collected:
+        by_cell[(row["scenario"], row["variant"])][row["seed"]] = float(
+            row["r2"])
 
     print("\n" + "=" * 66)
-    print(f"{'scen':<5}{'variant':<15}{'R2 mean':>10}{'±std':>8}{'published':>11}")
-    for key in sorted(by):
-        v = list(by[key].values())
-        mean, sd = stats.mean_std(v)
-        pub = PUBLISHED.get(key, float("nan"))
-        print(f"{key[0]:<5}{key[1]:<15}{mean:>10.3f}{sd:>8.3f}{pub:>11.4f}")
+    print(f"{'scen':<5}{'variant':<15}{'R2 mean':>10}{'±std':>8}"
+          f"{'published':>11}")
+    for key in sorted(by_cell):
+        mean, std = stats.mean_std(list(by_cell[key].values()))
+        published = PUBLISHED.get(key, float("nan"))
+        print(f"{key[0]:<5}{key[1]:<15}{mean:>10.3f}{std:>8.3f}"
+              f"{published:>11.4f}")
 
     print("\nclaims, as paired differences per seed:")
-    for scen, better, worse, pub_margin, label in CLAIMS:
-        hi, lo = by.get((scen, better), {}), by.get((scen, worse), {})
-        seeds = sorted(set(hi) & set(lo))
+    for scenario, better, worse, published, label in CLAIMS:
+        high = by_cell.get((scenario, better), {})
+        low = by_cell.get((scenario, worse), {})
+        seeds = sorted(set(high) & set(low))
         if not seeds:
             continue
         diff = stats.paired_difference(
-            [hi[s] for s in seeds], [lo[s] for s in seeds])
+            [high[s] for s in seeds], [low[s] for s in seeds])
         if diff.n_positive == diff.n:
             verdict = "holds in every seed"
         elif diff.n_negative == diff.n:
@@ -140,11 +106,36 @@ def main() -> None:
         else:
             verdict = "SIGN VARIES -- not resolved"
         print(f"  {label}")
-        print(f"    published {pub_margin:+.4f} | replicated {diff.mean:+.3f} "
-              f"± {diff.std:.3f}  "
+        print(f"    published {published:+.4f} | replicated "
+              f"{diff.mean:+.3f} ± {diff.std:.3f}  "
               f"{[f'{x:+.3f}' for x in diff.differences]}  -> {verdict}")
 
-    print(f"\ntotal {time.time() - t0:.0f}s -> {out}")
+
+def main(argv: Sequence[str] | None = None) -> None:
+    """Replicates E1 on scenarios A-C for each seed."""
+    args = common.parse_args(__doc__, extra=_add_flags, argv=argv)
+    n_per = 30 if args.fast else args.n_per
+    path = common.results_path("r7_multiseed_1qubit", args)
+
+    print(f"R7 | seeds={args.seeds} n_per={n_per} scenarios=A,B,C")
+    print(f"writing -> {path}  (champion CSVs untouched)\n", flush=True)
+
+    start = time.time()
+    collected = []
+    with common.ResultsWriter(
+            path, COLUMNS, seeds=args.seeds,
+            config={"n_per": n_per, "scenarios": SCENARIOS}) as out:
+        for seed in args.seeds:
+            seed_start = time.time()
+            print(f"--- seed {seed} ---", flush=True)
+            for result in e1_ablation.run(SCENARIOS, n_per, seed=seed):
+                row = {"seed": seed, **result}
+                out.write(row)
+                collected.append(row)
+            print(f"    [{time.time() - seed_start:.0f}s]", flush=True)
+
+    _summarise(collected)
+    print(f"\ntotal {time.time() - start:.0f}s -> {path}")
 
 
 if __name__ == "__main__":

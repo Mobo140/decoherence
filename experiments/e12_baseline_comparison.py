@@ -22,7 +22,7 @@ R², MAE. physics_only = OLS log C; stretched_exp = curve_fit C0·exp(-(t/τ)^β
 
 Output
 ------
-experiments/results/e12_baseline_comparison.csv
+experiments/results/e12_baseline_comparison[_<tag>][_fast].csv
 
 Usage
 -----
@@ -31,49 +31,48 @@ Usage
 """
 from __future__ import annotations
 
-import argparse
-import csv
-import sys
-from pathlib import Path
+from collections.abc import Sequence
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+from experiments import common
+from src.application import run_ablation
+from src.data import scenarios as scenario_lib
+from src.domain import value_objects
+from src.simulation import simulator as simulator_lib
 
-from src.application.run_ablation import AblationCommand, AblationStudyUseCase
-from src.data.scenarios import build_configs, trajectory_store
-from src.domain.value_objects import PredictorVariant
-from src.simulation.simulator import QuTipSimulator
-
-
-RESULTS_DIR = Path(__file__).parent / "results"
-
-VARIANTS = [
-    PredictorVariant.PHYSICS_ONLY,
-    PredictorVariant.STRETCHED_EXP,
-    PredictorVariant.PHYSICS_LSTM,
-]
+COLUMNS = (
+    "scenario", "name", "variant", "window_fraction", "noise_sigma", "mae",
+    "rmse", "r2", "mape", "auroc", "n_samples")
+VARIANTS = (
+    value_objects.PredictorVariant.PHYSICS_ONLY,
+    value_objects.PredictorVariant.STRETCHED_EXP,
+    value_objects.PredictorVariant.PHYSICS_LSTM,
+)
+SCENARIOS = ("B", "C", "D", "E")
 
 
-def main(fast: bool = False) -> None:
-    results_dir = RESULTS_DIR
-    results_dir.mkdir(exist_ok=True)
+def run(n_per: int, n_epochs: int, *,
+        seed: int = 42) -> list[dict[str, object]]:
+    """Scores the physics-only, stretched-exp and physics + LSTM models.
 
-    n_per = 20 if fast else 100
-    n_epochs = 15 if fast else 80
-    scenarios = ["B", "C", "D", "E"]
+    Args:
+        n_per: Trajectories per scenario.
+        n_epochs: Training epochs.
+        seed: Seed of the configurations, datasets and training.
 
-    simulator = QuTipSimulator()
-    groups = build_configs(n_per_scenario=n_per, seed=42)
-
-    all_rows = []
-
-    for scenario_label in scenarios:
-        print(f"\n{'='*60}")
-        print(f"E12 — Scenario {scenario_label}  n_per={n_per}  epochs={n_epochs}")
-        print(f"{'='*60}")
-
-        cmd = AblationCommand(
-            configs=groups[scenario_label],
-            variants=VARIANTS,
+    Returns:
+        One row per scenario and variant, with the keys of `COLUMNS`.
+    """
+    groups = scenario_lib.build_configs(n_per_scenario=n_per, seed=seed)
+    use_case = run_ablation.AblationStudyUseCase(
+        simulator_lib.QuTipSimulator(),
+        store=scenario_lib.trajectory_store())
+    rows = []
+    for label in SCENARIOS:
+        print(f"\n{'=' * 60}\nE12 — Scenario {label}  n_per={n_per}  "
+              f"epochs={n_epochs}\n{'=' * 60}")
+        results = use_case.execute(run_ablation.AblationCommand(
+            configs=groups[label],
+            variants=list(VARIANTS),
             window_length=20,
             horizon=1.0,
             samples_per_trajectory=5,
@@ -81,39 +80,31 @@ def main(fast: bool = False) -> None:
             batch_size=32,
             lr=1e-3,
             regression_loss="huber",
-            seed=42,
+            seed=seed,
             verbose=True,
-        )
+        ))
+        for result in results:
+            rows.append({**result.as_dict(), "scenario": label})
+    return rows
 
-        results = AblationStudyUseCase(simulator, store=trajectory_store()).execute(cmd)
 
-        for r in results:
-            row = r.as_dict()
-            row["scenario"] = scenario_label
-            all_rows.append(row)
-
-    out_path = results_dir / "e12_baseline_comparison.csv"
-    fieldnames = [
-        "scenario", "name", "variant", "window_fraction", "noise_sigma",
-        "mae", "rmse", "r2", "mape", "auroc", "n_samples",
-    ]
-    with open(out_path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-        writer.writeheader()
-        writer.writerows(all_rows)
-
-    print(f"\nResults saved to {out_path}")
-    print(f"\n{'Scenario':<10} {'Variant':<16} {'R²':>8} {'MAE':>8} {'AUROC':>8}")
+def main(argv: Sequence[str] | None = None) -> None:
+    """Runs E12 and writes its CSV."""
+    args = common.parse_args(__doc__, argv=argv, seeds=None)
+    n_per, n_epochs = (20, 15) if args.fast else (100, 80)
+    rows = run(n_per, n_epochs)
+    path = common.results_path("e12_baseline_comparison", args)
+    common.write_results(
+        rows, path, columns=COLUMNS, seeds=[42],
+        config={"n_per": n_per, "n_epochs": n_epochs})
+    print(f"\nResults saved to {path}")
+    print(f"\n{'Scenario':<10} {'Variant':<16} {'R²':>8} {'MAE':>8} "
+          f"{'AUROC':>8}")
     print("-" * 54)
-    for r in all_rows:
-        print(
-            f"{r['scenario']:<10} {r['variant']:<16} "
-            f"{r['r2']:>8.4f} {r['mae']:>8.4f} {r['auroc']:>8.4f}"
-        )
+    for row in rows:
+        print(f"{row['scenario']:<10} {row['variant']:<16} "
+              f"{row['r2']:>8.4f} {row['mae']:>8.4f} {row['auroc']:>8.4f}")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--fast", action="store_true")
-    args = parser.parse_args()
-    main(fast=args.fast)
+    main()

@@ -21,45 +21,40 @@ R² on uncensored test windows. Target E ≥ 0.70. Best here: E10c E=0.472.
 
 Output
 ------
-experiments/results/e10_tfim_c.csv   # mixed D+E; a/b/d TFIM-only were R²<0, not kept
+experiments/results/e10_tfim_a|b|c[_<tag>][_fast].csv
+(a and b were R²<0 and are not kept; the catalog cites e10_tfim_c.csv)
 
 Usage
 -----
     python -m experiments.e10_tfim_specialized
     python -m experiments.e10_tfim_specialized --fast
+
+E10a updates the best TFIM checkpoint in checkpoints/ when it beats the
+stored one.
 """
 from __future__ import annotations
 
-import argparse
-import csv
-import sys
-from pathlib import Path
+import functools
+from collections.abc import Sequence
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from src.application.backtest import BacktestCommand, BacktestUseCase
-from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
-from src.application.run_cross_system import CrossSystemCommand, CrossSystemUseCase
-from src.application.train_model import TrainModelCommand, TrainModelUseCase
-from src.data.scenarios import build_configs, trajectory_store
+from experiments import common
+from src.application import backtest
+from src.application import generate_dataset
+from src.application import run_cross_system
+from src.application import train_model
+from src.data import scenarios as scenario_lib
 from src.domain import ports
-from src.domain.value_objects import DissipatorType, InteractionType, PredictorVariant
+from src.domain import value_objects
 from src.models import registry
-from src.persistence.stores import HamiltonianModelRegistry
-from src.simulation.simulator import QuTipSimulator
+from src.persistence import stores
+from src.simulation import simulator as simulator_lib
 
-
-RESULTS_DIR = Path(__file__).parent / "results"
-_FAST = False
-
-
-def _save_csv(rows: list, path: Path, fieldnames: list) -> None:
-    RESULTS_DIR.mkdir(exist_ok=True)
-    with open(path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-        writer.writeheader()
-        writer.writerows(rows)
-    print(f"Saved → {path}")
+SINGLE_COLUMNS = (
+    "name", "variant", "scenario", "mae", "rmse", "r2", "mape", "auroc",
+    "n_samples")
+CROSS_COLUMNS = (
+    "name", "variant", "scenario", "window_fraction", "noise_sigma", "mae",
+    "rmse", "r2", "mape", "auroc", "n_samples")
 
 
 def _make_tfim_lstm(
@@ -91,7 +86,10 @@ def _train_single(
     min_gap: int,
     verbose: bool,
 ):
-    ds = GenerateDatasetUseCase(simulator, store=trajectory_store()).execute(GenerateDatasetCommand(
+    """Trains a TFIM-only model and backtests it on its own dataset."""
+    dataset = generate_dataset.GenerateDatasetUseCase(
+        simulator, store=scenario_lib.trajectory_store()
+    ).execute(generate_dataset.GenerateDatasetCommand(
         configs=configs,
         window_length=window,
         horizon=1.0,
@@ -99,80 +97,118 @@ def _train_single(
         seed=42,
         min_window_gap=min_gap,
     ))
-    pred = _make_tfim_lstm(hidden, tau, int_code)
-    TrainModelUseCase(pred).execute(TrainModelCommand(
-        dataset=ds,
-        n_epochs=n_epochs,
-        batch_size=64,
-        learning_rate=5e-4,
-        regression_loss="huber",
-        verbose=verbose,
-        seed=42,
-    ))
-    metrics = BacktestUseCase(pred).execute(BacktestCommand(dataset=ds, horizon=1.0))
-    return metrics, pred
+    predictor = _make_tfim_lstm(hidden, tau, int_code)
+    train_model.TrainModelUseCase(predictor).execute(
+        train_model.TrainModelCommand(
+            dataset=dataset,
+            n_epochs=n_epochs,
+            batch_size=64,
+            learning_rate=5e-4,
+            regression_loss="huber",
+            verbose=verbose,
+            seed=42,
+        ))
+    metrics = backtest.BacktestUseCase(predictor).execute(
+        backtest.BacktestCommand(dataset=dataset, horizon=1.0))
+    return metrics, predictor
 
 
-def run_e10a(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
-    window = 20 if _FAST else 40
-    hidden = 64 if _FAST else 256
-    print(f"\n{'='*60}\nE10a — TFIM-only  window={window}  hidden={hidden}  τ=0\n{'='*60}")
-    metrics, pred = _train_single(
-        simulator, groups["E"],
-        window=window, hidden=hidden, tau=0.0, int_code=3.0,
-        n_epochs=n_epochs, min_gap=max(window // 2, 1), verbose=verbose,
-    )
-    updated = HamiltonianModelRegistry().maybe_update(
-        pred, metrics, 2, InteractionType.TFIM, DissipatorType.SIGMA_MINUS,
-    )
-    print(f"  → {metrics.summary()}")
+def _single_row(name: str, metrics) -> dict[str, object]:
+    return {
+        "name": name,
+        "variant": value_objects.PredictorVariant.PHYSICS_LSTM.value,
+        "scenario": "E",
+        "mae": metrics.mae, "rmse": metrics.rmse, "r2": metrics.r2,
+        "mape": metrics.mape, "auroc": metrics.risk_auroc,
+        "n_samples": metrics.n_samples,
+    }
+
+
+def _update_registry(predictor, metrics) -> None:
+    """Keeps the predictor as the best TFIM model if it beats the stored."""
+    updated = stores.HamiltonianModelRegistry().maybe_update(
+        predictor, metrics, 2, value_objects.InteractionType.TFIM,
+        value_objects.DissipatorType.SIGMA_MINUS)
     print(f"  registry best_TFIM.pt updated={updated}")
-    row = {
-        "name": "e10a_tfim_only",
-        "variant": PredictorVariant.PHYSICS_LSTM.value,
-        "scenario": "E",
-        "mae": metrics.mae, "rmse": metrics.rmse, "r2": metrics.r2,
-        "mape": metrics.mape, "auroc": metrics.risk_auroc,
-        "n_samples": metrics.n_samples,
-    }
-    _save_csv([row], RESULTS_DIR / "e10_tfim_a.csv",
-              ["name", "variant", "scenario", "mae", "rmse", "r2", "mape", "auroc", "n_samples"])
-    return [row]
 
 
-def run_e10b(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
-    window = 25 if _FAST else 50
-    hidden = 64 if _FAST else 256
-    print(f"\n{'='*60}\nE10b — TFIM-only  window={window}  hidden={hidden}  τ=0  code=3\n{'='*60}")
-    metrics, _ = _train_single(
-        simulator, groups["E"],
-        window=window, hidden=hidden, tau=0.0, int_code=3.0,
-        n_epochs=n_epochs, min_gap=max(window // 2, 1), verbose=verbose,
-    )
+def run_e10a(simulator, groups, n_epochs: int, verbose: bool = True,
+             *, fast: bool = False) -> list[dict[str, object]]:
+    """E10a: TFIM-only model, window 40.
+
+    Args:
+        simulator: The simulator.
+        groups: Scenario label -> configurations.
+        n_epochs: Training epochs.
+        verbose: Whether to print training progress.
+        fast: Whether to use the smoke-run window and hidden size.
+
+    Returns:
+        One row, with the keys of `SINGLE_COLUMNS`.
+    """
+    window = 20 if fast else 40
+    hidden = 64 if fast else 256
+    print(f"\n{'=' * 60}\nE10a — TFIM-only  window={window}  "
+          f"hidden={hidden}  τ=0\n{'=' * 60}")
+    metrics, predictor = _train_single(
+        simulator, groups["E"], window=window, hidden=hidden, tau=0.0,
+        int_code=3.0, n_epochs=n_epochs, min_gap=max(window // 2, 1),
+        verbose=verbose)
     print(f"  → {metrics.summary()}")
-    row = {
-        "name": "e10b_tfim_window50",
-        "variant": PredictorVariant.PHYSICS_LSTM.value,
-        "scenario": "E",
-        "mae": metrics.mae, "rmse": metrics.rmse, "r2": metrics.r2,
-        "mape": metrics.mape, "auroc": metrics.risk_auroc,
-        "n_samples": metrics.n_samples,
-    }
-    _save_csv([row], RESULTS_DIR / "e10_tfim_b.csv",
-              ["name", "variant", "scenario", "mae", "rmse", "r2", "mape", "auroc", "n_samples"])
-    return [row]
+    _update_registry(predictor, metrics)
+    return [_single_row("e10a_tfim_only", metrics)]
 
 
-def run_e10c(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
-    window = 20 if _FAST else 40
-    hidden = 64 if _FAST else 256
-    print(f"\n{'='*60}\nE10c — cross-system D+E  window={window}  hidden={hidden}\n{'='*60}")
+def run_e10b(simulator, groups, n_epochs: int, verbose: bool = True,
+             *, fast: bool = False) -> list[dict[str, object]]:
+    """E10b: TFIM-only model, window 50.
 
-    class E10Cross(CrossSystemUseCase):
-        def _build_predictor(self):
-            return _make_tfim_lstm(hidden=hidden, tau=0.0, int_code=2.5)
+    Args:
+        simulator: The simulator.
+        groups: Scenario label -> configurations.
+        n_epochs: Training epochs.
+        verbose: Whether to print training progress.
+        fast: Whether to use the smoke-run window and hidden size.
 
-    cmd = CrossSystemCommand(
+    Returns:
+        One row, with the keys of `SINGLE_COLUMNS`.
+    """
+    window = 25 if fast else 50
+    hidden = 64 if fast else 256
+    print(f"\n{'=' * 60}\nE10b — TFIM-only  window={window}  "
+          f"hidden={hidden}  τ=0  code=3\n{'=' * 60}")
+    metrics, _ = _train_single(
+        simulator, groups["E"], window=window, hidden=hidden, tau=0.0,
+        int_code=3.0, n_epochs=n_epochs, min_gap=max(window // 2, 1),
+        verbose=verbose)
+    print(f"  → {metrics.summary()}")
+    return [_single_row("e10b_tfim_window50", metrics)]
+
+
+def run_e10c(simulator, groups, n_epochs: int, verbose: bool = True,
+             *, fast: bool = False) -> list[dict[str, object]]:
+    """E10c: one mixed model trained on D+E, scored per scenario.
+
+    Args:
+        simulator: The simulator.
+        groups: Scenario label -> configurations.
+        n_epochs: Training epochs.
+        verbose: Whether to print training progress.
+        fast: Whether to use the smoke-run window and hidden size.
+
+    Returns:
+        One row per scenario, with the keys of `CROSS_COLUMNS`.
+    """
+    window = 20 if fast else 40
+    hidden = 64 if fast else 256
+    print(f"\n{'=' * 60}\nE10c — cross-system D+E  window={window}  "
+          f"hidden={hidden}\n{'=' * 60}")
+    # No trajectory cache here: the published run did not use one.
+    results = run_cross_system.CrossSystemUseCase(
+        simulator,
+        predictor_factory=functools.partial(
+            _make_tfim_lstm, hidden, 0.0, 2.5),
+    ).execute(run_cross_system.CrossSystemCommand(
         train_configs=groups["D"] + groups["E"],
         eval_groups={"D": groups["D"], "E": groups["E"]},
         window_length=window,
@@ -186,67 +222,64 @@ def run_e10c(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
         verbose=verbose,
         min_window_gap=max(window // 2, 1),
         eval_interaction_codes={"D": 2.0, "E": 3.0},
-    )
-    results = E10Cross(simulator).execute(cmd)
-    rows = []
-    for r in results:
-        row = r.as_dict()
-        row["scenario"] = r.spec.name.replace("cross_system_", "")
-        rows.append(row)
-    _save_csv(rows, RESULTS_DIR / "e10_tfim_c.csv",
-              ["name", "variant", "scenario", "window_fraction", "noise_sigma",
-               "mae", "rmse", "r2", "mape", "auroc", "n_samples"])
+    ))
+    rows = [{**r.as_dict(),
+             "scenario": r.spec.name.replace("cross_system_", "")}
+            for r in results]
     print(f"\n{'Scenario':>8} {'R²':>8} {'MAE':>8} {'AUROC':>8}")
-    for r in results:
-        print(f"{r.spec.name:>8} {r.r2:>8.4f} {r.mae:>8.4f} {r.risk_auroc:>8.4f}")
+    for result in results:
+        print(f"{result.spec.name:>8} {result.r2:>8.4f} "
+              f"{result.mae:>8.4f} {result.risk_auroc:>8.4f}")
     return rows
 
 
-def run_e10d(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
-    """TFIM-only with E8 window (30), so the test split stays non-empty."""
-    window = 20 if _FAST else 30
-    hidden = 64 if _FAST else 256
-    print(f"\n{'='*60}\nE10d — TFIM-only  window={window}  hidden={hidden}  τ=0\n{'='*60}")
-    metrics, pred = _train_single(
-        simulator, groups["E"],
-        window=window, hidden=hidden, tau=0.0, int_code=3.0,
-        n_epochs=n_epochs, min_gap=max(window // 2, 1), verbose=verbose,
-    )
-    updated = HamiltonianModelRegistry().maybe_update(
-        pred, metrics, 2, InteractionType.TFIM, DissipatorType.SIGMA_MINUS,
-    )
+def run_e10d(simulator, groups, n_epochs: int, verbose: bool = True,
+             *, fast: bool = False) -> list[dict[str, object]]:
+    """E10d: TFIM-only with the E8 window (30), keeping the test split.
+
+    Args:
+        simulator: The simulator.
+        groups: Scenario label -> configurations.
+        n_epochs: Training epochs.
+        verbose: Whether to print training progress.
+        fast: Whether to use the smoke-run window and hidden size.
+
+    Returns:
+        One row, with the keys of `SINGLE_COLUMNS`.
+    """
+    window = 20 if fast else 30
+    hidden = 64 if fast else 256
+    print(f"\n{'=' * 60}\nE10d — TFIM-only  window={window}  "
+          f"hidden={hidden}  τ=0\n{'=' * 60}")
+    metrics, predictor = _train_single(
+        simulator, groups["E"], window=window, hidden=hidden, tau=0.0,
+        int_code=3.0, n_epochs=n_epochs, min_gap=max(window // 2, 1),
+        verbose=verbose)
     print(f"  → {metrics.summary()}")
-    print(f"  registry best_TFIM.pt updated={updated}")
-    row = {
-        "name": "e10d_tfim_window30",
-        "variant": PredictorVariant.PHYSICS_LSTM.value,
-        "scenario": "E",
-        "mae": metrics.mae, "rmse": metrics.rmse, "r2": metrics.r2,
-        "mape": metrics.mape, "auroc": metrics.risk_auroc,
-        "n_samples": metrics.n_samples,
-    }
-    _save_csv([row], RESULTS_DIR / "e10_tfim_d.csv",
-              ["name", "variant", "scenario", "mae", "rmse", "r2", "mape", "auroc", "n_samples"])
-    return [row]
+    _update_registry(predictor, metrics)
+    return [_single_row("e10d_tfim_window30", metrics)]
 
 
-def main(fast: bool = False) -> None:
-    n_per = 40 if fast else 300
-    epochs = 15 if fast else 120
-    global _FAST
-    _FAST = fast
-    simulator = QuTipSimulator()
-    groups = build_configs(n_per_scenario=n_per, seed=42)
+def main(argv: Sequence[str] | None = None) -> None:
+    """Runs E10a, E10b and E10c and writes their CSVs."""
+    args = common.parse_args(__doc__, argv=argv, seeds=None, out=False)
+    n_per, epochs = (40, 15) if args.fast else (300, 120)
+    config = {"n_per": n_per, "n_epochs": epochs}
+    simulator = simulator_lib.QuTipSimulator()
+    groups = scenario_lib.build_configs(n_per_scenario=n_per, seed=42)
 
     print(f"E10 TFIM specialized | n_per={n_per} | epochs={epochs}")
-    run_e10a(simulator, groups, n_epochs=epochs)
-    run_e10b(simulator, groups, n_epochs=epochs)
-    run_e10c(simulator, groups, n_epochs=epochs)
+    for stem, run, columns in (
+        ("e10_tfim_a", run_e10a, SINGLE_COLUMNS),
+        ("e10_tfim_b", run_e10b, SINGLE_COLUMNS),
+        ("e10_tfim_c", run_e10c, CROSS_COLUMNS),
+    ):
+        rows = run(simulator, groups, epochs, fast=args.fast)
+        common.write_results(
+            rows, common.results_path(stem, args), columns=columns,
+            seeds=[42], config=config)
     print("\nE10 completed. Results in experiments/results/e10_tfim_*.csv")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--fast", action="store_true")
-    args = parser.parse_args()
-    main(fast=args.fast)
+    main()

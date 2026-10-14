@@ -32,6 +32,8 @@ def parse_args(
     *,
     extra: Callable[[argparse.ArgumentParser], None] | None = None,
     argv: Sequence[str] | None = None,
+    seeds: Sequence[int] | None = DEFAULT_SEEDS,
+    out: bool = True,
 ) -> argparse.Namespace:
     """Parses the command line shared by the experiments.
 
@@ -43,6 +45,10 @@ def parse_args(
         description: Text of the help message.
         extra: Adds the script's own flags to the parser.
         argv: Arguments to parse; defaults to `sys.argv[1:]`.
+        seeds: Default of `--seeds`; `None` leaves the flag out, for
+            experiments that are a single run with a fixed seed.
+        out: Whether to offer `--out`; `False` for scripts that write
+            several CSVs.
 
     Returns:
         The parsed arguments.
@@ -50,16 +56,39 @@ def parse_args(
     parser = argparse.ArgumentParser(
         description=description,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--seeds", type=int, nargs="+",
-                        default=list(DEFAULT_SEEDS))
+    if seeds is not None:
+        parser.add_argument("--seeds", type=int, nargs="+",
+                            default=list(seeds))
     parser.add_argument("--fast", action="store_true",
                         help="smoke run on reduced data")
     parser.add_argument("--tag", type=str, default="",
                         help="suffix of the output file name")
-    parser.add_argument("--out", type=str, default=None,
-                        help="output CSV name under experiments/results/")
+    if out:
+        parser.add_argument("--out", type=str, default=None,
+                            help="output CSV name under experiments/results/")
     if extra is not None:
         extra(parser)
+    return parser.parse_args(argv)
+
+
+def parse_fast(
+    description: str | None = None,
+    argv: Sequence[str] | None = None,
+) -> argparse.Namespace:
+    """Parses the only flag of the runners that chain experiments.
+
+    Args:
+        description: Text of the help message.
+        argv: Arguments to parse; defaults to `sys.argv[1:]`.
+
+    Returns:
+        The parsed arguments; `fast` is passed on to every experiment.
+    """
+    parser = argparse.ArgumentParser(
+        description=description,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--fast", action="store_true",
+                        help="smoke run of every experiment on reduced data")
     return parser.parse_args(argv)
 
 
@@ -74,8 +103,9 @@ def results_path(stem: str, args: argparse.Namespace) -> pathlib.Path:
         `--out` under the results directory if given, otherwise
         `<stem>[_<tag>][_fast].csv` there.
     """
-    if args.out:
-        return RESULTS_DIR / args.out
+    out = getattr(args, "out", None)
+    if out:
+        return RESULTS_DIR / out
     suffix = (f"_{args.tag}" if args.tag else "") + (
         "_fast" if args.fast else "")
     return RESULTS_DIR / f"{stem}{suffix}.csv"

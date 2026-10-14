@@ -12,7 +12,7 @@ judged against run-to-run spread.
 
 Safety
 ------
-Writes ONLY to experiments/results/r1_multiseed_ablation.csv.  It never touches
+Writes ONLY to experiments/results/r1_multiseed_ablation[_<tag>][_fast].csv.  It never touches
 the champion CSVs (e6_*_improved.csv etc.) that back the paper tables --
 re-running e6_2qubit_improved.py directly would overwrite them, which is why
 this is a separate entry point.
@@ -31,79 +31,65 @@ replication rather than a training-only reseed.
 
 Usage
 -----
+    python -m experiments.r1_multiseed_ablation --fast
     python -m experiments.r1_multiseed_ablation --seeds 42 43 44
     python -m experiments.r1_multiseed_ablation --seeds 42 43 44 --n-per 150 --epochs 40
 """
 from __future__ import annotations
 
-import argparse
-import csv
 import time
-from pathlib import Path
+from collections.abc import Sequence
 
-from src.application.run_ablation import AblationCommand, AblationStudyUseCase
-from src.data.scenarios import build_configs
-from src.domain.value_objects import PredictorVariant
+from experiments import common
+from experiments import e6_2qubit_improved
+from src.application import run_ablation
+from src.data import scenarios as scenario_lib
+from src.domain import value_objects
 from src.evaluation import stats
-from src.simulation.simulator import QuTipSimulator
+from src.simulation import simulator as simulator_lib
 
-class ImprovedAblation(AblationStudyUseCase):
-    """Mirror of the predictor factory used by E6a (``e6_2qubit_improved.py``).
+COLUMNS = ("seed", "scenario", "variant", "r2", "mae", "auroc", "n_samples")
+VARIANTS = (
+    value_objects.PredictorVariant.PHYSICS_ONLY,
+    value_objects.PredictorVariant.LSTM_ONLY,
+    value_objects.PredictorVariant.PHYSICS_LSTM,
+    value_objects.PredictorVariant.TRANSFORMER,
+)
 
-    The base use case builds default predictors (hidden 64, 1 layer, tau=0),
-    which is a *different, weaker* model than the one the paper reports.
-    Replicating E6a's spread requires E6a's architecture, so the factory is
-    copied here verbatim; keep the two in sync if either changes.
+
+def run_seed(
+    simulator,
+    seed: int,
+    n_per: int,
+    epochs: int,
+    scenarios: Sequence[str],
+    out: common.ResultsWriter,
+) -> list[dict[str, object]]:
+    """Runs E6a's ablation for one seed and writes each row as it arrives.
+
+    The predictors are E6a's (`improved_ablation_predictor`); the base
+    use case would build a weaker model than the paper reports.
+
+    Args:
+        simulator: The simulator.
+        seed: Seed of the configurations, datasets and training.
+        n_per: Trajectories per scenario.
+        epochs: Training epochs.
+        scenarios: Scenario labels to run.
+        out: Writer of the results file.
+
+    Returns:
+        The rows written.
     """
-
-    def _build_predictor(self, variant, command):
-        from src.models import registry
-        if variant == PredictorVariant.PHYSICS_ONLY:
-            return registry.build_model(
-                "physics_only", t_max=max(c.t_max for c in command.configs))
-        if variant == PredictorVariant.LSTM_ONLY:
-            return registry.build_model(
-                "lstm_only", hidden_size=128, num_layers=2, dropout=0.3,
-                adaptive_prior_r2_threshold=0.0,
-            )
-        if variant == PredictorVariant.PHYSICS_LSTM:
-            return registry.build_model(
-                "physics_lstm", hidden_size=128, num_layers=2, dropout=0.3,
-                adaptive_prior_r2_threshold=0.7,
-            )
-        if variant == PredictorVariant.TRANSFORMER:
-            return registry.build_model("transformer")
-        raise ValueError(variant)
-
-
-VARIANTS = [
-    PredictorVariant.PHYSICS_ONLY,
-    PredictorVariant.LSTM_ONLY,
-    PredictorVariant.PHYSICS_LSTM,
-    PredictorVariant.TRANSFORMER,
-]
-OUT = Path(__file__).parent / "results" / "r1_multiseed_ablation.csv"  # overridable via --out
-
-
-def _append(row: dict, first: bool) -> None:
-    """Append one row immediately so a long run survives interruption."""
-    OUT.parent.mkdir(exist_ok=True)
-    with OUT.open("w" if first else "a", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(row.keys()))
-        if first:
-            w.writeheader()
-        w.writerow(row)
-
-
-def run_seed(simulator, seed: int, n_per: int, epochs: int, scenarios: list,
-             first_row: list = None) -> list:
-    groups = build_configs(n_per_scenario=n_per, seed=seed)
-    uc = ImprovedAblation(simulator=simulator)
+    groups = scenario_lib.build_configs(n_per_scenario=n_per, seed=seed)
+    use_case = run_ablation.AblationStudyUseCase(
+        simulator,
+        predictor_factory=e6_2qubit_improved.improved_ablation_predictor)
     rows = []
-    for scen in scenarios:
-        cmd = AblationCommand(
-            configs=groups[scen],
-            variants=VARIANTS,
+    for scenario in scenarios:
+        results = use_case.execute(run_ablation.AblationCommand(
+            configs=groups[scenario],
+            variants=list(VARIANTS),
             window_length=20,
             horizon=1.0,
             samples_per_trajectory=5,
@@ -113,73 +99,79 @@ def run_seed(simulator, seed: int, n_per: int, epochs: int, scenarios: list,
             regression_loss="huber",
             seed=seed,
             verbose=False,
-        )
-        for r in uc.execute(cmd):
+        ))
+        for result in results:
             row = {
                 "seed": seed,
-                "scenario": scen,
-                "variant": r.spec.predictor_variant.value,
-                "r2": r.r2,
-                "mae": r.mae,
-                "auroc": r.risk_auroc,
-                "n_samples": r.n_samples,
+                "scenario": scenario,
+                "variant": result.spec.predictor_variant.value,
+                "r2": result.r2,
+                "mae": result.mae,
+                "auroc": result.risk_auroc,
+                "n_samples": result.n_samples,
             }
             rows.append(row)
-            _append(row, first_row[0])
-            first_row[0] = False
-            print(f"    seed={seed} {scen} {r.spec.predictor_variant.value:14} "
-                  f"R2={r.r2:8.3f} MAE={r.mae:7.3f} AUROC={r.risk_auroc:.3f}", flush=True)
+            out.write(row)
+            print(f"    seed={seed} {scenario} {row['variant']:14} "
+                  f"R2={result.r2:8.3f} MAE={result.mae:7.3f} "
+                  f"AUROC={result.risk_auroc:.3f}", flush=True)
     return rows
 
 
-def summarise(rows: list) -> None:
+def summarise(rows: Sequence[dict[str, object]]) -> None:
     """Prints mean and standard deviation of R^2 and AUROC over the seeds.
 
     Args:
         rows: Result rows with the keys scenario, variant, r2 and auroc.
     """
-    print(f"\n{'='*78}\nMEAN +/- STD ACROSS SEEDS\n{'='*78}")
+    print(f"\n{'=' * 78}\nMEAN +/- STD ACROSS SEEDS\n{'=' * 78}")
     print(f"{'scen':5} {'variant':14} {'R2 mean':>9} {'R2 std':>8} "
           f"{'AUROC mean':>11} {'AUROC std':>10} {'n':>3}")
-    for scen in sorted({r["scenario"] for r in rows}):
-        for var in [v.value for v in VARIANTS]:
+    for scenario in sorted({r["scenario"] for r in rows}):
+        for variant in [v.value for v in VARIANTS]:
             sub = [r for r in rows
-                   if r["scenario"] == scen and r["variant"] == var]
+                   if r["scenario"] == scenario and r["variant"] == variant]
             if not sub:
                 continue
             r2_mean, r2_std = stats.mean_std([r["r2"] for r in sub])
             au_mean, au_std = stats.mean_std([r["auroc"] for r in sub])
-            print(f"{scen:5} {var:14} {r2_mean:9.3f} {r2_std:8.3f} "
+            print(f"{scenario:5} {variant:14} {r2_mean:9.3f} {r2_std:8.3f} "
                   f"{au_mean:11.3f} {au_std:10.3f} {len(sub):3d}")
 
 
-def main() -> None:
-    p = argparse.ArgumentParser()
-    p.add_argument("--seeds", type=int, nargs="+", default=[42, 43, 44])
-    p.add_argument("--n-per", type=int, default=100)
-    p.add_argument("--epochs", type=int, default=30)
-    p.add_argument("--scenarios", nargs="+", default=["D", "E"])
-    p.add_argument("--out", type=str, default=None,
-                   help="output CSV name under experiments/results/")
-    a = p.parse_args()
-    global OUT
-    if a.out:
-        OUT = Path(__file__).parent / "results" / a.out
+def _add_flags(parser) -> None:
+    parser.add_argument("--n-per", type=int, default=100)
+    parser.add_argument("--epochs", type=int, default=30)
+    parser.add_argument("--scenarios", nargs="+", default=["D", "E"])
 
-    print(f"R1 multi-seed variance | seeds={a.seeds} n_per={a.n_per} "
-          f"epochs={a.epochs} scenarios={a.scenarios}")
-    print(f"writing -> {OUT}  (champion CSVs untouched)\n")
 
-    sim = QuTipSimulator()
-    all_rows, t0, first = [], time.time(), [True]
-    for i, s in enumerate(a.seeds, 1):
-        print(f"--- seed {s}  ({i}/{len(a.seeds)}) ---", flush=True)
-        ts = time.time()
-        all_rows += run_seed(sim, s, a.n_per, a.epochs, a.scenarios, first)
-        print(f"    [{time.time()-ts:.0f}s]", flush=True)
+def main(argv: Sequence[str] | None = None) -> None:
+    """Runs the ablation for every seed and writes the CSV."""
+    args = common.parse_args(__doc__, extra=_add_flags, argv=argv)
+    n_per, epochs = (20, 3) if args.fast else (args.n_per, args.epochs)
+    path = common.results_path("r1_multiseed_ablation", args)
+
+    print(f"R1 multi-seed variance | seeds={args.seeds} n_per={n_per} "
+          f"epochs={epochs} scenarios={args.scenarios}")
+    print(f"writing -> {path}  (champion CSVs untouched)\n")
+
+    simulator = simulator_lib.QuTipSimulator()
+    all_rows = []
+    start = time.time()
+    with common.ResultsWriter(
+            path, COLUMNS, seeds=args.seeds,
+            config={"n_per": n_per, "epochs": epochs,
+                    "scenarios": args.scenarios}) as out:
+        for i, seed in enumerate(args.seeds, 1):
+            print(f"--- seed {seed}  ({i}/{len(args.seeds)}) ---",
+                  flush=True)
+            seed_start = time.time()
+            all_rows += run_seed(
+                simulator, seed, n_per, epochs, args.scenarios, out)
+            print(f"    [{time.time() - seed_start:.0f}s]", flush=True)
 
     summarise(all_rows)
-    print(f"\ntotal {time.time()-t0:.0f}s -> {OUT}")
+    print(f"\ntotal {time.time() - start:.0f}s -> {path}")
 
 
 if __name__ == "__main__":

@@ -21,6 +21,13 @@ def test_parse_args_defaults_and_flags():
         [1, 2], True, "x", "y.csv")
 
 
+def test_seeds_flag_can_be_left_out_for_single_run_experiments():
+    args = common.parse_args(argv=["--fast"], seeds=None)
+    assert not hasattr(args, "seeds") and args.fast
+    args = common.parse_args(argv=[], seeds=(7,))
+    assert args.seeds == [7]
+
+
 def test_extra_flags_are_added():
     args = common.parse_args(
         extra=lambda p: p.add_argument("--part", default="a"),

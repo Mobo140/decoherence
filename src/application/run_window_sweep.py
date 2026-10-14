@@ -1,48 +1,57 @@
-"""Use-case: window fraction sweep (Experiment E2 from plan.md).
+"""Use case: window-fraction sweep (experiment E2).
 
-Trains the physics+LSTM predictor at different observation-window fractions
-f ∈ {0.05, 0.10, 0.15, 0.20, 0.30, 0.50} and records MAE / R² / AUROC vs f.
+Trains the physics + LSTM predictor at different observation-window
+fractions f, e.g. {0.05, 0.10, 0.15, 0.20, 0.30, 0.50}, and records MAE,
+R2 and AUROC against f.
 
-The window fraction is defined as:
-    f = window_length * dt / median_T₂
+The window fraction is f = window_length * dt / median_T2. Since T2
+varies per trajectory, the window length for each f is fixed after a
+pilot simulation that estimates the median T2.
 
-Since T₂ varies per trajectory, we control f indirectly by fixing window_length
-and varying it.  A cleaner approach (used here) is to determine the window_length
-for each f *after* a pilot simulation that estimates the distribution of T₂.
-
-Usage::
-    cmd = WindowSweepCommand(configs=my_configs, fractions=[0.10, 0.20, 0.30])
-    results = WindowSweepUseCase(simulator).execute(cmd)   # List[AblationResult]
+Example:
+    command = WindowSweepCommand(configs=my_configs,
+                                 fractions=[0.10, 0.20, 0.30])
+    results = WindowSweepUseCase(simulator).execute(command)
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import List
+import dataclasses
+import random
 
 import numpy as np
 
-from ..domain.ports import ISimulator
-from ..domain.value_objects import (
-    AblationResult,
-    ExperimentSpec,
-    NoiseConfig,
-    PredictorVariant,
-    SystemConfig,
-)
-from .backtest import BacktestCommand, BacktestUseCase
-from .generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
-from .train_model import TrainModelCommand, TrainModelUseCase
+from src.application import backtest
+from src.application import generate_dataset
+from src.application import train_model
+from src.domain import ports
+from src.domain import value_objects
+from src.models import registry
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class WindowSweepCommand:
-    """Input for WindowSweepUseCase."""
+    """Input of `WindowSweepUseCase`.
 
-    configs: List[SystemConfig]
-    fractions: List[float] = field(
-        default_factory=lambda: [0.05, 0.10, 0.15, 0.20, 0.30, 0.50]
-    )
-    noise: NoiseConfig = field(default_factory=NoiseConfig)
+    Attributes:
+        configs: Systems to simulate.
+        fractions: Window fractions to sweep.
+        noise: Measurement noise recorded in each result's spec.
+        horizon: Risk horizon.
+        samples_per_trajectory: Windows drawn from each trajectory.
+        n_epochs: Training epochs.
+        batch_size: Training batch size.
+        lr: Learning rate.
+        regression_loss: Loss alias for the remaining-time target.
+        seed: Seed of the pilot, dataset and training.
+        verbose: Whether to print progress.
+        pilot_n: Trajectories simulated to estimate the median T2.
+    """
+
+    configs: list[value_objects.SystemConfig]
+    fractions: list[float] = dataclasses.field(
+        default_factory=lambda: [0.05, 0.10, 0.15, 0.20, 0.30, 0.50])
+    noise: value_objects.NoiseConfig = dataclasses.field(
+        default_factory=value_objects.NoiseConfig)
     horizon: float = 1.0
     samples_per_trajectory: int = 5
     n_epochs: int = 80
@@ -51,66 +60,81 @@ class WindowSweepCommand:
     regression_loss: str = "huber"
     seed: int = 42
     verbose: bool = True
-    # Pilot simulation: estimate median T₂ to translate fractions → window_length
     pilot_n: int = 20
 
 
 class WindowSweepUseCase:
-    """Run E2: train physics+LSTM at each window fraction, evaluate, return results."""
+    """Trains physics + LSTM at each window fraction and scores it."""
 
-    def __init__(self, simulator: ISimulator, store=None) -> None:
+    def __init__(
+        self,
+        simulator: ports.ISimulator,
+        store: ports.ITrajectoryStore | None = None,
+    ) -> None:
+        """Wires the use case.
+
+        Args:
+            simulator: Simulates the configurations.
+            store: Trajectory cache; `None` disables caching.
+        """
         self._simulator = simulator
         self._store = store
 
-    def execute(self, command: WindowSweepCommand) -> List[AblationResult]:
+    def execute(
+        self, command: WindowSweepCommand
+    ) -> list[value_objects.AblationResult]:
+        """Trains and scores one model per window fraction.
+
+        Args:
+            command: What to run.
+
+        Returns:
+            One result per fraction, named `window_f<f>`; fractions with
+            no test samples are skipped.
+        """
         median_t2, dt = self._estimate_median_t2(command)
-        results: List[AblationResult] = []
-
-        for f in command.fractions:
-            window_length = max(5, int(round(f * median_t2 / dt)))
+        results = []
+        for fraction in command.fractions:
+            window_length = max(5, int(round(fraction * median_t2 / dt)))
             if command.verbose:
-                print(f"\n=== Window fraction f={f:.2f}  window_length={window_length} ===")
-
-            gen_uc = GenerateDatasetUseCase(self._simulator, store=self._store)
-            dataset = gen_uc.execute(GenerateDatasetCommand(
+                print(f"\n=== Window fraction f={fraction:.2f}  "
+                      f"window_length={window_length} ===")
+            dataset = generate_dataset.GenerateDatasetUseCase(
+                self._simulator, store=self._store
+            ).execute(generate_dataset.GenerateDatasetCommand(
                 configs=command.configs,
                 window_length=window_length,
                 horizon=command.horizon,
                 samples_per_trajectory=command.samples_per_trajectory,
                 seed=command.seed,
             ))
-
             if len(dataset.test_idx) == 0:
                 if command.verbose:
-                    print(f"  Skipping f={f:.2f} — no test samples.")
+                    print(f"  Skipping f={fraction:.2f} — no test samples.")
                 continue
 
-            from src.models import registry
             predictor = registry.build_model("physics_lstm")
-
-            train_uc = TrainModelUseCase(predictor)
-            train_uc.execute(TrainModelCommand(
-                dataset=dataset,
-                n_epochs=command.n_epochs,
-                batch_size=command.batch_size,
-                learning_rate=command.lr,
-                regression_loss=command.regression_loss,
-                verbose=command.verbose,
-                seed=command.seed,
-            ))
-
-            metrics = BacktestUseCase(predictor).execute(
-                BacktestCommand(dataset=dataset, horizon=command.horizon)
-            )
-
-            spec = ExperimentSpec(
-                name=f"window_f{f:.2f}",
-                predictor_variant=PredictorVariant.PHYSICS_LSTM,
-                window_fraction=f,
+            train_model.TrainModelUseCase(predictor).execute(
+                train_model.TrainModelCommand(
+                    dataset=dataset,
+                    n_epochs=command.n_epochs,
+                    batch_size=command.batch_size,
+                    learning_rate=command.lr,
+                    regression_loss=command.regression_loss,
+                    verbose=command.verbose,
+                    seed=command.seed,
+                ))
+            metrics = backtest.BacktestUseCase(predictor).execute(
+                backtest.BacktestCommand(
+                    dataset=dataset, horizon=command.horizon))
+            spec = value_objects.ExperimentSpec(
+                name=f"window_f{fraction:.2f}",
+                predictor_variant=value_objects.PredictorVariant.PHYSICS_LSTM,
+                window_fraction=fraction,
                 noise=command.noise,
                 seed=command.seed,
             )
-            results.append(AblationResult(
+            results.append(value_objects.AblationResult(
                 spec=spec,
                 mae=metrics.mae,
                 rmse=metrics.rmse,
@@ -121,24 +145,21 @@ class WindowSweepUseCase:
             ))
             if command.verbose:
                 print(f"  → {metrics.summary()}")
-
         return results
 
-    # ------------------------------------------------------------------
-    # Private
-    # ------------------------------------------------------------------
-
-    def _estimate_median_t2(self, command: WindowSweepCommand):
-        """Run a small pilot simulation to estimate median T₂ and dt."""
-        import random
+    def _estimate_median_t2(
+        self, command: WindowSweepCommand
+    ) -> tuple[float, float]:
+        """Simulates a pilot sample to estimate the median T2 and dt."""
         rng = random.Random(command.seed)
-        pilot_configs = rng.choices(command.configs, k=min(command.pilot_n, len(command.configs)))
-        t2_vals = []
+        pilot_configs = rng.choices(
+            command.configs, k=min(command.pilot_n, len(command.configs)))
+        t2_values = []
         dt = None
-        for cfg in pilot_configs:
-            traj = self._simulator.simulate(cfg)
-            t2_vals.append(traj.t_decoh)
+        for config in pilot_configs:
+            trajectory = self._simulator.simulate(config)
+            t2_values.append(trajectory.t_decoh)
             if dt is None:
-                dt = float(cfg.dt)
-        median_t2 = float(np.median(t2_vals)) if t2_vals else 5.0
+                dt = float(config.dt)
+        median_t2 = float(np.median(t2_values)) if t2_values else 5.0
         return median_t2, dt or 0.1

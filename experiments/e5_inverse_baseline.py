@@ -21,144 +21,149 @@ at the same f (Paper 1: 0.92 vs −0.86).
 
 Output
 ------
-experiments/results/e5_inverse_baseline.csv
+experiments/results/e5_inverse_baseline[_<tag>][_fast].csv
 
 Usage
 -----
+    python -m experiments.e5_inverse_baseline --fast
     python -m experiments.e5_inverse_baseline
 """
 from __future__ import annotations
 
-import csv
-import sys
-from dataclasses import dataclass
-from pathlib import Path
-from typing import List, Optional, Tuple
+from collections.abc import Sequence
 
 import numpy as np
+import torch
+from torch import nn
+from torch.utils import data as torch_data
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from src.application.backtest import BacktestCommand, BacktestUseCase
-from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
-from src.application.train_model import TrainModelCommand, TrainModelUseCase
-from src.data.scenarios import build_configs, trajectory_store
-from src.domain.value_objects import AblationResult, ExperimentSpec, NoiseConfig, PredictorVariant
+from experiments import common
+from src.application import backtest
+from src.application import generate_dataset
+from src.application import train_model
+from src.data import scenarios as scenario_lib
+from src.domain import value_objects
 from src.evaluation import metrics
 from src.models import registry
-from src.simulation.simulator import QuTipSimulator
+from src.simulation import simulator as simulator_lib
 
+COLUMNS = ("method", "window_fraction", "mae", "rmse", "r2", "auroc")
+FRACTIONS = (0.10, 0.15, 0.20, 0.30, 0.50)
+N_COEFFS = 5
 
-# ---------------------------------------------------------------------------
-# γ-reconstruction Transformer baseline
-# ---------------------------------------------------------------------------
 
 class GammaReconstructorPredictor:
-    """Two-step baseline: reconstruct γ coefficients, then numerically integrate.
+    """Two-step baseline: reconstruct γ coefficients, then integrate.
 
-    Step 1 — a small MLP is trained (supervised) to map
-             window → Bernstein coefficients.  The training targets are the
-             *true* γ coefficients stored in the SystemConfig of each trajectory.
+    Step 1: a small MLP is trained (supervised) to map a window to
+    Bernstein coefficients. The targets are the true γ coefficients stored
+    in the SystemConfig of each trajectory.
 
-    Step 2 — given the reconstructed coefficients, forward-simulate the
-             Lindblad equation with QuTiP and read off T₂.
+    Step 2: given the reconstructed coefficients, the Lindblad equation is
+    forward-simulated with QuTiP and T₂ is read off.
 
     This is the fair analogue of arXiv 2505.06928 applied to the T₂ task.
-    The key weakness at short windows is that the reconstruction is ill-
-    conditioned: there are many γ(t) curves compatible with a short partial
-    observation, leading to high T₂ prediction variance.
+    Its weakness at short windows is that the reconstruction is
+    ill-conditioned: many γ(t) curves fit a short partial observation,
+    which gives a high T₂ prediction variance.
     """
 
-    def __init__(self, simulator: QuTipSimulator, t_max: float = 10.0) -> None:
-        self._simulator = simulator
-        self._t_max = t_max
-        self._mlp = None
-        self._scaler_X_mean = None
-        self._scaler_X_std = None
+    def __init__(self, simulator: simulator_lib.QuTipSimulator) -> None:
+        """Creates an untrained reconstructor.
 
-    @property
-    def is_trained(self) -> bool:
-        return self._mlp is not None
+        Args:
+            simulator: Forward-simulates the reconstructed systems.
+        """
+        self._simulator = simulator
+        self._mlp = None
+        self._mean = None
+        self._std = None
 
     def train_gamma_reconstruction(
         self,
-        sequences: np.ndarray,   # (N, T, F)
-        gamma_targets: np.ndarray,  # (N, n_coeffs) — true Bernstein coefficients
+        sequences: np.ndarray,
+        gamma_targets: np.ndarray,
         n_epochs: int = 100,
         lr: float = 1e-3,
         verbose: bool = True,
     ) -> None:
-        """Train MLP: window → γ Bernstein coefficients."""
-        import torch
-        import torch.nn as nn
-        from torch.utils.data import DataLoader, TensorDataset
+        """Trains the MLP window -> γ Bernstein coefficients.
 
-        N, T, F = sequences.shape
-        X_flat = sequences.reshape(N, T * F).astype(np.float32)
-
-        self._scaler_X_mean = X_flat.mean(axis=0)
-        self._scaler_X_std = X_flat.std(axis=0) + 1e-8
-        X_norm = (X_flat - self._scaler_X_mean) / self._scaler_X_std
-
-        in_dim = X_norm.shape[1]
-        out_dim = gamma_targets.shape[1]
+        Args:
+            sequences: Windows, shape (N, T, F).
+            gamma_targets: True coefficients, shape (N, n_coeffs).
+            n_epochs: Training epochs.
+            lr: AdamW learning rate.
+            verbose: Whether to print the loss every 20 epochs.
+        """
+        n_windows = sequences.shape[0]
+        flat = sequences.reshape(n_windows, -1).astype(np.float32)
+        self._mean = flat.mean(axis=0)
+        self._std = flat.std(axis=0) + 1e-8
+        normed = (flat - self._mean) / self._std
 
         self._mlp = nn.Sequential(
-            nn.Linear(in_dim, 256), nn.GELU(), nn.Dropout(0.1),
-            nn.Linear(256, 128),   nn.GELU(), nn.Dropout(0.1),
-            nn.Linear(128, out_dim), nn.Softplus(),  # ensure non-negative outputs
+            nn.Linear(normed.shape[1], 256), nn.GELU(), nn.Dropout(0.1),
+            nn.Linear(256, 128), nn.GELU(), nn.Dropout(0.1),
+            # Softplus keeps the coefficients non-negative.
+            nn.Linear(128, gamma_targets.shape[1]), nn.Softplus(),
         )
-
-        opt = torch.optim.AdamW(self._mlp.parameters(), lr=lr, weight_decay=1e-3)
-        ds = TensorDataset(
-            torch.tensor(X_norm, dtype=torch.float32),
-            torch.tensor(gamma_targets, dtype=torch.float32),
-        )
-        loader = DataLoader(ds, batch_size=64, shuffle=True)
+        optimizer = torch.optim.AdamW(
+            self._mlp.parameters(), lr=lr, weight_decay=1e-3)
+        loader = torch_data.DataLoader(
+            torch_data.TensorDataset(
+                torch.tensor(normed, dtype=torch.float32),
+                torch.tensor(gamma_targets, dtype=torch.float32)),
+            batch_size=64, shuffle=True)
         criterion = nn.HuberLoss(delta=0.5)
 
-        for ep in range(1, n_epochs + 1):
+        for epoch in range(1, n_epochs + 1):
             self._mlp.train()
             total = 0.0
-            for xb, yb in loader:
-                pred = self._mlp(xb)
-                loss = criterion(pred, yb)
-                opt.zero_grad()
+            for batch_x, batch_y in loader:
+                loss = criterion(self._mlp(batch_x), batch_y)
+                optimizer.zero_grad()
                 loss.backward()
-                opt.step()
+                optimizer.step()
                 total += loss.item()
-            if verbose and ep % 20 == 0:
-                print(f"  [GammaReconstructor] Epoch {ep}/{n_epochs}  loss={total/len(loader):.4f}")
+            if verbose and epoch % 20 == 0:
+                print(f"  [GammaReconstructor] Epoch {epoch}/{n_epochs}  "
+                      f"loss={total / len(loader):.4f}")
 
     def predict_t2(
         self,
-        window: np.ndarray,   # (T, F)
-        system_config,
+        window: np.ndarray,
+        system_config: value_objects.SystemConfig,
     ) -> float:
-        """Reconstruct γ(t), forward-simulate, return T₂."""
-        import torch
-        from src.physics.lindblad_systems import bernstein_gamma
-        from src.domain.value_objects import DissipatorConfig, SystemConfig
+        """Reconstructs γ(t), forward-simulates and returns T₂.
 
+        Args:
+            window: One observation window, shape (T, F).
+            system_config: The system whose dissipator is replaced by the
+                reconstructed one.
+
+        Returns:
+            The decoherence time of the simulated system.
+
+        Raises:
+            RuntimeError: If the MLP has not been trained.
+        """
         if self._mlp is None:
             raise RuntimeError("Not trained.")
-
-        X_flat = window.flatten()[np.newaxis]
-        X_norm = (X_flat - self._scaler_X_mean) / self._scaler_X_std
-
+        normed = (window.flatten()[np.newaxis] - self._mean) / self._std
         self._mlp.eval()
         with torch.no_grad():
-            coeffs = self._mlp(torch.tensor(X_norm, dtype=torch.float32)).numpy()[0]
+            coeffs = self._mlp(
+                torch.tensor(normed, dtype=torch.float32)).numpy()[0]
 
-        # Build a new config with reconstructed γ(t) and simulate
-        new_dissipator = DissipatorConfig.time_dependent(
+        dissipator = value_objects.DissipatorConfig.time_dependent(
             tuple(float(c) for c in coeffs),
             system_config.dissipator.operator_type,
         )
-        new_config = SystemConfig(
+        new_config = value_objects.SystemConfig(
             n_qubits=system_config.n_qubits,
             omega=system_config.omega,
-            dissipator=new_dissipator,
+            dissipator=dissipator,
             interaction_type=system_config.interaction_type,
             J=system_config.J,
             t_max=system_config.t_max,
@@ -166,160 +171,159 @@ class GammaReconstructorPredictor:
             decoherence_criterion=system_config.decoherence_criterion,
             decoherence_threshold=system_config.decoherence_threshold,
         )
-        traj = self._simulator.simulate(new_config)
-        return traj.t_decoh
+        return self._simulator.simulate(new_config).t_decoh
 
 
-# ---------------------------------------------------------------------------
-# Experiment runner
-# ---------------------------------------------------------------------------
+def _extract_gamma_targets(
+    trajectories: Sequence[value_objects.TrajectoryResult],
+    n_coeffs: int = N_COEFFS,
+) -> np.ndarray:
+    """Reads the Bernstein coefficients from the trajectories' configs.
 
-def _extract_gamma_targets(trajectories, n_coeffs: int = 5) -> np.ndarray:
-    """Extract Bernstein coefficients from trajectory configs.
-
-    For constant-γ configs, replicate the constant to fill n_coeffs.
-    For time-dependent configs, use the stored coefficients (pad/truncate to n_coeffs).
+    A constant γ is replicated to `n_coeffs` values; a shorter coefficient
+    list is padded with its last value.
     """
     targets = []
-    for traj in trajectories:
-        d = traj.system_config.dissipator
-        if d.gamma_const is not None:
-            targets.append([d.gamma_const] * n_coeffs)
-        elif d.gamma_coeffs is not None:
-            coeffs = list(d.gamma_coeffs)
+    for trajectory in trajectories:
+        dissipator = trajectory.system_config.dissipator
+        if dissipator.gamma_const is not None:
+            targets.append([dissipator.gamma_const] * n_coeffs)
+        elif dissipator.gamma_coeffs is not None:
+            coeffs = list(dissipator.gamma_coeffs)
             if len(coeffs) >= n_coeffs:
                 targets.append(coeffs[:n_coeffs])
             else:
-                targets.append(coeffs + [coeffs[-1]] * (n_coeffs - len(coeffs)))
+                targets.append(
+                    coeffs + [coeffs[-1]] * (n_coeffs - len(coeffs)))
         else:
             targets.append([0.0] * n_coeffs)
     return np.array(targets, dtype=np.float32)
 
 
-def main(*, seed: int = 42, out_path=None) -> None:
-    results_dir = Path(__file__).parent / "results"
-    results_dir.mkdir(exist_ok=True)
+def _direct_row(dataset, fraction: float, seed: int, n_epochs: int) -> dict:
+    """Trains physics + LSTM on the windows and scores it."""
+    direct = registry.build_model("physics_lstm")
+    train_model.TrainModelUseCase(direct).execute(
+        train_model.TrainModelCommand(
+            dataset=dataset, n_epochs=n_epochs, batch_size=32,
+            verbose=True, seed=seed))
+    result = backtest.BacktestUseCase(direct).execute(
+        backtest.BacktestCommand(dataset=dataset, horizon=1.0))
+    print(f"  Direct: {result.summary()}")
+    return {
+        "method": "direct_physics_lstm",
+        "window_fraction": fraction,
+        "mae": result.mae,
+        "rmse": result.rmse,
+        "r2": result.r2,
+        "auroc": result.risk_auroc,
+    }
 
-    simulator = QuTipSimulator()
-    groups = build_configs(n_per_scenario=80, seed=seed)
-    configs = groups["B"]  # time-dependent γ only — hardest case for inverse approach
 
-    fractions = [0.10, 0.15, 0.20, 0.30, 0.50]
-    n_coeffs = 5
+def _inverse_row(simulator, configs, dataset, fraction: float,
+                 median_t2: float, n_epochs: int) -> dict:
+    """Reconstructs γ, forward-simulates and scores the T₂ estimates."""
+    print("  Training γ reconstructor...")
+    trajectories = [simulator.simulate(cfg) for cfg in configs]
+    gamma_targets = _extract_gamma_targets(trajectories)
 
-    # Pilot: estimate median T₂ and dt
-    pilot_t2 = []
-    pilot_trajs = []
-    for cfg in configs[:20]:
-        traj = simulator.simulate(cfg)
-        pilot_t2.append(traj.t_decoh)
-        pilot_trajs.append(traj)
+    test_seqs = dataset.sequences[dataset.test_idx]
+    test_t_decoh = dataset.t_decoh_abs[dataset.test_idx]
+    train_gamma = np.array([
+        gamma_targets[i % len(gamma_targets)] for i in dataset.train_idx])
+    reconstructor = GammaReconstructorPredictor(simulator)
+    reconstructor.train_gamma_reconstruction(
+        dataset.sequences[dataset.train_idx], train_gamma,
+        n_epochs=n_epochs, verbose=True)
+
+    predictions = []
+    for i, sequence in enumerate(test_seqs):
+        try:
+            t2_pred = reconstructor.predict_t2(
+                sequence, configs[i % len(configs)])
+        except Exception:  # pylint: disable=broad-except
+            # A reconstructed γ can make the solver fail; score such
+            # windows as the pilot median instead of dropping them.
+            t2_pred = float(median_t2)
+        predictions.append(t2_pred)
+
+    predictions = np.array(predictions)
+    actuals = test_t_decoh.astype(np.float64)
+    row = {
+        "method": "inverse_gamma_reconstruct",
+        "window_fraction": fraction,
+        "mae": metrics.mae(actuals, predictions),
+        "rmse": metrics.rmse(actuals, predictions),
+        "r2": metrics.r2(actuals, predictions),
+        "auroc": float("nan"),
+    }
+    print(f"  Inverse: MAE={row['mae']:.4f}  RMSE={row['rmse']:.4f}  "
+          f"R²={row['r2']:.4f}")
+    return row
+
+
+def run(
+    *,
+    seed: int = 42,
+    n_per: int = 80,
+    n_epochs: int = 100,
+    recon_epochs: int = 80,
+) -> list[dict[str, object]]:
+    """Compares the direct and the inverse predictor on scenario B.
+
+    Args:
+        seed: Seed of the configurations, dataset and training.
+        n_per: Trajectories of scenario B.
+        n_epochs: Training epochs of the direct predictor.
+        recon_epochs: Training epochs of the γ reconstructor.
+
+    Returns:
+        Two rows (direct, inverse) per window fraction, with the keys of
+        `COLUMNS`.
+    """
+    simulator = simulator_lib.QuTipSimulator()
+    # Time-dependent γ only: the hardest case for the inverse approach.
+    configs = scenario_lib.build_configs(
+        n_per_scenario=n_per, seed=seed)["B"]
+
+    pilot_t2 = [simulator.simulate(cfg).t_decoh for cfg in configs[:20]]
     median_t2 = float(np.median(pilot_t2))
     dt = float(configs[0].dt)
     print(f"Median T₂ (pilot): {median_t2:.2f},  dt={dt}")
 
-    gen_uc = GenerateDatasetUseCase(simulator, store=trajectory_store())
+    generator = generate_dataset.GenerateDatasetUseCase(
+        simulator, store=scenario_lib.trajectory_store())
     rows = []
+    for fraction in FRACTIONS:
+        window_length = max(5, int(round(fraction * median_t2 / dt)))
+        print(f"\n{'=' * 60}\nWindow fraction f={fraction:.2f}  "
+              f"window_length={window_length}\n{'=' * 60}")
+        dataset = generator.execute(generate_dataset.GenerateDatasetCommand(
+            configs=configs, window_length=window_length, horizon=1.0,
+            samples_per_trajectory=5, seed=seed))
+        rows.append(_direct_row(dataset, fraction, seed, n_epochs))
+        rows.append(_inverse_row(
+            simulator, configs, dataset, fraction, median_t2, recon_epochs))
+    return rows
 
-    for f in fractions:
-        window_length = max(5, int(round(f * median_t2 / dt)))
-        print(f"\n{'='*60}")
-        print(f"Window fraction f={f:.2f}  window_length={window_length}")
-        print(f"{'='*60}")
 
-        dataset = gen_uc.execute(GenerateDatasetCommand(
-            configs=configs,
-            window_length=window_length,
-            horizon=1.0,
-            samples_per_trajectory=5,
-            seed=seed,
-        ))
-
-        # --- Direct predictor (physics+LSTM) ---
-        direct = registry.build_model("physics_lstm")
-        TrainModelUseCase(direct).execute(TrainModelCommand(
-            dataset=dataset,
-            n_epochs=100,
-            batch_size=32,
-            verbose=True,
-            seed=seed,
-        ))
-        m_direct = BacktestUseCase(direct).execute(
-            BacktestCommand(dataset=dataset, horizon=1.0)
-        )
-        rows.append({
-            "method": "direct_physics_lstm",
-            "window_fraction": f,
-            "mae": m_direct.mae,
-            "rmse": m_direct.rmse,
-            "r2": m_direct.r2,
-            "auroc": m_direct.risk_auroc,
-        })
-        print(f"  Direct: {m_direct.summary()}")
-
-        # --- Inverse baseline (γ reconstruction) ---
-        print("  Training γ reconstructor...")
-        all_trajs = []
-        for cfg in configs:
-            all_trajs.append(simulator.simulate(cfg))
-        gamma_targets = _extract_gamma_targets(all_trajs, n_coeffs)
-
-        # Build feature matrix from truncated windows (same window_length)
-        # Use feature matrices from all trajectories at the same relative position
-        test_seqs = dataset.sequences[dataset.test_idx]
-        test_t_obs = dataset.t_obs[dataset.test_idx]
-        test_t_decoh = dataset.t_decoh_abs[dataset.test_idx]
-
-        reconstructor = GammaReconstructorPredictor(simulator, t_max=configs[0].t_max)
-        # Use train sequences for MLP training
-        train_seqs = dataset.sequences[dataset.train_idx]
-        train_gamma = np.array([
-            gamma_targets[i % len(gamma_targets)] for i in dataset.train_idx
-        ])
-        reconstructor.train_gamma_reconstruction(
-            train_seqs, train_gamma, n_epochs=80, verbose=True
-        )
-
-        # Evaluate on test set: predict T₂ via γ reconstruction + simulation
-        inverse_preds = []
-        for i, seq in enumerate(test_seqs):
-            t_obs = float(test_t_obs[i])
-            cfg_idx = i % len(configs)
-            try:
-                t2_pred = reconstructor.predict_t2(seq, configs[cfg_idx])
-            except Exception:
-                t2_pred = float(median_t2)
-            inverse_preds.append(t2_pred)
-
-        inv_preds = np.array(inverse_preds)
-        actuals = test_t_decoh.astype(np.float64)
-        mae_inv = metrics.mae(actuals, inv_preds)
-        rmse_inv = metrics.rmse(actuals, inv_preds)
-        r2_inv = metrics.r2(actuals, inv_preds)
-
-        rows.append({
-            "method": "inverse_gamma_reconstruct",
-            "window_fraction": f,
-            "mae": mae_inv,
-            "rmse": rmse_inv,
-            "r2": r2_inv,
-            "auroc": float("nan"),
-        })
-        print(f"  Inverse: MAE={mae_inv:.4f}  RMSE={rmse_inv:.4f}  R²={r2_inv:.4f}")
-
-    # Save results
-    out_path = out_path or results_dir / "e5_inverse_baseline.csv"
-    with open(out_path, "w", newline="") as f_:
-        writer = csv.DictWriter(f_, fieldnames=["method", "window_fraction", "mae", "rmse", "r2", "auroc"])
-        writer.writeheader()
-        writer.writerows(rows)
-    print(f"\nResults saved to {out_path}")
-
-    # Summary table
+def main(argv: Sequence[str] | None = None) -> None:
+    """Runs E5 and writes its CSV."""
+    args = common.parse_args(__doc__, argv=argv, seeds=None)
+    sizes = (
+        {"n_per": 20, "n_epochs": 10, "recon_epochs": 10} if args.fast
+        else {})
+    rows = run(**sizes)
+    path = common.results_path("e5_inverse_baseline", args)
+    common.write_results(
+        rows, path, columns=COLUMNS, seeds=[42],
+        config={"fractions": FRACTIONS, **sizes})
+    print(f"\nResults saved to {path}")
     print(f"\n{'Method':<28} {'f':>5} {'R²':>8} {'MAE':>8}")
     print("-" * 54)
-    for r in rows:
-        print(f"{r['method']:<28} {r['window_fraction']:>5.2f} {r['r2']:>8.4f} {r['mae']:>8.4f}")
+    for row in rows:
+        print(f"{row['method']:<28} {row['window_fraction']:>5.2f} "
+              f"{row['r2']:>8.4f} {row['mae']:>8.4f}")
 
 
 if __name__ == "__main__":
