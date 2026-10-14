@@ -199,6 +199,11 @@ def add_flags(parser: argparse.ArgumentParser) -> None:
 
 
 def main() -> None:
+    """Runs the two-body correlator experiment (parts a, b, c).
+
+    Writes experiments/results/r23_two_body_correlators*.csv for
+    parts a and b and r23c_target_sensitivity*.csv for part c.
+    """
     args = common.parse_args(__doc__, extra=add_flags)
     n_per, n_eval, n_per_j, epochs = (
         (30, 20, 20, 5) if args.fast else (500, 200, 200, 150))

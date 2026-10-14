@@ -97,6 +97,10 @@ def add_flags(parser: argparse.ArgumentParser) -> None:
 
 
 def main() -> None:
+    """Scores the Paper 1 ablation on an independent test set.
+
+    Writes experiments/results/r13_independent_test*.csv.
+    """
     args = common.parse_args(__doc__, extra=add_flags)
     if args.fast:
         args.n_train, args.n_eval, args.n_boot = 30, 30, 50

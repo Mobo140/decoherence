@@ -97,6 +97,10 @@ def arms(n_per: int, epochs: int) -> list[pipeline.ExperimentConfig]:
 
 
 def main() -> None:
+    """Trains with AR(1) noisy copies and compares with white noise.
+
+    Writes experiments/results/r22_ar1_noise_training*.csv.
+    """
     args = common.parse_args(__doc__)
     n_per, epochs = (30, 5) if args.fast else (100, 100)
     common.run_arms(

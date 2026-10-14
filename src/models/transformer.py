@@ -332,6 +332,11 @@ class TransformerPredictor(ports.IPredictor):
         bce = nn.BCEWithLogitsLoss()
 
         def step(batch: tuple[torch.Tensor, ...]) -> torch.Tensor:
+            """Returns the regression plus risk-classification batch loss.
+
+            Args:
+                batch: Tensors (window, target, risk label) for one batch.
+            """
             xb, yb, rb = (t.to(self.device) for t in batch)
             reg_pred, risk_pred = self.net(xb)
             return reg_loss(reg_pred, yb) + bce(risk_pred, rb)

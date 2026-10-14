@@ -149,12 +149,14 @@ def test_variant_of_predictor_classes():
     assert variant_of(TransformerPredictor()) == PredictorVariant.TRANSFORMER
     assert variant_of(PhysicsOnlyPredictor()) == PredictorVariant.PHYSICS_ONLY
     assert variant_of(StretchedExpPredictor()) == PredictorVariant.STRETCHED_EXP
-    assert variant_of(LSTMPredictor(use_physics_prior=False)) == PredictorVariant.LSTM_ONLY
+    assert (variant_of(LSTMPredictor(use_physics_prior=False))
+            == PredictorVariant.LSTM_ONLY)
     assert variant_of(LSTMPredictor()) == PredictorVariant.PHYSICS_LSTM
 
 
 def test_e7a_csv_variant_is_transformer():
-    path = Path(__file__).resolve().parents[1] / "experiments" / "results" / "e7a_transformer_cross.csv"
+    path = (Path(__file__).resolve().parents[1] / "experiments" / "results"
+            / "e7a_transformer_cross.csv")
     text = path.read_text()
     assert "transformer" in text
     assert "physics_lstm" not in text
@@ -186,7 +188,8 @@ def _untrained_transformer():
     from src.models.transformer import TransformerPredictor, TransformerNet
     from src.training.standardize import Standardizer
 
-    p = TransformerPredictor(d_model=32, n_heads=4, n_layers=1, dim_ff=64, dropout=0.0)
+    p = TransformerPredictor(
+        d_model=32, n_heads=4, n_layers=1, dim_ff=64, dropout=0.0)
     p.net = TransformerNet(
         n_features=5, d_model=32, n_heads=4, n_layers=1, dim_ff=64, dropout=0.0,
     )

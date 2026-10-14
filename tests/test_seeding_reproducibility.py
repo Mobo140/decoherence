@@ -155,7 +155,8 @@ def _training_command_sites():
                     depth -= 1
                     if depth == 0:
                         break
-            yield path.name, text[:m.start()].count("\n") + 1, m.group(1), text[i:j + 1]
+            line = text[:m.start()].count("\n") + 1
+            yield path.name, line, m.group(1), text[i:j + 1]
 
 
 def test_no_experiment_trains_without_a_seed():
@@ -166,7 +167,8 @@ def test_no_experiment_trains_without_a_seed():
         for name, line, cmd, body in _training_command_sites()
         if not re.search(r"\bseed\s*=", body)
     ]
-    assert not unseeded, "training command(s) without a seed: " + "; ".join(unseeded)
+    assert not unseeded, (
+        "training command(s) without a seed: " + "; ".join(unseeded))
 
 
 def test_the_site_scan_actually_finds_sites():

@@ -161,6 +161,10 @@ def add_flags(parser: argparse.ArgumentParser) -> None:
 
 
 def main() -> None:
+    """Runs the parity-sector arms and prints the summary.
+
+    Writes experiments/results/r6_parity_sector*.csv.
+    """
     args = common.parse_args(__doc__, extra=add_flags)
     n_per_j, epochs = (30, 10) if args.fast else (200, 150)
     rows = common.run_arms(

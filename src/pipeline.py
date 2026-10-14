@@ -333,6 +333,7 @@ def generate(
         The labelled windows.
     """
     def build() -> dataset_lib.Dataset:
+        """Simulates the trajectories and returns the labelled windows."""
         use_case = generate_dataset.GenerateDatasetUseCase(
             _simulator(spec.simulator, seed), store=_store(spec, cache))
         return use_case.execute(generate_dataset.GenerateDatasetCommand(

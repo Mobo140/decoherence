@@ -136,7 +136,8 @@ class TestLossFunctions:
         pred = torch.tensor([5.0, 6.0])
         bound = torch.tensor([3.0, 4.0])
         cens = torch.ones(2)
-        assert float(SurvHuberLoss()(pred, bound, cens)) == pytest.approx(0.0, abs=1e-8)
+        loss = float(SurvHuberLoss()(pred, bound, cens))
+        assert loss == pytest.approx(0.0, abs=1e-8)
 
     def test_surv_huber_censored_penalizes_underprediction(self):
         import torch
@@ -151,7 +152,9 @@ class TestLossFunctions:
 # ---------------------------------------------------------------------------
 
 class TestPhysicsOnlyPredictor:
-    def _exponential_window(self, gamma: float = 0.5, T: int = 50, dt: float = 0.1):
+    def _exponential_window(
+        self, gamma: float = 0.5, T: int = 50, dt: float = 0.1
+    ):
         """Simulate exact exponential decay for coherence_l1 (last feature)."""
         t = np.arange(T) * dt
         window = np.zeros((T, 3), dtype=np.float32)
@@ -164,7 +167,7 @@ class TestPhysicsOnlyPredictor:
         assert p.is_trained
 
     def test_predict_exact_decay(self):
-        """For exact exponential decay C(t)=exp(-γt/2), remaining = 2/γ - t_obs."""
+        """Exact decay C(t)=exp(-γt/2) gives remaining = 2/γ - t_obs."""
         from src.models.physics_only import PhysicsOnlyPredictor
         gamma = 0.4
         dt = 0.1
@@ -176,7 +179,8 @@ class TestPhysicsOnlyPredictor:
         t2_exact = 2.0 / gamma  # = 5.0
         remaining_exact = t2_exact - t_obs  # = 0.0 (at decoherence time)
         # Should predict ≈ 0 remaining (or t_obs ≈ T₂)
-        assert result.t_decoh_predicted == pytest.approx(t_obs + max(0, remaining_exact), abs=0.5)
+        assert result.t_decoh_predicted == pytest.approx(
+            t_obs + max(0, remaining_exact), abs=0.5)
 
     def test_risk_score_range(self):
         from src.models.physics_only import PhysicsOnlyPredictor
@@ -221,7 +225,10 @@ class TestPhysicsOnlyPredictor:
 class TestLSTMPredictorFlag:
     def _make_tiny_dataset(self):
         from src.data.scenarios import build_configs
-        from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
+        from src.application.generate_dataset import (
+            GenerateDatasetCommand,
+            GenerateDatasetUseCase,
+        )
         from src.simulation.simulator import QuTipSimulator
         simulator = QuTipSimulator()
         groups = build_configs(n_per_scenario=8, seed=7)
@@ -234,40 +241,56 @@ class TestLSTMPredictorFlag:
 
     def test_physics_prior_true(self):
         from src.application.backtest import BacktestCommand, BacktestUseCase
-        from src.application.train_model import TrainModelCommand, TrainModelUseCase
+        from src.application.train_model import (
+            TrainModelCommand,
+            TrainModelUseCase,
+        )
         from src.models.lstm import LSTMPredictor
         ds = self._make_tiny_dataset()
         p = LSTMPredictor(use_physics_prior=True)
-        TrainModelUseCase(p).execute(TrainModelCommand(dataset=ds, n_epochs=2, verbose=False))
+        TrainModelUseCase(p).execute(TrainModelCommand(
+            dataset=ds, n_epochs=2, verbose=False))
         m = BacktestUseCase(p).execute(BacktestCommand(dataset=ds, horizon=1.0))
         assert m.n_samples > 0
 
     def test_physics_prior_false(self):
         from src.application.backtest import BacktestCommand, BacktestUseCase
-        from src.application.train_model import TrainModelCommand, TrainModelUseCase
+        from src.application.train_model import (
+            TrainModelCommand,
+            TrainModelUseCase,
+        )
         from src.models.lstm import LSTMPredictor
         ds = self._make_tiny_dataset()
         p = LSTMPredictor(use_physics_prior=False)
-        TrainModelUseCase(p).execute(TrainModelCommand(dataset=ds, n_epochs=2, verbose=False))
+        TrainModelUseCase(p).execute(TrainModelCommand(
+            dataset=ds, n_epochs=2, verbose=False))
         m = BacktestUseCase(p).execute(BacktestCommand(dataset=ds, horizon=1.0))
         assert m.n_samples > 0
 
     def test_serialisation_preserves_flag(self):
-        from src.application.train_model import TrainModelCommand, TrainModelUseCase
+        from src.application.train_model import (
+            TrainModelCommand,
+            TrainModelUseCase,
+        )
         from src.models.lstm import LSTMPredictor
         ds = self._make_tiny_dataset()
         p = LSTMPredictor(use_physics_prior=False)
-        TrainModelUseCase(p).execute(TrainModelCommand(dataset=ds, n_epochs=1, verbose=False))
+        TrainModelUseCase(p).execute(TrainModelCommand(
+            dataset=ds, n_epochs=1, verbose=False))
         data = p.state_bytes()
         p2 = LSTMPredictor.from_bytes(data)
         assert p2.use_physics_prior is False
 
     def test_risk_moves_with_horizon(self):
-        from src.application.train_model import TrainModelCommand, TrainModelUseCase
+        from src.application.train_model import (
+            TrainModelCommand,
+            TrainModelUseCase,
+        )
         from src.models.lstm import LSTMPredictor
         ds = self._make_tiny_dataset()
         p = LSTMPredictor(use_physics_prior=True, early_stopping_patience=3)
-        TrainModelUseCase(p).execute(TrainModelCommand(dataset=ds, n_epochs=2, verbose=False))
+        TrainModelUseCase(p).execute(TrainModelCommand(
+            dataset=ds, n_epochs=2, verbose=False))
         window = ds.sequences[ds.test_idx[0]]
         t_obs = float(ds.t_obs[ds.test_idx[0]])
         lo = p.predict(window, t_obs, horizon=0.05)
@@ -283,7 +306,10 @@ class TestLSTMPredictorFlag:
 class TestTransformerPredictor:
     def _make_tiny_dataset(self):
         from src.data.scenarios import build_configs
-        from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
+        from src.application.generate_dataset import (
+            GenerateDatasetCommand,
+            GenerateDatasetUseCase,
+        )
         from src.simulation.simulator import QuTipSimulator
         simulator = QuTipSimulator()
         groups = build_configs(n_per_scenario=8, seed=3)
@@ -296,21 +322,30 @@ class TestTransformerPredictor:
 
     def test_train_and_predict(self):
         from src.application.backtest import BacktestCommand, BacktestUseCase
-        from src.application.train_model import TrainModelCommand, TrainModelUseCase
+        from src.application.train_model import (
+            TrainModelCommand,
+            TrainModelUseCase,
+        )
         from src.models.transformer import TransformerPredictor
         ds = self._make_tiny_dataset()
         p = TransformerPredictor(d_model=16, n_heads=2, n_layers=1, dim_ff=32)
-        TrainModelUseCase(p).execute(TrainModelCommand(dataset=ds, n_epochs=2, verbose=False))
+        TrainModelUseCase(p).execute(TrainModelCommand(
+            dataset=ds, n_epochs=2, verbose=False))
         assert p.is_trained
         m = BacktestUseCase(p).execute(BacktestCommand(dataset=ds, horizon=1.0))
         assert m.n_samples > 0
 
     def test_predict_output_range(self):
-        from src.application.train_model import TrainModelCommand, TrainModelUseCase
+        from src.application.train_model import (
+            TrainModelCommand,
+            TrainModelUseCase,
+        )
         from src.models.transformer import TransformerPredictor
         ds = self._make_tiny_dataset()
-        p = TransformerPredictor(d_model=16, n_heads=2, n_layers=1, dim_ff=32, t_max=10.0)
-        TrainModelUseCase(p).execute(TrainModelCommand(dataset=ds, n_epochs=1, verbose=False))
+        p = TransformerPredictor(
+            d_model=16, n_heads=2, n_layers=1, dim_ff=32, t_max=10.0)
+        TrainModelUseCase(p).execute(TrainModelCommand(
+            dataset=ds, n_epochs=1, verbose=False))
         window = ds.sequences[ds.test_idx[0]]
         t_obs = float(ds.t_obs[ds.test_idx[0]])
         result = p.predict(window, t_obs=t_obs, horizon=1.0)
@@ -318,11 +353,16 @@ class TestTransformerPredictor:
         assert 0.0 <= result.risk_score <= 1.0
 
     def test_risk_moves_with_horizon(self):
-        from src.application.train_model import TrainModelCommand, TrainModelUseCase
+        from src.application.train_model import (
+            TrainModelCommand,
+            TrainModelUseCase,
+        )
         from src.models.transformer import TransformerPredictor
         ds = self._make_tiny_dataset()
-        p = TransformerPredictor(d_model=16, n_heads=2, n_layers=1, dim_ff=32, t_max=10.0)
-        TrainModelUseCase(p).execute(TrainModelCommand(dataset=ds, n_epochs=1, verbose=False))
+        p = TransformerPredictor(
+            d_model=16, n_heads=2, n_layers=1, dim_ff=32, t_max=10.0)
+        TrainModelUseCase(p).execute(TrainModelCommand(
+            dataset=ds, n_epochs=1, verbose=False))
         window = ds.sequences[ds.test_idx[0]]
         t_obs = float(ds.t_obs[ds.test_idx[0]])
         lo = p.predict(window, t_obs, horizon=0.05)

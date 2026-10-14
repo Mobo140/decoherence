@@ -32,7 +32,8 @@ def test_oscillation_envelope_beats_raw_ols():
     coh = np.exp(-lam * t) * (0.12 + 0.88 * np.abs(np.cos(4.2 * t)))
     raw_slope, raw_r2 = ols_log_slope(coh, dt)
     rem, slope, r2 = physics_remaining(_window(coh), t_obs, dt=dt, t_max=20.0)
-    raw_rem = float(np.clip(-1.0 / raw_slope - t_obs, 0.0, 20.0)) if raw_slope < -1e-6 else 20.0
+    raw_rem = (float(np.clip(-1.0 / raw_slope - t_obs, 0.0, 20.0))
+               if raw_slope < -1e-6 else 20.0)
     assert r2 > raw_r2
     assert abs(rem - true_rem) < abs(raw_rem - true_rem)
     assert abs(rem - true_rem) < 1.5

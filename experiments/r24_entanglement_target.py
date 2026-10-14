@@ -168,6 +168,11 @@ def add_flags(parser: argparse.ArgumentParser) -> None:
 
 
 def main() -> None:
+    """Runs the entanglement-sudden-death target experiment.
+
+    Writes experiments/results/r24_entanglement_target*.csv for
+    part a and r24b_esd_statistics*.csv for part b.
+    """
     args = common.parse_args(__doc__, extra=add_flags)
     n_per, n_eval, epochs = (30, 20, 5) if args.fast else (500, 200, 150)
     if args.part == "b":

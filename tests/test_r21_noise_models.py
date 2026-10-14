@@ -1,4 +1,4 @@
-"""R21 noise models: AR(1) measurement noise and the stochastic gamma(t) hook."""
+"""R21 noise models: AR(1) measurement noise, stochastic gamma(t) hook."""
 import numpy as np
 
 from src.data.observation import ar1_filter as ar1

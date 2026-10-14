@@ -24,9 +24,9 @@ off the window's position in time. The classifier is trained on all
 t_obs pooled and scored separately at each t_obs, so a base rate that
 changes with t_obs cannot inflate the AUROC. Classifiers: gradient-boosted
 trees and logistic regression on the flattened window, with the three
-input sets of R24 (base / + correlators / + correlators + concurrence). Metrics: AUROC,
-Brier score and balanced accuracy at 0.5, with the class balance. Three
-seeds.
+input sets of R24 (base / + correlators / + correlators + concurrence).
+Metrics: AUROC, Brier score and balanced accuracy at 0.5, with the class
+balance. Three seeds.
 
 Writes ONLY to experiments/results/r26_esd_occurrence*.csv.
 Each CSV is accompanied by <name>.csv.provenance.json (configuration,
@@ -233,6 +233,10 @@ def add_flags(parser: argparse.ArgumentParser) -> None:
 
 
 def main() -> None:
+    """Runs the ESD occurrence and permanence classifiers.
+
+    Writes experiments/results/r26_esd_occurrence*.csv.
+    """
     args = common.parse_args(__doc__, extra=add_flags)
     n_train, n_test = (60, 30) if args.fast else (2000, 400)
     path = common.results_path("r26_esd_occurrence", args)

@@ -32,7 +32,9 @@ def _1q(gamma: float = 0.4) -> SystemConfig:
     )
 
 
-def _2q(J: float, interaction: InteractionType = InteractionType.TFIM) -> SystemConfig:
+def _2q(
+    J: float, interaction: InteractionType = InteractionType.TFIM
+) -> SystemConfig:
     return SystemConfig(
         n_qubits=QubitCount.TWO,
         omega=1.0,
@@ -52,7 +54,8 @@ class _RecordJ(PhysicsOnlyPredictor):
 
     def predict(self, window, t_obs, horizon):
         self.seen_J.append(self.inference_J)
-        return PredictionResult(t_decoh_predicted=4.0, risk_score=0.1, horizon=horizon)
+        return PredictionResult(
+            t_decoh_predicted=4.0, risk_score=0.1, horizon=horizon)
 
 
 def test_dataset_J_is_zero_for_1q_and_config_J_for_2q():
@@ -128,7 +131,8 @@ def test_lstm_without_J_from_bytes_stays_seven_scalars():
         seed=2,
         min_window_gap=0,
     ))
-    p = LSTMPredictor(hidden_size=16, num_layers=1, dropout=0.0, early_stopping_patience=3)
+    p = LSTMPredictor(
+        hidden_size=16, num_layers=1, dropout=0.0, early_stopping_patience=3)
     p.train(ds, n_epochs=2, batch_size=8, lr=1e-3, verbose=False)
     assert p.net.n_physics == 7
     p2 = LSTMPredictor.from_bytes(p.state_bytes())

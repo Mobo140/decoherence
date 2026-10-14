@@ -139,6 +139,7 @@ class QuantileLossFunction(ports.ILossFunction):
             def forward(
                 self, pred: torch.Tensor, target: torch.Tensor
             ) -> torch.Tensor:
+                """Returns the mean pinball loss of pred against target."""
                 e = target - pred
                 return torch.mean(torch.max(q * e, (q - 1) * e))
 

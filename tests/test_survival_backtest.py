@@ -11,7 +11,8 @@ from src.models.physics_only import PhysicsOnlyPredictor
 
 class _ConstPredictor(PhysicsOnlyPredictor):
     def predict(self, window, t_obs, horizon):
-        return PredictionResult(t_decoh_predicted=4.0, risk_score=0.1, horizon=horizon)
+        return PredictionResult(
+            t_decoh_predicted=4.0, risk_score=0.1, horizon=horizon)
 
 
 def test_backtest_skips_censored_rows():
@@ -20,8 +21,10 @@ def test_backtest_skips_censored_rows():
     ds = Dataset(
         sequences=np.ones((n, T, F), dtype=np.float32),
         t_obs=np.full(n, 1.0, dtype=np.float32),
-        t_decoh_abs=np.array([4.0, 4.0, 4.0, 20.0, 20.0, 20.0], dtype=np.float32),
-        remaining_time=np.array([3.0, 3.0, 3.0, 19.0, 19.0, 19.0], dtype=np.float32),
+        t_decoh_abs=np.array(
+            [4.0, 4.0, 4.0, 20.0, 20.0, 20.0], dtype=np.float32),
+        remaining_time=np.array(
+            [3.0, 3.0, 3.0, 19.0, 19.0, 19.0], dtype=np.float32),
         risk_labels=np.zeros(n, dtype=np.float32),
         train_idx=np.array([0], dtype=int),
         val_idx=np.array([1], dtype=int),
@@ -30,7 +33,8 @@ def test_backtest_skips_censored_rows():
         metadata={"dt": 0.1, "horizon": 1.0},
         censored=np.array([False, False, False, True, True, True]),
     )
-    metrics = BacktestUseCase(_ConstPredictor()).execute(BacktestCommand(dataset=ds, horizon=1.0))
+    metrics = BacktestUseCase(_ConstPredictor()).execute(
+        BacktestCommand(dataset=ds, horizon=1.0))
     assert metrics.n_samples == 3
     assert metrics.mae == 0.0
     np.testing.assert_array_equal(metrics.actuals, np.array([4.0, 4.0, 4.0]))
@@ -45,8 +49,10 @@ class _CodeSpy:
         self.seen: list[tuple[float, float]] = []
 
     def predict(self, window, t_obs, horizon):
-        self.seen.append((self.inference_interaction_code, self.inference_dissipator_code))
-        return PredictionResult(t_decoh_predicted=4.0, risk_score=0.1, horizon=horizon)
+        self.seen.append(
+            (self.inference_interaction_code, self.inference_dissipator_code))
+        return PredictionResult(
+            t_decoh_predicted=4.0, risk_score=0.1, horizon=horizon)
 
 
 def test_backtest_sets_hamiltonian_codes_from_dataset():

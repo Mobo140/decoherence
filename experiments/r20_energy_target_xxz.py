@@ -119,6 +119,11 @@ def add_flags(parser: argparse.ArgumentParser) -> None:
 
 
 def main() -> None:
+    """Runs the XXZ J sweeps and the cross-system energy-target model.
+
+    Writes experiments/results/r20a_xxz_J_sweep*.csv and
+    r20b_cross_energy*.csv (use --tag, not --out).
+    """
     args = common.parse_args(__doc__, extra=add_flags)
     if args.out:
         raise SystemExit("R20 writes two files: use --tag, not --out")

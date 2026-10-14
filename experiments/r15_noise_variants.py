@@ -57,6 +57,10 @@ def arms(n_per: int, epochs: int) -> list[pipeline.ExperimentConfig]:
 
 
 def main() -> None:
+    """Evaluates every model under measurement noise.
+
+    Writes experiments/results/r15_noise_variants*.csv.
+    """
     args = common.parse_args(__doc__)
     n_per, epochs = (30, 10) if args.fast else (100, 100)
     common.run_arms(

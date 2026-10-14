@@ -91,6 +91,10 @@ def add_flags(parser: argparse.ArgumentParser) -> None:
 
 
 def main() -> None:
+    """Trains the residual model with noise-aware augmentation.
+
+    Writes experiments/results/r16_noise_aware_training*.csv.
+    """
     args = common.parse_args(__doc__, extra=add_flags)
     n_per, epochs = (30, 5) if args.fast else (100, 100)
     common.run_arms(

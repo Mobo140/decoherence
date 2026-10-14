@@ -1,7 +1,13 @@
-"""R23: two-body correlators complete the two-qubit state and leave the base features unchanged."""
+"""R23: two-body correlators complete the two-qubit state.
+
+They also leave the base features unchanged.
+"""
 import numpy as np
 
-from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
+from src.application.generate_dataset import (
+    GenerateDatasetCommand,
+    GenerateDatasetUseCase,
+)
 from src.data import features
 from src.data.scenarios import build_configs
 from src.simulation.simulator import QuTipSimulator
@@ -19,7 +25,8 @@ def test_pauli_expectations_reconstruct_the_purity():
         obs = CorrelatorSimulator().simulate(cfg).observables
         single = sum(obs[f"sigma_{a}{q}"] ** 2 for a in "xyz" for q in "12")
         two = sum(obs[name] ** 2 for name in CORR)
-        np.testing.assert_allclose((1 + single + two) / 4, obs["purity"], atol=1e-8)
+        np.testing.assert_allclose(
+            (1 + single + two) / 4, obs["purity"], atol=1e-8)
 
 
 def test_correlators_sit_before_purity_and_coherence():
@@ -30,10 +37,12 @@ def test_correlators_sit_before_purity_and_coherence():
 
 
 def test_base_features_equal_the_plain_simulator():
-    cmd = dict(configs=_cfgs(), window_length=10, horizon=1.0, samples_per_trajectory=3,
-               seed=4, dataset_name="r23_test")
-    plain = GenerateDatasetUseCase(QuTipSimulator(), store=None).execute(GenerateDatasetCommand(**cmd))
-    full = GenerateDatasetUseCase(CorrelatorSimulator(), store=None).execute(GenerateDatasetCommand(**cmd))
+    cmd = dict(configs=_cfgs(), window_length=10, horizon=1.0,
+               samples_per_trajectory=3, seed=4, dataset_name="r23_test")
+    plain = GenerateDatasetUseCase(QuTipSimulator(), store=None).execute(
+        GenerateDatasetCommand(**cmd))
+    full = GenerateDatasetUseCase(CorrelatorSimulator(), store=None).execute(
+        GenerateDatasetCommand(**cmd))
     base = features.select(full, "base")
     assert base.feature_names == plain.feature_names
     np.testing.assert_array_equal(base.sequences, plain.sequences)

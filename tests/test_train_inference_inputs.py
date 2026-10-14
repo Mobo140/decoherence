@@ -31,7 +31,8 @@ def _toy_dataset(n=60, L=20, seed=0):
         sequences=seq, t_obs=t_obs, t_decoh_abs=t2, remaining_time=rem,
         risk_labels=(rem <= 1.0).astype(np.float32),
         train_idx=idx[:40], val_idx=idx[40:50], test_idx=idx[50:],
-        feature_names=["sigma_x", "sigma_y", "sigma_z", "purity", "coherence_l1"],
+        feature_names=["sigma_x", "sigma_y", "sigma_z", "purity",
+                       "coherence_l1"],
         metadata={"dt": 0.1, "horizon": 1.0},
     )
 

@@ -128,6 +128,10 @@ def run(seed, n_train, n_test, out):
 
 
 def main() -> None:
+    """Runs the large-sample ESD permanence classifiers on XXZ.
+
+    Writes experiments/results/r27_esd_permanence*.csv.
+    """
     args = common.parse_args(__doc__)
     n_train, n_test = (300, 200) if args.fast else (8000, 4000)
     path = common.results_path("r27_esd_permanence", args)

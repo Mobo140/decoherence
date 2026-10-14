@@ -5,7 +5,10 @@ import numpy as np
 import pytest
 import qutip as qt
 
-from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
+from src.application.generate_dataset import (
+    GenerateDatasetCommand,
+    GenerateDatasetUseCase,
+)
 from src.domain.value_objects import (
     DissipatorConfig,
     DissipatorType,
@@ -24,7 +27,9 @@ def _plus_state(n_qubits: int = 1, seed=None) -> qt.Qobj:
     return qt.ket2dm(ket)
 
 
-def _const_sigma_minus(gamma: float, t_max: float, dt: float = 0.1) -> SystemConfig:
+def _const_sigma_minus(
+    gamma: float, t_max: float, dt: float = 0.1
+) -> SystemConfig:
     return SystemConfig(
         n_qubits=QubitCount.ONE,
         omega=1.0,
@@ -83,7 +88,9 @@ class _FakeSimulator:
         return traj
 
 
-def _fake_traj(t_decoh: float, censored: bool, t_max: float = 10.0, dt: float = 0.1) -> TrajectoryResult:
+def _fake_traj(
+    t_decoh: float, censored: bool, t_max: float = 10.0, dt: float = 0.1
+) -> TrajectoryResult:
     n = int(round(t_max / dt)) + 1
     times = np.linspace(0.0, t_max, n)
     cfg = _const_sigma_minus(0.4, t_max=t_max, dt=dt)

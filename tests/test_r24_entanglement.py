@@ -28,18 +28,22 @@ def test_sudden_death_time_interpolates_the_zero_of_lambda():
     t = np.linspace(0.0, 1.0, 11)
     lam = 0.5 - t                                    # zero at t = 0.5
     assert abs(simulator.sudden_death_time(t, lam)[0] - 0.5) < 1e-12
-    assert simulator.sudden_death_time(t, -t - 0.1) == (0.0, False)   # separable
-    assert simulator.sudden_death_time(t, 1.0 + t) == (1.0, True)     # censored
+    # Separable.
+    assert simulator.sudden_death_time(t, -t - 0.1) == (0.0, False)
+    # Censored.
+    assert simulator.sudden_death_time(t, 1.0 + t) == (1.0, True)
 
 
 def test_esd_target_matches_the_concurrence_of_the_trajectory():
-    cfg = dataclasses.replace(build_configs(n_per_scenario=2, seed=3)["E"][0],
-                              decoherence_criterion=DecoherenceCriterion.ENTANGLEMENT_DEATH)
+    cfg = dataclasses.replace(
+        build_configs(n_per_scenario=2, seed=3)["E"][0],
+        decoherence_criterion=DecoherenceCriterion.ENTANGLEMENT_DEATH)
     np.random.seed(11)
     traj = simulator.QuTipSimulator().simulate(cfg)
     np.random.seed(11)
     plain = simulator.QuTipSimulator().simulate(dataclasses.replace(
         cfg, decoherence_criterion=DecoherenceCriterion.COHERENCE))
     # Same dynamics and observables; only the target differs.
-    np.testing.assert_array_equal(traj.observables["coherence_l1"], plain.observables["coherence_l1"])
+    np.testing.assert_array_equal(
+        traj.observables["coherence_l1"], plain.observables["coherence_l1"])
     assert traj.t_decoh != plain.t_decoh

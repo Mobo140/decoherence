@@ -99,13 +99,29 @@ def _unitary_min(H: np.ndarray, psi0: np.ndarray) -> float:
 
 
 def _coef(system: TwoQubitSystem):
-    def g(t, args):
-        v = system.get_gamma(t)
-        return np.sqrt(v) if v > 0 else 0.0
-    return g
+    def sqrt_gamma(t, args):
+        """Returns sqrt(gamma(t)), or 0 where the rate is not positive.
+
+        Args:
+            t: Time.
+            args: Unused; required by the QuTiP coefficient signature.
+        """
+        rate = system.get_gamma(t)
+        return np.sqrt(rate) if rate > 0 else 0.0
+    return sqrt_gamma
 
 
 def part1(n_states: int, seed: int) -> list[dict]:
+    """Measures unitary-only coherence dips from Haar-random states.
+
+    Args:
+        n_states: Number of Haar-random initial states per (model, J).
+        seed: Seed of the state generator.
+
+    Returns:
+        One row per model and J with the share of states whose coherence
+        crosses the threshold and the median modulation depth.
+    """
     rng = np.random.default_rng(seed)
     states = [_haar(rng) for _ in range(n_states)]
     rows = []
@@ -122,6 +138,17 @@ def part1(n_states: int, seed: int) -> list[dict]:
 
 
 def part2(n_traj: int, seed: int) -> list[dict]:
+    """Measures T2 ambiguity on dissipative Bernstein-gamma trajectories.
+
+    Args:
+        n_traj: Number of trajectories per (model, J).
+        seed: Seed of the generator of rates and initial states.
+
+    Returns:
+        One row per model and J with the non-monotone share, the mean
+        crossing gap, the correlation with the energy-basis T2 and T2
+        statistics.
+    """
     rng = np.random.default_rng(seed)
     rows = []
     for model in MODELS:

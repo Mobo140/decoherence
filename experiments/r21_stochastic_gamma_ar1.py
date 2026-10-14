@@ -152,6 +152,10 @@ def arms(
 
 
 def main() -> None:
+    """Runs the correlated-noise and stochastic-gamma arms.
+
+    Writes experiments/results/r21_stochastic_gamma_ar1*.csv.
+    """
     args = common.parse_args(__doc__)
     n_per, n_eval, epochs = (30, 20, 5) if args.fast else (100, 100, 100)
     common.run_arms(

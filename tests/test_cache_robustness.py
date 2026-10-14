@@ -84,7 +84,8 @@ def test_garbage_archive_reads_as_a_miss(tmp_path):
 def test_empty_metadata_reads_as_a_miss(tmp_path):
     store = NumpyTrajectoryStore(root=tmp_path)
     store.save([_traj()], "k")
-    (tmp_path / "k_meta.json").write_text("")      # interrupted before the JSON landed
+    # Interrupted before the JSON landed.
+    (tmp_path / "k_meta.json").write_text("")
     with pytest.raises(FileNotFoundError):
         store.load("k")
 

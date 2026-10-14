@@ -97,6 +97,10 @@ def add_flags(parser: argparse.ArgumentParser) -> None:
 
 
 def main() -> None:
+    """Runs the ESD learning curve over nested training-set sizes.
+
+    Writes experiments/results/r25_esd_data_scaling*.csv.
+    """
     args = common.parse_args(__doc__, extra=add_flags)
     sizes, n_eval, epochs = (
         ((20, 40), 20, 5) if args.fast else (SIZES, 200, 150))

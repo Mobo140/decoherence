@@ -1,4 +1,4 @@
-"""Behaviour-regression check for refactoring: records or compares golden outputs.
+"""Behaviour-regression check: records or compares golden outputs.
 
 Runs small, deterministic versions of everything the papers depend on --
 simulation under every decoherence criterion, the experiment-specific
@@ -33,7 +33,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from experiments.r26_esd_occurrence import windows as esd_windows
 from src import reproducibility
 from src.application.backtest import BacktestCommand, BacktestUseCase
-from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
+from src.application.generate_dataset import (
+    GenerateDatasetCommand,
+    GenerateDatasetUseCase,
+)
 from src.application.train_model import TrainModelCommand, TrainModelUseCase
 from src.data.features import select as feature_set
 from src.data.observation import ar1_filter, noise_augmented
@@ -63,7 +66,7 @@ _CACHE_KEYS = (
 
 
 def _fp(arr) -> list[str]:
-    """Fingerprint of an array: size, sum, sum of squares, first and last values."""
+    """Fingerprint of an array: size, sums and first and last values."""
     a = np.asarray(arr, dtype=np.float64).ravel()
     if a.size == 0:
         return ["0"]
@@ -72,7 +75,8 @@ def _fp(arr) -> list[str]:
 
 
 def _traj(traj) -> dict:
-    out = {"t_decoh": repr(float(traj.t_decoh)), "censored": bool(traj.censored),
+    out = {"t_decoh": repr(float(traj.t_decoh)),
+           "censored": bool(traj.censored),
            "features": list(traj.feature_names)}
     for k in traj.feature_names:
         out[k] = _fp(traj.observables[k])
@@ -87,10 +91,12 @@ def _dataset(ds) -> dict:
 
 
 def _metrics(m) -> list[str]:
-    return [repr(float(m.r2)), repr(float(m.mae)), repr(float(m.risk_auroc)), str(m.n_samples)]
+    return [repr(float(m.r2)), repr(float(m.mae)),
+            repr(float(m.risk_auroc)), str(m.n_samples)]
 
 
 def compute() -> dict:
+    """Runs the deterministic checks and returns the fingerprints by name."""
     reproducibility.set_num_threads(1)
     out: dict = {}
     g = build_configs(n_per_scenario=6, seed=11)
@@ -100,7 +106,8 @@ def compute() -> dict:
     for sc in "ABCDE":
         crits = [DecoherenceCriterion.COHERENCE, DecoherenceCriterion.PURITY]
         if sc in "DE":
-            crits += [DecoherenceCriterion.COHERENCE_ENERGY, DecoherenceCriterion.CONCURRENCE,
+            crits += [DecoherenceCriterion.COHERENCE_ENERGY,
+                      DecoherenceCriterion.CONCURRENCE,
                       DecoherenceCriterion.ENTANGLEMENT_DEATH]
         for c in crits:
             reproducibility.seed_numpy_global(5)
@@ -112,9 +119,12 @@ def compute() -> dict:
     out["sim/corr"] = _traj(CorrelatorSimulator().simulate(g["E"][2]))
     reproducibility.seed_numpy_global(5)
     out["sim/ent"] = _traj(EntanglementSimulator().simulate(
-        dataclasses.replace(g["D"][2], decoherence_criterion=DecoherenceCriterion.ENTANGLEMENT_DEATH)))
+        dataclasses.replace(
+            g["D"][2],
+            decoherence_criterion=DecoherenceCriterion.ENTANGLEMENT_DEATH)))
     reproducibility.seed_numpy_global(5)
-    out["sim/stochastic_gamma"] = _traj(StochasticGammaSimulator(0.3, 0.5, seed=3).simulate(g["B"][2]))
+    out["sim/stochastic_gamma"] = _traj(
+        StochasticGammaSimulator(0.3, 0.5, seed=3).simulate(g["B"][2]))
 
     # Noise model.
     eta = np.random.default_rng(0).standard_normal((50, 20, 3))
@@ -124,42 +134,55 @@ def compute() -> dict:
     # Datasets.
     cmd = dict(window_length=20, horizon=1.0, samples_per_trajectory=5, seed=3)
     ds_1q = GenerateDatasetUseCase(QuTipSimulator(), store=None).execute(
-        GenerateDatasetCommand(configs=g["B"] + g["C"], dataset_name="golden_1q", **cmd))
+        GenerateDatasetCommand(
+            configs=g["B"] + g["C"], dataset_name="golden_1q", **cmd))
     ds_2q = GenerateDatasetUseCase(EntanglementSimulator(), store=None).execute(
-        GenerateDatasetCommand(configs=g["D"] + g["E"], dataset_name="golden_2q", **cmd))
+        GenerateDatasetCommand(
+            configs=g["D"] + g["E"], dataset_name="golden_2q", **cmd))
     out["ds/1q"] = _dataset(ds_1q)
     out["ds/2q"] = _dataset(ds_2q)
     out["ds/2q_base"] = _dataset(ds_2q.drop_features(CORR))
     out["ds/2q_corr"] = _dataset(feature_set(ds_2q, "corr"))
-    out["ds/1q_aug"] = _dataset(noise_augmented(ds_1q, 2, np.random.default_rng(7), phi_max=0.9))
+    out["ds/1q_aug"] = _dataset(noise_augmented(
+        ds_1q, 2, np.random.default_rng(7), phi_max=0.9))
 
     # Classification windows (R26).
     trajs = []
     for i, c in enumerate(g["D"][:4]):
         reproducibility.seed_numpy_global(100 + i)
         trajs.append(EntanglementSimulator().simulate(
-            dataclasses.replace(c, decoherence_criterion=DecoherenceCriterion.ENTANGLEMENT_DEATH)))
+            dataclasses.replace(
+                c,
+                decoherence_criterion=DecoherenceCriterion.ENTANGLEMENT_DEATH)))
     X, owner, tob = esd_windows(trajs, "corr_conc")
     out["r26/windows"] = [_fp(X), owner.tolist(), tob.tolist()]
 
     # Predictors.
     def run(pred, ds, train=True):
+        """Optionally trains pred on ds, then returns its backtest metrics."""
         if train:
             TrainModelUseCase(pred).execute(TrainModelCommand(
                 dataset=ds, n_epochs=3, batch_size=16, learning_rate=1e-3,
                 regression_loss="huber", verbose=False, seed=1))
-        return _metrics(BacktestUseCase(pred).execute(BacktestCommand(dataset=ds, horizon=1.0)))
+        return _metrics(BacktestUseCase(pred).execute(
+            BacktestCommand(dataset=ds, horizon=1.0)))
 
-    out["model/physics_only"] = run(PhysicsOnlyPredictor(t_max=20.0), ds_1q, train=False)
-    out["model/stretched_exp"] = run(StretchedExpPredictor(t_max=20.0), ds_1q, train=False)
-    out["model/physics_lstm"] = run(LSTMPredictor(use_physics_prior=True), ds_1q)
+    out["model/physics_only"] = run(
+        PhysicsOnlyPredictor(t_max=20.0), ds_1q, train=False)
+    out["model/stretched_exp"] = run(
+        StretchedExpPredictor(t_max=20.0), ds_1q, train=False)
+    out["model/physics_lstm"] = run(
+        LSTMPredictor(use_physics_prior=True), ds_1q)
     out["model/lstm_only"] = run(LSTMPredictor(use_physics_prior=False), ds_1q)
-    out["model/physics_feature"] = run(LSTMPredictor(use_physics_prior=True, residual_output=False), ds_1q)
+    out["model/physics_feature"] = run(
+        LSTMPredictor(use_physics_prior=True, residual_output=False), ds_1q)
     out["model/transformer"] = run(TransformerPredictor(), ds_1q)
     out["model/transformer_2q"] = run(
-        TransformerPredictor(d_model=32, n_heads=4, n_layers=1, dim_ff=64), feature_set(ds_2q, "corr"))
+        TransformerPredictor(d_model=32, n_heads=4, n_layers=1, dim_ff=64),
+        feature_set(ds_2q, "corr"))
     out["model/lstm_2q_gated"] = run(
-        LSTMPredictor(use_physics_prior=True, adaptive_prior_r2_threshold=0.7), ds_2q.drop_features(CORR))
+        LSTMPredictor(use_physics_prior=True, adaptive_prior_r2_threshold=0.7),
+        ds_2q.drop_features(CORR))
 
     # Stored artefacts must keep loading: every checkpoint predicts on fixed
     # windows, and a few cached trajectories load unchanged.
@@ -174,7 +197,7 @@ def compute() -> dict:
             try:
                 r = pred.predict(w, float(ds.t_obs[i]), 1.0)
                 preds.append(r.t_decoh_predicted)
-            except Exception as exc:  # record failures too, they must not change
+            except Exception as exc:  # failures are recorded too
                 preds.append(type(exc).__name__)
         out[f"ckpt/{ckpt.stem}"] = [type(pred).__name__] + [
             repr(float(x)) if not isinstance(x, str) else x for x in preds]
@@ -199,6 +222,7 @@ def _diff(a, b, path="") -> list[str]:
 
 
 def main() -> None:
+    """Compares with golden_outputs.json, or rewrites it with --write."""
     p = argparse.ArgumentParser()
     p.add_argument("--write", action="store_true")
     args = p.parse_args()

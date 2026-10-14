@@ -87,6 +87,11 @@ def compare_with_r5(rows: Sequence[Mapping[str, object]]) -> None:
 
 
 def main() -> None:
+    """Runs the J sweep with the energy-basis target.
+
+    Writes experiments/results/r10_energy_target_J_sweep*.csv; unless
+    --fast, also compares it with the R5 results when those exist.
+    """
     args = common.parse_args(__doc__)
     n_per_j, epochs = (30, 10) if args.fast else (200, 150)
     arms = j_sweep.arms(

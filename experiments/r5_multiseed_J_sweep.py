@@ -116,6 +116,10 @@ def summarize(rows: Sequence[Mapping[str, object]]) -> None:
 
 
 def main() -> None:
+    """Runs the multi-seed TFIM J sweep and prints the per-J summary.
+
+    Writes experiments/results/r5_multiseed_J_sweep*.csv.
+    """
     args = common.parse_args(__doc__)
     n_per_j, epochs = (30, 10) if args.fast else (200, 150)
     rows = common.run_arms(

@@ -34,6 +34,12 @@ def _collapse_operators(system: _System) -> list:
         ]
 
     def sqrt_gamma(t, args):
+        """Returns sqrt(gamma(t)) for QuTiP's callable coefficient format.
+
+        Args:
+            t: Time.
+            args: Unused; required by the QuTiP coefficient signature.
+        """
         gamma_t = system.get_gamma(t)
         return np.sqrt(gamma_t) if gamma_t > 0 else 0.0
 

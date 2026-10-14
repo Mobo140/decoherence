@@ -66,7 +66,8 @@ def test_r4_scores_disjoint_configurations():
             f"line {call.lineno}: R4 arm is missing seed/eval_groups"
         )
     from experiments.r4_config_overlap import CONFIG_SEED_OFFSET
-    assert CONFIG_SEED_OFFSET != 0, "fresh configs would equal the training ones"
+    assert CONFIG_SEED_OFFSET != 0, (
+        "fresh configs would equal the training ones")
 
 
 def test_run_e11b_defaults_reproduce_the_published_run():
@@ -113,7 +114,8 @@ def _code_strings(path: Path) -> set:
     tree = ast.parse(path.read_text())
     docstrings = set()
     for node in ast.walk(tree):
-        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
+                             ast.AsyncFunctionDef)):
             doc = ast.get_docstring(node, clean=False)
             if doc is not None:
                 docstrings.add(doc)
@@ -130,8 +132,9 @@ def test_replications_write_only_their_own_results():
     Mentioning one in a docstring is fine; naming it in code is not.
     """
     champions = {
-        "e6_ablation_improved.csv", "e7b_tau_sweep.csv", "e7a_transformer_cross.csv",
-        "e8c_cross_system.csv", "e11a_cross_system.csv", "e11b_cross_system.csv",
+        "e6_ablation_improved.csv", "e7b_tau_sweep.csv",
+        "e7a_transformer_cross.csv", "e8c_cross_system.csv",
+        "e11a_cross_system.csv", "e11b_cross_system.csv",
     }
     for probe in ("r1_multiseed_ablation.py", "r2_multiseed_tau.py",
                   "r3_multiseed_scaling.py"):
