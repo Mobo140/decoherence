@@ -59,7 +59,8 @@ def test_every_module_is_importable():
 
 
 def test_cited_entries_name_a_paper():
-    bad = [e.id for e in CATALOG if e.status == "cited" and e.paper in ("", "-")]
+    bad = [e.id for e in CATALOG
+           if e.status == "cited" and e.paper in ("", "-")]
     assert not bad, f"marked cited but no paper given: {bad}"
 
 
@@ -102,4 +103,5 @@ def test_cited_ids_appear_in_the_paper_they_claim():
         labels = [p for p in entry.id.split("/")]
         if not any(re.search(rf"\b{re.escape(lbl)}\b", text) for lbl in labels):
             missing.append(entry.id)
-    assert not missing, f"cited in the catalog but absent from Paper 2: {missing}"
+    assert not missing, (
+        f"cited in the catalog but absent from Paper 2: {missing}")

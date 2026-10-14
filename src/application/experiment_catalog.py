@@ -2,191 +2,310 @@
 from __future__ import annotations
 
 import csv
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Dict, List
+import dataclasses
+import pathlib
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+RESULTS_DIR = REPO_ROOT / "experiments" / "results"
+TRAJECTORY_CACHE = REPO_ROOT / "data" / "trajectories"
 
 
-RESULTS_DIR = Path(__file__).resolve().parents[2] / "experiments" / "results"
-
-
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class ExperimentEntry:
+    """One experiment of the catalog.
+
+    Attributes:
+        id: Label used in the papers and the workbench, e.g. "E8c".
+        title: Short human-readable name.
+        module: Module run with `python -m`.
+        paper: Paper that cites it, or "-".
+        claim: Claims it supports, or "-".
+        scenarios: Scenarios it covers.
+        csv_globs: Names of the result files under `RESULTS_DIR`.
+        supports_fast: Whether the script accepts `--fast`.
+        status: Role of the experiment, so the UI does not present a
+            dead end as a result: "cited" (a paper reports it),
+            "superseded" (a later experiment replaced it), "negative"
+            (a recorded outcome that did not reach its goal, kept so it
+            is not retried blindly) or "replication" (checks another
+            experiment rather than producing a result of its own).
+        note: Caveat about how the committed results were produced.
+    """
+
     id: str
     title: str
     module: str
     paper: str
     claim: str
     scenarios: str
-    csv_globs: tuple
+    csv_globs: tuple[str, ...]
     supports_fast: bool = True
     status: str = "cited"
-    """Role of this experiment, so the UI does not present a dead end as a
-    result: "cited" (a paper reports it), "superseded" (a later experiment
-    replaced it), "negative" (recorded outcome that did not reach its goal,
-    kept so it is not retried blindly), or "replication" (checks another
-    experiment rather than producing a result of its own)."""
+    note: str = ""
 
 
-CATALOG: List[ExperimentEntry] = [
-    ExperimentEntry("E1", "Ablation", "experiments.e1_ablation", "1", "C1, C2", "A–C",
-                    ("e1_ablation_p1.csv",), status="cited"),
-    ExperimentEntry("E2", "Window sweep", "experiments.e2_window_sweep", "1", "C3", "B/C",
-                    ("e2_window_sweep_p1.csv",), status="cited"),
-    ExperimentEntry("E3", "Noise sweep", "experiments.e3_noise_sweep", "1", "C4", "B/C",
-                    ("e3_noise_sweep_p1.csv",), status="cited"),
-    ExperimentEntry("E4", "Cross-system", "experiments.e4_cross_system", "1", "C5", "A–C",
-                    ("e4_cross_system_p1.csv",), status="cited"),
-    ExperimentEntry("E5", "Inverse baseline", "experiments.e5_inverse_baseline", "1", "C3", "B",
-                    ("e5_inverse_baseline.csv",), status="cited"),
-    ExperimentEntry("E6", "2q improved (E6a/b/c)", "experiments.e6_2qubit_improved", "2", "C2", "D, E",
-                    ("e6_ablation_improved.csv", "e6_noise_sweep_improved.csv",
-                     "e6_cross_system_improved.csv"), status="cited"),
-    ExperimentEntry("E7", "Transformer / τ / J (E7a/b/c)", "experiments.e7_paper2_extended", "2", "C2, C5", "D, E",
-                    ("e7a_transformer_cross.csv", "e7b_tau_sweep.csv", "e7c_J_sweep.csv"),
-                    status="cited"),
-    ExperimentEntry("E8c", "Improved 2q training", "experiments.e8_improved_2qubit", "2", "C4, C5", "D, E",
-                    ("e8c_cross_system.csv",), status="superseded"),
-    ExperimentEntry("E9", "Context codes", "experiments.e9_context_injection", "-", "C5", "D, E",
-                    ("e9a_cross_system.csv", "e9b_ablation.csv"), status="negative"),
+CATALOG: list[ExperimentEntry] = [
+    ExperimentEntry(
+        "E1", "Ablation", "experiments.e1_ablation",
+        "1", "C1, C2", "A–C",
+        ("e1_ablation_p1.csv",), status="cited"),
+    ExperimentEntry(
+        "E2", "Window sweep", "experiments.e2_window_sweep",
+        "1", "C3", "B/C",
+        ("e2_window_sweep_p1.csv",), status="cited"),
+    ExperimentEntry(
+        "E3", "Noise sweep", "experiments.e3_noise_sweep",
+        "1", "C4", "B/C",
+        ("e3_noise_sweep_p1.csv",), status="cited"),
+    ExperimentEntry(
+        "E4", "Cross-system", "experiments.e4_cross_system",
+        "1", "C5", "A–C",
+        ("e4_cross_system_p1.csv",), status="cited"),
+    ExperimentEntry(
+        "E5", "Inverse baseline", "experiments.e5_inverse_baseline",
+        "1", "C3", "B",
+        ("e5_inverse_baseline.csv",), status="cited"),
+    ExperimentEntry(
+        "E6", "2q improved (E6a/b/c)", "experiments.e6_2qubit_improved",
+        "2", "C2", "D, E",
+        ("e6_ablation_improved.csv", "e6_noise_sweep_improved.csv",
+         "e6_cross_system_improved.csv"),
+        status="cited"),
+    ExperimentEntry(
+        "E7", "Transformer / τ / J (E7a/b/c)", "experiments.e7_paper2_extended",
+        "2", "C2, C5", "D, E",
+        ("e7a_transformer_cross.csv", "e7b_tau_sweep.csv", "e7c_J_sweep.csv"),
+        status="cited"),
+    ExperimentEntry(
+        "E8c", "Improved 2q training", "experiments.e8_improved_2qubit",
+        "2", "C4, C5", "D, E",
+        ("e8c_cross_system.csv",), status="superseded",
+        note="E8b (noise sweep) raised NameError for an undefined seed "
+             "until it became a parameter, so no E8b result was ever "
+             "committed. run_e8c now passes its seed to the command; "
+             "before, every call trained and split with seed 42 (the "
+             "committed e8c_cross_system.csv is a seed-42 run, so it "
+             "is unaffected). E8a raised ValueError at its last variant "
+             "(stretched_exp) after training the others; it now builds "
+             "that baseline through the model registry and adds a "
+             "stretched_exp row per scenario."),
+    ExperimentEntry(
+        "E9", "Context codes", "experiments.e9_context_injection",
+        "-", "C5", "D, E",
+        ("e9a_cross_system.csv", "e9b_ablation.csv"), status="negative"),
     # The papers' "E10b" is the window-30 cross-system run produced by
-    # e10_fixed_context.py -- not e10_tfim_specialized.py, which this catalog
-    # used to label E10b. Ids now match what the papers cite.
-    ExperimentEntry("E10a/E10b", "Fixed context (E10b cited)", "experiments.e10_fixed_context", "2", "C5", "D, E",
-                    ("e10a_cross_system.csv", "e10b_cross_system.csv"), status="superseded"),
-    ExperimentEntry("E10-TFIM", "TFIM specialized", "experiments.e10_tfim_specialized", "-", "C2", "E",
-                    ("e10_tfim_c.csv",), status="negative"),
-    ExperimentEntry("E11", "Scaling (E11a/E11b)", "experiments.e11_scaling", "2", "C5", "D, E",
-                    ("e11a_cross_system.csv", "e11b_cross_system.csv"), status="cited"),
-    ExperimentEntry("E12", "Stretched-exp baseline", "experiments.e12_baseline_comparison", "-", "C2", "B–E",
-                    ("e12_baseline_comparison.csv",), status="negative"),
-    ExperimentEntry("E13", "Survival TFIM", "experiments.e13_survival_tfim", "-", "C2", "E",
-                    ("e13_survival_tfim.csv",), status="negative"),
-    ExperimentEntry("E14", "Inject J", "experiments.e14_inject_J", "-", "C2, C5", "D, E",
-                    ("e14_inject_J.csv",), status="negative"),
+    # e10_fixed_context.py, not by e10_tfim_specialized.py.
+    ExperimentEntry(
+        "E10a/E10b", "Fixed context (E10b cited)",
+        "experiments.e10_fixed_context",
+        "2", "C5", "D, E",
+        ("e10a_cross_system.csv", "e10b_cross_system.csv"),
+        status="superseded"),
+    ExperimentEntry(
+        "E10-TFIM", "TFIM specialized", "experiments.e10_tfim_specialized",
+        "-", "C2", "E",
+        ("e10_tfim_c.csv",), status="negative"),
+    ExperimentEntry(
+        "E11", "Scaling (E11a/E11b)", "experiments.e11_scaling",
+        "2", "C5", "D, E",
+        ("e11a_cross_system.csv", "e11b_cross_system.csv"), status="cited"),
+    ExperimentEntry(
+        "E12", "Stretched-exp baseline", "experiments.e12_baseline_comparison",
+        "-", "C2", "B–E",
+        ("e12_baseline_comparison.csv",), status="negative"),
+    ExperimentEntry(
+        "E13", "Survival TFIM", "experiments.e13_survival_tfim",
+        "-", "C2", "E",
+        ("e13_survival_tfim.csv",), status="negative"),
+    ExperimentEntry(
+        "E14", "Inject J", "experiments.e14_inject_J",
+        "-", "C2, C5", "D, E",
+        ("e14_inject_J.csv",), status="negative"),
 
     # Replications: these check other experiments rather than producing
     # results of their own, so they sit outside the E-numbering the papers
     # cite. (They were briefly named E22-E24 after task ids, which left a
     # phantom gap at E15-E21.)
-    ExperimentEntry("R1", "Ablation across seeds (checks E6a)", "experiments.r1_multiseed_ablation", "-", "-", "D, E",
-                    ("r1_multiseed_ablation_full.csv", "r1_multiseed_ablation_defaultarch.csv"),
-                    status="replication"),
-    ExperimentEntry("R2", "τ sweep across seeds (checks E7b)", "experiments.r2_multiseed_tau", "-", "-", "D, E",
-                    ("r2_multiseed_tau_full_seeded.csv",), status="replication"),
-    ExperimentEntry("R3", "Scaling across seeds (checks E11a/E11b)", "experiments.r3_multiseed_scaling", "-", "-", "D, E",
-                    ("r3_multiseed_scaling.csv",), status="replication"),
-    ExperimentEntry("R4", "Config overlap in E11a evaluation", "experiments.r4_config_overlap", "-", "-", "D, E",
-                    ("r4_config_overlap.csv",), status="replication"),
-    ExperimentEntry("R5", "J sweep across seeds (checks E7c)", "experiments.r5_multiseed_J_sweep", "-", "-", "E",
-                    ("r5_multiseed_J_sweep.csv",), status="replication"),
-    ExperimentEntry("R6", "Parity-sector preparation (tests the ceiling mechanism)", "experiments.r6_parity_sector", "-", "-", "E",
-                    ("r6_parity_sector.csv",), status="replication"),
-    ExperimentEntry("R7", "Paper 1 ablation across seeds (checks E1)", "experiments.r7_multiseed_1qubit", "-", "-", "A-C",
-                    ("r7_multiseed_1qubit.csv",), status="replication"),
-    ExperimentEntry("R8", "Noise sweep and scaling across seeds (checks E6b/E8c)", "experiments.r8_noise_and_scaling", "-", "-", "D, E",
-                    ("r8_noise_and_scaling.csv",), status="replication"),
-    ExperimentEntry("R9", "Target modulation by H (simulation only)", "experiments.r9_target_modulation", "-", "-", "D, E",
-                    ("r9_target_modulation.csv",), status="replication"),
-    ExperimentEntry("R10", "J sweep with energy-basis T2 target (tests R9)", "experiments.r10_energy_target_J_sweep", "-", "-", "E",
-                    ("r10_energy_target_J_sweep.csv",), status="replication"),
-    ExperimentEntry("R11", "Paper 1 ablation at 500 trajectories (checks lstm_only vs data size)", "experiments.r7_multiseed_1qubit", "-", "-", "A-C",
-                    ("r11_1qubit_500traj.csv",), supports_fast=False, status="replication"),
-    ExperimentEntry("R12", "Window sweep across seeds (checks E2)", "experiments.r12_multiseed_window_sweep", "-", "-", "B/C",
-                    ("r12_multiseed_window_sweep.csv",), supports_fast=False, status="replication"),
-    ExperimentEntry("R13", "Paper 1 ablation on 400 independent test trajectories, bootstrap CIs; T_phys-as-feature variant", "experiments.r13_independent_test", "-", "-", "A-C",
-                    ("r13_independent_test.csv",), status="replication"),
-    ExperimentEntry("R15", "Measurement-noise robustness of every model across seeds (replaces E3)", "experiments.r15_noise_variants", "-", "-", "B/C",
-                    ("r15_noise_variants.csv",), status="replication"),
-    ExperimentEntry("R16", "Noise-aware training (noisy copies of training windows, scalars recomputed)", "experiments.r16_noise_aware_training", "-", "-", "B/C",
-                    ("r16_noise_aware_training.csv",), status="replication"),
-    ExperimentEntry("R17", "Smoothing-based slope estimators under noise (no training)", "experiments.r17_slope_estimators", "-", "-", "B/C",
-                    ("r17_slope_estimators.csv",), supports_fast=False, status="replication"),
-    ExperimentEntry("R18", "Accuracy and alarm timing along each trajectory (vs t_obs/T2)", "experiments.r18_alarm_timing", "-", "-", "B/C",
-                    ("r18_alarm_timing_bins.csv", "r18_alarm_timing_alarm.csv"), status="replication"),
-    ExperimentEntry("R19", "E4 and E5 across seeds", "experiments.r19_replicate_e4_e5", "-", "-", "A-C",
-                    ("r19_e4.csv", "r19_e5.csv"), supports_fast=False, status="replication"),
-    ExperimentEntry("R20", "Energy-basis T2 target: XXZ J sweep (control) and cross-system Transformer", "experiments.r20_energy_target_xxz", "-", "-", "D/E",
-                    ("r20a_xxz_J_sweep.csv", "r20b_cross_energy.csv"), status="replication"),
-    ExperimentEntry("R21", "AR(1) measurement noise and stochastic (log-normal OU) gamma(t)", "experiments.r21_stochastic_gamma_ar1", "-", "-", "B/C",
-                    ("r21_stochastic_gamma_ar1.csv",), status="replication"),
-    ExperimentEntry("R22", "Noise-aware training with AR(1)-correlated noise (five seeds)", "experiments.r22_ar1_noise_training", "-", "-", "B/C",
-                    ("r22_ar1_noise_training.csv",), status="replication"),
-    ExperimentEntry("R23", "Two-body Pauli correlators as 2q inputs; target sensitivity to a 2% rate change", "experiments.r23_two_body_correlators", "-", "-", "D/E",
-                    ("r23_two_body_correlators.csv", "r23c_target_sensitivity.csv"), supports_fast=False, status="replication"),
-    ExperimentEntry("R24", "Entanglement sudden death as the 2q target; ESD/revival statistics", "experiments.r24_entanglement_target", "-", "-", "D/E",
-                    ("r24_entanglement_target.csv", "r24b_esd_statistics.csv"), supports_fast=False, status="replication"),
-    ExperimentEntry("R25", "Learning curve for the ESD target (250-4000 trajectories, nested)", "experiments.r25_esd_data_scaling", "-", "-", "D/E",
-                    ("r25_esd_data_scaling.csv",), supports_fast=False, status="replication"),
-    ExperimentEntry("R26", "Will entanglement die, and will it stay dead? (classification at fixed t_obs)", "experiments.r26_esd_occurrence", "-", "-", "D/E",
-                    ("r26_esd_occurrence.csv",), status="replication"),
-    ExperimentEntry("R27", "ESD occurrence and permanence on XXZ, 8000/4000 trajectories, bootstrap CIs", "experiments.r27_esd_permanence", "-", "-", "D",
-                    ("r27_esd_permanence.csv",), supports_fast=False, status="replication"),
+    ExperimentEntry(
+        "R1", "Ablation across seeds (checks E6a)",
+        "experiments.r1_multiseed_ablation",
+        "-", "-", "D, E",
+        ("r1_multiseed_ablation_full.csv",
+         "r1_multiseed_ablation_defaultarch.csv"),
+        status="replication"),
+    ExperimentEntry(
+        "R2", "τ sweep across seeds (checks E7b)",
+        "experiments.r2_multiseed_tau",
+        "-", "-", "D, E",
+        ("r2_multiseed_tau_full_seeded.csv",), status="replication"),
+    ExperimentEntry(
+        "R3", "Scaling across seeds (checks E11a/E11b)",
+        "experiments.r3_multiseed_scaling",
+        "-", "-", "D, E",
+        ("r3_multiseed_scaling.csv",), status="replication"),
+    ExperimentEntry(
+        "R4", "Config overlap in E11a evaluation",
+        "experiments.r4_config_overlap",
+        "-", "-", "D, E",
+        ("r4_config_overlap.csv",), status="replication"),
+    ExperimentEntry(
+        "R5", "J sweep across seeds (checks E7c)",
+        "experiments.r5_multiseed_J_sweep",
+        "-", "-", "E",
+        ("r5_multiseed_J_sweep.csv",), status="replication"),
+    ExperimentEntry(
+        "R6", "Parity-sector preparation (tests the ceiling mechanism)",
+        "experiments.r6_parity_sector",
+        "-", "-", "E",
+        ("r6_parity_sector.csv",), status="replication"),
+    ExperimentEntry(
+        "R7", "Paper 1 ablation across seeds (checks E1)",
+        "experiments.r7_multiseed_1qubit",
+        "-", "-", "A-C",
+        ("r7_multiseed_1qubit.csv",), status="replication"),
+    ExperimentEntry(
+        "R8", "Noise sweep and scaling across seeds (checks E6b/E8c)",
+        "experiments.r8_noise_and_scaling",
+        "-", "-", "D, E",
+        ("r8_noise_and_scaling.csv",), status="replication",
+        note="The committed rows of the e8c arm were produced while "
+             "run_e8c ignored its seed argument, so the training and "
+             "split seed was 42 in every replicate; only the "
+             "configurations varied. They are not independent "
+             "replications."),
+    ExperimentEntry(
+        "R9", "Target modulation by H (simulation only)",
+        "experiments.r9_target_modulation",
+        "-", "-", "D, E",
+        ("r9_target_modulation.csv",), status="replication"),
+    ExperimentEntry(
+        "R10", "J sweep with energy-basis T2 target (tests R9)",
+        "experiments.r10_energy_target_J_sweep",
+        "-", "-", "E",
+        ("r10_energy_target_J_sweep.csv",), status="replication"),
+    ExperimentEntry(
+        "R11",
+        "Paper 1 ablation at 500 trajectories (checks lstm_only vs data size)",
+        "experiments.r7_multiseed_1qubit",
+        "-", "-", "A-C",
+        ("r11_1qubit_500traj.csv",), supports_fast=False, status="replication"),
+    ExperimentEntry(
+        "R12", "Window sweep across seeds (checks E2)",
+        "experiments.r12_multiseed_window_sweep",
+        "-", "-", "B/C",
+        ("r12_multiseed_window_sweep.csv",), status="replication"),
+    ExperimentEntry(
+        "R13",
+        "Paper 1 ablation on 400 independent test trajectories, bootstrap "
+        "CIs; T_phys-as-feature variant",
+        "experiments.r13_independent_test",
+        "-", "-", "A-C",
+        ("r13_independent_test.csv",), status="replication"),
+    ExperimentEntry(
+        "R15",
+        "Measurement-noise robustness of every model across seeds (replaces "
+        "E3)",
+        "experiments.r15_noise_variants",
+        "-", "-", "B/C",
+        ("r15_noise_variants.csv",), status="replication"),
+    ExperimentEntry(
+        "R16",
+        "Noise-aware training (noisy copies of training windows, scalars "
+        "recomputed)",
+        "experiments.r16_noise_aware_training",
+        "-", "-", "B/C",
+        ("r16_noise_aware_training.csv",), status="replication"),
+    ExperimentEntry(
+        "R17", "Smoothing-based slope estimators under noise (no training)",
+        "experiments.r17_slope_estimators",
+        "-", "-", "B/C",
+        ("r17_slope_estimators.csv",), status="replication"),
+    ExperimentEntry(
+        "R18", "Accuracy and alarm timing along each trajectory (vs t_obs/T2)",
+        "experiments.r18_alarm_timing",
+        "-", "-", "B/C",
+        ("r18_alarm_timing_bins.csv", "r18_alarm_timing_alarm.csv"),
+        status="replication"),
+    ExperimentEntry(
+        "R19", "E4 and E5 across seeds", "experiments.r19_replicate_e4_e5",
+        "-", "-", "A-C",
+        ("r19_e4.csv", "r19_e5.csv"), status="replication"),
+    ExperimentEntry(
+        "R20",
+        "Energy-basis T2 target: XXZ J sweep (control) and cross-system "
+        "Transformer",
+        "experiments.r20_energy_target_xxz",
+        "-", "-", "D/E",
+        ("r20a_xxz_J_sweep.csv", "r20b_cross_energy.csv"),
+        status="replication"),
+    ExperimentEntry(
+        "R21",
+        "AR(1) measurement noise and stochastic (log-normal OU) gamma(t)",
+        "experiments.r21_stochastic_gamma_ar1",
+        "-", "-", "B/C",
+        ("r21_stochastic_gamma_ar1.csv",), status="replication"),
+    ExperimentEntry(
+        "R22", "Noise-aware training with AR(1)-correlated noise (five seeds)",
+        "experiments.r22_ar1_noise_training",
+        "-", "-", "B/C",
+        ("r22_ar1_noise_training.csv",), status="replication"),
+    ExperimentEntry(
+        "R23",
+        "Two-body Pauli correlators as 2q inputs; target sensitivity to a "
+        "2% rate change",
+        "experiments.r23_two_body_correlators",
+        "-", "-", "D/E",
+        ("r23_two_body_correlators.csv", "r23c_target_sensitivity.csv"),
+        status="replication"),
+    ExperimentEntry(
+        "R24",
+        "Entanglement sudden death as the 2q target; ESD/revival statistics",
+        "experiments.r24_entanglement_target",
+        "-", "-", "D/E",
+        ("r24_entanglement_target.csv", "r24b_esd_statistics.csv"),
+        status="replication"),
+    ExperimentEntry(
+        "R25",
+        "Learning curve for the ESD target (250-4000 trajectories, nested)",
+        "experiments.r25_esd_data_scaling",
+        "-", "-", "D/E",
+        ("r25_esd_data_scaling.csv",), status="replication"),
+    ExperimentEntry(
+        "R26",
+        "Will entanglement die, and will it stay dead? (classification at "
+        "fixed t_obs)",
+        "experiments.r26_esd_occurrence",
+        "-", "-", "D/E",
+        ("r26_esd_occurrence.csv",), status="replication"),
+    ExperimentEntry(
+        "R27",
+        "ESD occurrence and permanence on XXZ, 8000/4000 trajectories, "
+        "bootstrap CIs",
+        "experiments.r27_esd_permanence",
+        "-", "-", "D",
+        ("r27_esd_permanence.csv",), status="replication"),
 ]
 
 
-# Paper-cited champions (PROJECT_PLAN / CURRENT_STATUS). Dashboard uses these
-# so the UI does not silently pick a weak row from a mixed CSV.
+# Paper-cited champions (PROJECT_PLAN / CURRENT_STATUS). The dashboard uses
+# these so the UI does not silently pick a weak row from a mixed CSV.
 CHAMPIONS = [
-    {"scenario": "A", "label": "1q σ₋ const", "r2": 1.000, "model": "physics_only", "run": "R13 mean", "auroc": 1.000, "goal": 0.999},
-    {"scenario": "B", "label": "1q σ₋ γ(t)", "r2": 0.948, "model": "physics_lstm", "run": "R13 mean", "auroc": 0.984, "goal": 0.97},
-    {"scenario": "C", "label": "1q σz γ(t)", "r2": 0.989, "model": "physics_lstm", "run": "R13 mean", "auroc": 0.997, "goal": 0.97},
-    {"scenario": "D", "label": "2q XXZ", "r2": 0.814, "model": "transformer w20", "run": "E11a (R3 mean)", "auroc": 0.931, "goal": 0.80},
-    {"scenario": "E", "label": "2q TFIM", "r2": 0.703, "model": "transformer w20", "run": "E11a (R3 mean)", "auroc": 0.904, "goal": 0.70},
+    {"scenario": "A", "label": "1q σ₋ const", "r2": 1.000,
+     "model": "physics_only", "run": "R13 mean", "auroc": 1.000,
+     "goal": 0.999},
+    {"scenario": "B", "label": "1q σ₋ γ(t)", "r2": 0.948,
+     "model": "physics_lstm", "run": "R13 mean", "auroc": 0.984,
+     "goal": 0.97},
+    {"scenario": "C", "label": "1q σz γ(t)", "r2": 0.989,
+     "model": "physics_lstm", "run": "R13 mean", "auroc": 0.997,
+     "goal": 0.97},
+    {"scenario": "D", "label": "2q XXZ", "r2": 0.814,
+     "model": "transformer w20", "run": "E11a (R3 mean)", "auroc": 0.931,
+     "goal": 0.80},
+    {"scenario": "E", "label": "2q TFIM", "r2": 0.703,
+     "model": "transformer w20", "run": "E11a (R3 mean)", "auroc": 0.904,
+     "goal": 0.70},
 ]
-
-
-def by_id(exp_id: str) -> ExperimentEntry:
-    for e in CATALOG:
-        if e.id == exp_id:
-            return e
-    raise KeyError(exp_id)
-
-
-def list_csv_paths(entry: ExperimentEntry) -> List[Path]:
-    found = []
-    for name in entry.csv_globs:
-        p = RESULTS_DIR / name
-        if p.exists():
-            found.append(p)
-    return found
-
-
-def read_csv_rows(path: Path, limit: int = 40) -> List[Dict[str, str]]:
-    with path.open(newline="") as f:
-        rows = list(csv.DictReader(f))
-    return rows[:limit]
-
-
-def summarize_r2(path: Path) -> str:
-    rows = read_csv_rows(path, limit=200)
-    if not rows:
-        return f"{path.name}: empty"
-    r2_key = next((k for k in ("r2", "R²", "R2") if k in rows[0]), None)
-    if r2_key is None:
-        return f"{path.name}: {len(rows)} rows"
-    parts = []
-    for row in rows:
-        label = row.get("scenario") or row.get("name") or row.get("arm") or row.get("variant") or "?"
-        extra = row.get("j_bin") or row.get("variant") or ""
-        try:
-            r2 = float(row[r2_key])
-            r2s = f"{r2:.3f}"
-        except (TypeError, ValueError):
-            r2s = str(row[r2_key])
-        tag = f"{label}" + (f"/{extra}" if extra and extra != label else "")
-        parts.append(f"{tag} {r2s}")
-    return f"{path.name}: " + "; ".join(parts[:8])
-
-
-def catalog_table() -> List[List[str]]:
-    table = []
-    for e in CATALOG:
-        csvs = list_csv_paths(e)
-        status = f"{len(csvs)} CSV" if csvs else "no CSV"
-        table.append([e.id, e.title, e.paper, e.claim, e.scenarios, status, e.module])
-    return table
-
 
 CLAIMS = [
     {"id": "C1", "ok": True, "text": "physics baseline R²≥0.999 ✓"},
@@ -197,27 +316,101 @@ CLAIMS = [
 ]
 
 
-def cache_stats(root: Path | None = None) -> dict:
-    cache_root = root or (Path(__file__).resolve().parents[2] / "data" / "trajectories")
+def by_id(exp_id: str) -> ExperimentEntry:
+    """Returns the catalog entry with the given id.
+
+    Args:
+        exp_id: The id, e.g. "E8c".
+
+    Returns:
+        The entry.
+
+    Raises:
+        KeyError: If there is no such entry.
+    """
+    for entry in CATALOG:
+        if entry.id == exp_id:
+            return entry
+    raise KeyError(exp_id)
+
+
+def list_csv_paths(entry: ExperimentEntry) -> list[pathlib.Path]:
+    """Returns the entry's result files that exist."""
+    paths = (RESULTS_DIR / name for name in entry.csv_globs)
+    return [path for path in paths if path.exists()]
+
+
+def read_csv_rows(
+    path: pathlib.Path, limit: int = 40
+) -> list[dict[str, str]]:
+    """Reads the first rows of a results file.
+
+    Args:
+        path: The CSV file.
+        limit: Maximum number of rows.
+
+    Returns:
+        The rows as dicts of strings.
+    """
+    with path.open(newline="") as f:
+        rows = list(csv.DictReader(f))
+    return rows[:limit]
+
+
+def summarize_r2(path: pathlib.Path) -> str:
+    """Returns a one-line summary of the R2 column of a results file."""
+    rows = read_csv_rows(path, limit=200)
+    if not rows:
+        return f"{path.name}: empty"
+    r2_key = next((k for k in ("r2", "R²", "R2") if k in rows[0]), None)
+    if r2_key is None:
+        return f"{path.name}: {len(rows)} rows"
+    parts = []
+    for row in rows:
+        label = (row.get("scenario") or row.get("name") or row.get("arm")
+                 or row.get("variant") or "?")
+        extra = row.get("j_bin") or row.get("variant") or ""
+        try:
+            r2_text = f"{float(row[r2_key]):.3f}"
+        except (TypeError, ValueError):
+            r2_text = str(row[r2_key])
+        tag = f"{label}" + (f"/{extra}" if extra and extra != label else "")
+        parts.append(f"{tag} {r2_text}")
+    return f"{path.name}: " + "; ".join(parts[:8])
+
+
+def cache_stats(root: pathlib.Path | None = None) -> dict[str, float]:
+    """Counts the trajectory cache and the result files.
+
+    Args:
+        root: Cache directory; defaults to `data/trajectories`.
+
+    Returns:
+        File count, size in bytes and GB of the cache, and the number of
+        result CSVs.
+    """
+    cache_root = root or TRAJECTORY_CACHE
     files = list(cache_root.glob("*.npz")) if cache_root.exists() else []
-    bytes_ = sum(p.stat().st_size for p in files)
+    size = sum(p.stat().st_size for p in files)
     return {
         "n_files": len(files),
-        "bytes": bytes_,
-        "gb": round(bytes_ / (1024 ** 3), 3),
+        "bytes": size,
+        "gb": round(size / (1024 ** 3), 3),
         "n_csv": len(list(RESULTS_DIR.glob("*.csv"))),
     }
 
 
 def compare_summaries(id_a: str, id_b: str) -> str:
+    """Returns a text comparing the results of two experiments."""
     lines = [f"Compare {id_a} vs {id_b}", ""]
     for exp_id in (id_a, id_b):
-        e = by_id(exp_id)
-        lines.append(f"### {e.id} — {e.title} (claim {e.claim})")
-        paths = list_csv_paths(e)
+        entry = by_id(exp_id)
+        lines.append(
+            f"### {entry.id} — {entry.title} (claim {entry.claim})")
+        paths = list_csv_paths(entry)
         if not paths:
             lines.append("нет CSV")
-        for p in paths:
-            lines.append(summarize_r2(p))
+        for path in paths:
+            lines.append(summarize_r2(path))
         lines.append("")
     return "\n".join(lines)

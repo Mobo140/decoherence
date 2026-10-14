@@ -23,9 +23,9 @@ E7c: R² vs J for Transformer.
 
 Output
 ------
-experiments/results/e7a_transformer_cross.csv
-experiments/results/e7b_tau_sweep.csv
-experiments/results/e7c_J_sweep.csv
+experiments/results/e7a_transformer_cross[_<tag>][_fast].csv
+experiments/results/e7b_tau_sweep[_<tag>][_fast].csv
+experiments/results/e7c_J_sweep[_<tag>][_fast].csv
 
 Usage
 -----
@@ -34,60 +34,86 @@ Usage
 """
 from __future__ import annotations
 
-import argparse
-import copy
-import csv
-import itertools
-import sys
-from pathlib import Path
-from typing import List, Dict
+import functools
+from collections.abc import Sequence
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+from experiments import common
+from src.application import backtest
+from src.application import generate_dataset
+from src.application import run_cross_system
+from src.application import train_model
+from src.data import scenarios as scenario_lib
+from src.domain import ports
+from src.domain import value_objects
+from src.models import registry
+from src.simulation import simulator as simulator_lib
 
-from experiments._config import build_configs, trajectory_store, _bernstein_coeffs, trajectory_store
-from src.application.backtest import BacktestCommand, BacktestUseCase
-from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
-from src.application.run_cross_system import CrossSystemCommand, CrossSystemUseCase
-from src.application.run_ablation import AblationCommand, AblationStudyUseCase
-from src.application.train_model import TrainModelCommand, TrainModelUseCase
-from src.domain.value_objects import (
-    DecoherenceCriterion, DissipatorConfig, DissipatorType,
-    InteractionType, PredictorVariant, QubitCount, SystemConfig,
-)
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
-
-
-RESULTS_DIR = Path(__file__).parent / "results"
-_UNSET = object()
-
-
-def _save_csv(rows: list, path: Path, fieldnames: list) -> None:
-    RESULTS_DIR.mkdir(exist_ok=True)
-    with open(path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-        writer.writeheader()
-        writer.writerows(rows)
-    print(f"Saved → {path}")
+E7A_COLUMNS = (
+    "experiment", "name", "variant", "window_fraction", "noise_sigma",
+    "mae", "rmse", "r2", "mape", "auroc", "n_samples")
+E7B_COLUMNS = ("scenario", "tau", "r2", "mae", "rmse", "auroc", "n_samples")
+E7C_COLUMNS = ("J", "J_over_h", "r2", "mae", "rmse", "auroc", "n_samples")
+TAUS = (0.0, 0.3, 0.5, 0.7, 0.9)
+J_VALUES = (0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0)
+# Seed of the configuration generator of the J sweep.
+J_CONFIG_SEED = 123
 
 
-# ---------------------------------------------------------------------------
-# E7a — Transformer cross-system
-# ---------------------------------------------------------------------------
+def tau_predictor(tau: float) -> ports.IPredictor:
+    """Builds the physics + LSTM predictor of E7b for one threshold.
 
-def run_e7a(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
-    """Train large Transformer on D+E, eval on D/E separately."""
+    R2 replicates E7b with this factory so that both use one model.
 
-    class TransformerCrossSystem(CrossSystemUseCase):
-        def _build_predictor(self):
-            from src.infrastructure.ml.transformer_predictor import TransformerPredictor
-            # Larger Transformer: d_model=128, 4 heads, 3 layers, ff=512
-            return TransformerPredictor(
-                d_model=128, n_heads=4, n_layers=3, dim_ff=512, dropout=0.1,
-            )
+    Args:
+        tau: Adaptive-prior threshold on the OLS R² of log C.
 
-    cmd = CrossSystemCommand(
+    Returns:
+        The untrained predictor.
+    """
+    return registry.build_model(
+        "physics_lstm", hidden_size=128, num_layers=2, dropout=0.3,
+        adaptive_prior_r2_threshold=tau)
+
+
+def _train_and_score(predictor, dataset, n_epochs: int, seed: int,
+                     verbose: bool):
+    """Trains with the E7 settings and backtests on the same dataset."""
+    train_model.TrainModelUseCase(predictor).execute(
+        train_model.TrainModelCommand(
+            dataset=dataset,
+            n_epochs=n_epochs,
+            batch_size=64,
+            learning_rate=5e-4,
+            regression_loss="huber",
+            verbose=verbose,
+            seed=seed,
+        ))
+    return backtest.BacktestUseCase(predictor).execute(
+        backtest.BacktestCommand(dataset=dataset, horizon=1.0))
+
+
+def run_e7a(simulator, groups, n_epochs: int,
+            verbose: bool = True) -> list[dict[str, object]]:
+    """E7a: large Transformer trained on D+E, scored on D and E.
+
+    Args:
+        simulator: The simulator.
+        groups: Scenario label -> configurations.
+        n_epochs: Training epochs.
+        verbose: Whether to print training progress.
+
+    Returns:
+        One row per evaluation scenario, with the keys of
+        `E7A_COLUMNS`.
+    """
+    results = run_cross_system.CrossSystemUseCase(
+        simulator, store=scenario_lib.trajectory_store(),
+        # d_model=128, 4 heads, 3 layers, feed-forward 512.
+        predictor_factory=functools.partial(
+            registry.build_model, "transformer_large"),
+    ).execute(run_cross_system.CrossSystemCommand(
         train_configs=groups["D"] + groups["E"],
         eval_groups={"D": groups["D"], "E": groups["E"]},
         window_length=50,
@@ -99,68 +125,46 @@ def run_e7a(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
         regression_loss="huber",
         seed=42,
         verbose=verbose,
-    )
-    results = TransformerCrossSystem(simulator, store=trajectory_store()).execute(cmd)
-    rows = []
-    for r in results:
-        row = r.as_dict()
-        row["experiment"] = "E7a_transformer_cross"
-        rows.append(row)
-
-    fieldnames = ["experiment", "name", "variant", "window_fraction", "noise_sigma",
-                  "mae", "rmse", "r2", "mape", "auroc", "n_samples"]
-    _save_csv(rows, RESULTS_DIR / "e7a_transformer_cross.csv", fieldnames)
-
+    ))
+    rows = [{**r.as_dict(), "experiment": "E7a_transformer_cross"}
+            for r in results]
     print(f"\n{'Scenario':>20} {'R²':>8} {'MAE':>8} {'AUROC':>8} {'N':>6}")
     print("-" * 56)
-    for r in results:
-        print(f"{r.spec.name:>20} {r.r2:>8.4f} {r.mae:>8.4f} {r.risk_auroc:>8.4f} {r.n_samples:>6}")
+    for row in rows:
+        print(f"{row['name']:>20} {row['r2']:>8.4f} {row['mae']:>8.4f} "
+              f"{row['auroc']:>8.4f} {row['n_samples']:>6}")
     return rows
 
 
-# ---------------------------------------------------------------------------
-# E7b — Adaptive-prior threshold (τ) sweep
-# ---------------------------------------------------------------------------
+def run_e7b(simulator, groups, n_epochs: int,
+            verbose: bool = True) -> list[dict[str, object]]:
+    """E7b: sweeps the adaptive-prior threshold τ on D and on E.
 
-def run_e7b(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
-    """Sweep τ for physics_lstm on D and E to find optimal threshold."""
-    from src.infrastructure.ml.lstm_predictor import LSTMPredictor
+    Args:
+        simulator: The simulator.
+        groups: Scenario label -> configurations.
+        n_epochs: Training epochs.
+        verbose: Whether to print training progress.
 
-    thresholds = [0.0, 0.3, 0.5, 0.7, 0.9]
-    scenarios = ["D", "E"]
+    Returns:
+        One row per scenario and τ, with the keys of `E7B_COLUMNS`.
+    """
     rows = []
-
-    for scenario in scenarios:
-        print(f"\n{'='*60}\nτ sweep — Scenario {scenario}\n{'='*60}")
-
-        gen_uc = GenerateDatasetUseCase(simulator, store=trajectory_store())
-        dataset = gen_uc.execute(GenerateDatasetCommand(
+    for scenario in ("D", "E"):
+        print(f"\n{'=' * 60}\nτ sweep — Scenario {scenario}\n{'=' * 60}")
+        dataset = generate_dataset.GenerateDatasetUseCase(
+            simulator, store=scenario_lib.trajectory_store()
+        ).execute(generate_dataset.GenerateDatasetCommand(
             configs=groups[scenario],
             window_length=20,
             horizon=1.0,
             samples_per_trajectory=5,
             seed=42,
         ))
-
-        for tau in thresholds:
+        for tau in TAUS:
             print(f"\n  τ = {tau:.1f}")
-            predictor = LSTMPredictor(
-                hidden_size=128, num_layers=2, dropout=0.3,
-                use_physics_prior=True,
-                adaptive_prior_r2_threshold=tau,
-            )
-            TrainModelUseCase(predictor).execute(TrainModelCommand(
-                dataset=dataset,
-                n_epochs=n_epochs,
-                batch_size=64,
-                learning_rate=5e-4,
-                regression_loss="huber",
-                verbose=verbose,
-                seed=42,
-            ))
-            metrics = BacktestUseCase(predictor).execute(
-                BacktestCommand(dataset=dataset, horizon=1.0)
-            )
+            metrics = _train_and_score(
+                tau_predictor(tau), dataset, n_epochs, 42, verbose)
             rows.append({
                 "scenario": scenario,
                 "tau": tau,
@@ -170,109 +174,59 @@ def run_e7b(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
                 "auroc": metrics.risk_auroc,
                 "n_samples": metrics.n_samples,
             })
-            print(f"  → R²={metrics.r2:.4f}  MAE={metrics.mae:.4f}  AUROC={metrics.risk_auroc:.4f}")
-
-    _save_csv(rows, RESULTS_DIR / "e7b_tau_sweep.csv",
-              ["scenario", "tau", "r2", "mae", "rmse", "auroc", "n_samples"])
+            print(f"  → R²={metrics.r2:.4f}  MAE={metrics.mae:.4f}  "
+                  f"AUROC={metrics.risk_auroc:.4f}")
 
     print(f"\n{'Scenario':>8} {'τ':>5} {'R²':>8} {'MAE':>8} {'AUROC':>8}")
     print("-" * 42)
-    for r in rows:
-        print(f"{r['scenario']:>8} {r['tau']:>5.1f} {r['r2']:>8.4f} {r['mae']:>8.4f} {r['auroc']:>8.4f}")
+    for row in rows:
+        print(f"{row['scenario']:>8} {row['tau']:>5.1f} {row['r2']:>8.4f} "
+              f"{row['mae']:>8.4f} {row['auroc']:>8.4f}")
     return rows
 
 
-# ---------------------------------------------------------------------------
-# E7c — TFIM J-coupling sweep
-# ---------------------------------------------------------------------------
+def run_e7c(simulator, n_per_j: int, n_epochs: int,
+            verbose: bool = True) -> list[dict[str, object]]:
+    """E7c: sweeps the TFIM coupling J and trains a Transformer per J.
 
-def _make_tfim_configs_fixed_J(
-    n: int, J: float, rng: np.random.Generator,
-    criterion: DecoherenceCriterion = DecoherenceCriterion.COHERENCE,
-    interaction: InteractionType = InteractionType.TFIM,
-) -> List[SystemConfig]:
-    """Generate two-qubit configs (TFIM by default) with a fixed coupling J."""
-    shapes = ["random", "peak", "step_up", "step_down", "monotone_increasing",
-              "monotone_decreasing"]
-    shape_cycle = itertools.cycle(shapes)
-    configs = []
-    for _ in range(n):
-        shape = next(shape_cycle)
-        coeffs = _bernstein_coeffs(shape, rng, gamma_max=0.8)
-        configs.append(SystemConfig(
-            n_qubits=QubitCount.TWO,
-            omega=float(rng.uniform(0.5, 2.0)),
-            J=J,
-            dissipator=DissipatorConfig.time_dependent(coeffs, DissipatorType.SIGMA_MINUS),
-            interaction_type=interaction,
-            t_max=20.0,
-            dt=0.1,
-            decoherence_criterion=criterion,
-        ))
-    return configs
+    The phase transition is at J = h = 1.0 (h is fixed in
+    `TwoQubitSystem`).
 
+    Args:
+        simulator: The simulator.
+        n_per_j: Trajectories per J.
+        n_epochs: Training epochs.
+        verbose: Whether to print training progress.
 
-def run_e7c(simulator, n_per_J: int, n_epochs: int, verbose: bool = True,
-            *, seed: int = 42, config_seed: int = 123, out_path=None,
-            J_values=None, store=_UNSET,
-            criterion=DecoherenceCriterion.COHERENCE,
-            interaction=InteractionType.TFIM) -> list:
-    """Sweep TFIM coupling J ∈ {0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0}.
-
-    Phase transition at J = h_field = 1.0 (hardcoded in TwoQubitSystem).
-    Train Transformer on each J-bucket and report R² and AUROC.
-
-    The keyword-only arguments default to the published run; R5 varies
-    them to replicate the sweep across seeds without duplicating its
-    configuration (see experiments/r5_multiseed_J_sweep.py). R20 passes
-    ``interaction=InteractionType.XXZ`` to run the same sweep on the
-    Heisenberg model.
+    Returns:
+        One row per J with test samples, with the keys of `E7C_COLUMNS`.
     """
-    from src.infrastructure.ml.transformer_predictor import TransformerPredictor
-
-    if J_values is None:
-        J_values = [0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0]
-    rng = np.random.default_rng(config_seed)
-    # store=None disables the trajectory cache. R6 needs that: cache keys do
-    # not include the simulator, so a run with a different initial-state
-    # preparation would silently read the ordinary trajectories back.
-    gen_uc = GenerateDatasetUseCase(
-        simulator, store=trajectory_store() if store is _UNSET else store)
+    rng = np.random.default_rng(J_CONFIG_SEED)
+    generator = generate_dataset.GenerateDatasetUseCase(
+        simulator, store=scenario_lib.trajectory_store())
     rows = []
-
-    for J in J_values:
-        print(f"\n{'='*60}\n{interaction.value} J={J:.1f}\n{'='*60}")
-        configs = _make_tfim_configs_fixed_J(n_per_J, J, rng, criterion, interaction)
-
-        dataset = gen_uc.execute(GenerateDatasetCommand(
+    for coupling in J_VALUES:
+        print(f"\n{'=' * 60}\nTFIM J={coupling:.1f}\n{'=' * 60}")
+        configs = scenario_lib.fixed_coupling_configs(
+            n_per_j, coupling, rng,
+            value_objects.DecoherenceCriterion.COHERENCE,
+            value_objects.InteractionType.TFIM)
+        dataset = generator.execute(generate_dataset.GenerateDatasetCommand(
             configs=configs,
             window_length=20,
             horizon=1.0,
             samples_per_trajectory=5,
-            seed=seed,
+            seed=42,
         ))
         if len(dataset.test_idx) == 0:
-            print(f"  No test samples — skipping J={J}")
+            print(f"  No test samples — skipping J={coupling}")
             continue
-
-        predictor = TransformerPredictor(
-            d_model=128, n_heads=4, n_layers=3, dim_ff=512, dropout=0.1,
-        )
-        TrainModelUseCase(predictor).execute(TrainModelCommand(
-            dataset=dataset,
-            n_epochs=n_epochs,
-            batch_size=64,
-            learning_rate=5e-4,
-            regression_loss="huber",
-            verbose=verbose,
-            seed=seed,
-        ))
-        metrics = BacktestUseCase(predictor).execute(
-            BacktestCommand(dataset=dataset, horizon=1.0)
-        )
+        metrics = _train_and_score(
+            registry.build_model("transformer_large"), dataset, n_epochs,
+            42, verbose)
         rows.append({
-            "J": J,
-            "J_over_h": J,     # h=1.0 fixed
+            "J": coupling,
+            "J_over_h": coupling,     # h = 1.0 fixed
             "r2": metrics.r2,
             "mae": metrics.mae,
             "rmse": metrics.rmse,
@@ -282,50 +236,46 @@ def run_e7c(simulator, n_per_J: int, n_epochs: int, verbose: bool = True,
         print(f"  → R²={metrics.r2:.4f}  MAE={metrics.mae:.4f}  "
               f"AUROC={metrics.risk_auroc:.4f}  N={metrics.n_samples}")
 
-    _save_csv(rows, out_path or RESULTS_DIR / "e7c_J_sweep.csv",
-              ["J", "J_over_h", "r2", "mae", "rmse", "auroc", "n_samples"])
-
     print(f"\n{'J':>6} {'J/h':>6} {'R²':>8} {'MAE':>8} {'AUROC':>8} {'N':>6}")
     print("-" * 48)
-    for r in rows:
-        marker = " ← phase transition" if abs(r["J"] - 1.0) < 0.05 else ""
-        print(f"{r['J']:>6.1f} {r['J_over_h']:>6.1f} {r['r2']:>8.4f} "
-              f"{r['mae']:>8.4f} {r['auroc']:>8.4f} {r['n_samples']:>6}{marker}")
+    for row in rows:
+        marker = " ← phase transition" if abs(row["J"] - 1.0) < 0.05 else ""
+        print(f"{row['J']:>6.1f} {row['J_over_h']:>6.1f} "
+              f"{row['r2']:>8.4f} {row['mae']:>8.4f} {row['auroc']:>8.4f} "
+              f"{row['n_samples']:>6}{marker}")
     return rows
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
+def main(argv: Sequence[str] | None = None) -> None:
+    """Runs E7a, E7b and E7c and writes their CSVs."""
+    args = common.parse_args(__doc__, argv=argv, seeds=None, out=False)
+    n_per, n_per_j, epochs = (50, 30, 10) if args.fast else (500, 200, 150)
+    config = {"n_per": n_per, "n_per_J": n_per_j, "n_epochs": epochs}
+    simulator = simulator_lib.QuTipSimulator()
+    groups = scenario_lib.build_configs(n_per_scenario=n_per, seed=42)
 
-def main(fast: bool = False) -> None:
-    n_per   = 50  if fast else 500
-    n_per_J = 30  if fast else 200
-    epochs  = 10  if fast else 150
+    print(f"\n{'=' * 70}\nE7a — Transformer cross-system (D+E, "
+          f"n_per={n_per}, epochs={epochs})\n{'=' * 70}")
+    rows = run_e7a(simulator, groups, epochs)
+    common.write_results(
+        rows, common.results_path("e7a_transformer_cross", args),
+        columns=E7A_COLUMNS, seeds=[42], config=config)
 
-    simulator = QuTipSimulator()
-    groups = build_configs(n_per_scenario=n_per, seed=42)
+    print(f"\n{'=' * 70}\nE7b — τ sweep for physics_lstm (D and E, "
+          f"n_per={n_per}, epochs={epochs})\n{'=' * 70}")
+    rows = run_e7b(simulator, groups, epochs)
+    common.write_results(
+        rows, common.results_path("e7b_tau_sweep", args),
+        columns=E7B_COLUMNS, seeds=[42], config=config)
 
-    print(f"\n{'='*70}")
-    print(f"E7a — Transformer cross-system (D+E, n_per={n_per}, epochs={epochs})")
-    print(f"{'='*70}")
-    run_e7a(simulator, groups, n_epochs=epochs)
-
-    print(f"\n{'='*70}")
-    print(f"E7b — τ sweep for physics_lstm (D and E, n_per={n_per}, epochs={epochs})")
-    print(f"{'='*70}")
-    run_e7b(simulator, groups, n_epochs=epochs)
-
-    print(f"\n{'='*70}")
-    print(f"E7c — TFIM J sweep (n_per_J={n_per_J}, epochs={epochs})")
-    print(f"{'='*70}")
-    run_e7c(simulator, n_per_J=n_per_J, n_epochs=epochs)
-
-    print("\nE7 completed. Results in experiments/results/e7_*.csv")
+    print(f"\n{'=' * 70}\nE7c — TFIM J sweep (n_per_J={n_per_j}, "
+          f"epochs={epochs})\n{'=' * 70}")
+    rows = run_e7c(simulator, n_per_j, epochs)
+    common.write_results(
+        rows, common.results_path("e7c_J_sweep", args),
+        columns=E7C_COLUMNS, seeds=[42], config=config)
+    print("\nE7 completed. Results in experiments/results/e7*.csv")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--fast", action="store_true")
-    args = parser.parse_args()
-    main(fast=args.fast)
+    main()

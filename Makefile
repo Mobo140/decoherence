@@ -2,13 +2,14 @@
 #   make            список
 #   make app        UI  http://localhost:7860
 #   make test
-#   make e8         smoke (--fast). Полный E6/E8 перезапишет CSV чемпионов.
+#   make golden     эталонные выходы (должно быть "identical")
+#   make e8         smoke (--fast) пишет *_fast.csv; полный E6/E8 перезапишет CSV чемпионов.
 
 PYTHON := $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 PYTEST := $(PYTHON) -m pytest tests/ -q
 
 .DEFAULT_GOAL := help
-.PHONY: help install app test \
+.PHONY: help install app test golden \
 	paper1 paper1-full paper2-improved \
 	e1 e2 e3 e4 e5 e6 e7 e8 e9 e10a e10b e11 e12 e13 e14 \
 	e6-full e8-full pdf pdf-1 pdf-2
@@ -25,18 +26,21 @@ app: ## workbench http://localhost:7860
 test: ## pytest tests/
 	$(PYTEST)
 
-# --- статьи: --fast по умолчанию ------------------------------------------
+golden: ## эталонные выходы scripts/golden_outputs.json
+	$(PYTHON) -m scripts.golden_outputs
+
+# --- статьи: --fast по умолчанию; smoke пишет *_fast.csv --------------------
 
 paper1: ## Paper 1 (E1–E5) smoke
-	$(PYTHON) experiments/run_paper1.py --fast
+	$(PYTHON) -m experiments.run_paper1 --fast
 
 paper1-full: ## Paper 1 полный прогон
-	$(PYTHON) experiments/run_paper1.py
+	$(PYTHON) -m experiments.run_paper1
 
 paper2-improved: ## E6 suite smoke
-	$(PYTHON) experiments/run_paper2_improved.py --fast
+	$(PYTHON) -m experiments.run_paper2_improved --fast
 
-# --- eN: e1–e5 без --fast; e6–e14 smoke. CSV чемпионов: e6/e8-full --------
+# --- eN: e1–e5 полный прогон (--fast даёт smoke); e6–e14 smoke; чемпионы: e6/e8-full
 
 e1: ## ablation A–C
 	$(PYTHON) -m experiments.e1_ablation

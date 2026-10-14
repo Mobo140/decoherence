@@ -1,19 +1,14 @@
 """J as a physics scalar: dataset encoding, backtest wiring, LSTM flag."""
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import numpy as np
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import (
-    Dataset,
     GenerateDatasetCommand,
     GenerateDatasetUseCase,
 )
+from src.data.dataset import Dataset
 from src.domain.value_objects import (
     DissipatorConfig,
     DissipatorType,
@@ -22,9 +17,9 @@ from src.domain.value_objects import (
     QubitCount,
     SystemConfig,
 )
-from src.infrastructure.ml.lstm_predictor import LSTMPredictor
-from src.infrastructure.ml.physics_only_predictor import PhysicsOnlyPredictor
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+from src.models.lstm import LSTMPredictor
+from src.models.physics_only import PhysicsOnlyPredictor
+from src.simulation.simulator import QuTipSimulator
 
 
 def _1q(gamma: float = 0.4) -> SystemConfig:
@@ -37,7 +32,9 @@ def _1q(gamma: float = 0.4) -> SystemConfig:
     )
 
 
-def _2q(J: float, interaction: InteractionType = InteractionType.TFIM) -> SystemConfig:
+def _2q(
+    J: float, interaction: InteractionType = InteractionType.TFIM
+) -> SystemConfig:
     return SystemConfig(
         n_qubits=QubitCount.TWO,
         omega=1.0,
@@ -57,7 +54,8 @@ class _RecordJ(PhysicsOnlyPredictor):
 
     def predict(self, window, t_obs, horizon):
         self.seen_J.append(self.inference_J)
-        return PredictionResult(t_decoh_predicted=4.0, risk_score=0.1, horizon=horizon)
+        return PredictionResult(
+            t_decoh_predicted=4.0, risk_score=0.1, horizon=horizon)
 
 
 def test_dataset_J_is_zero_for_1q_and_config_J_for_2q():
@@ -116,10 +114,10 @@ def test_lstm_use_J_roundtrip_from_bytes():
         use_J_scalar=True, early_stopping_patience=3,
     )
     p.train(ds, n_epochs=2, batch_size=8, lr=1e-3, verbose=False)
-    assert p._net.n_physics == 8
+    assert p.net.n_physics == 8
     p2 = LSTMPredictor.from_bytes(p.state_bytes())
     assert p2.use_J_scalar is True
-    assert p2._net.n_physics == 8
+    assert p2.net.n_physics == 8
     out = p2.predict(ds.sequences[0], float(ds.t_obs[0]), 1.0)
     assert out.t_decoh_predicted >= 0.0
 
@@ -133,9 +131,10 @@ def test_lstm_without_J_from_bytes_stays_seven_scalars():
         seed=2,
         min_window_gap=0,
     ))
-    p = LSTMPredictor(hidden_size=16, num_layers=1, dropout=0.0, early_stopping_patience=3)
+    p = LSTMPredictor(
+        hidden_size=16, num_layers=1, dropout=0.0, early_stopping_patience=3)
     p.train(ds, n_epochs=2, batch_size=8, lr=1e-3, verbose=False)
-    assert p._net.n_physics == 7
+    assert p.net.n_physics == 7
     p2 = LSTMPredictor.from_bytes(p.state_bytes())
     assert p2.use_J_scalar is False
-    assert p2._net.n_physics == 7
+    assert p2.net.n_physics == 7

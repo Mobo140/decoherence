@@ -1,5 +1,5 @@
 """Domain layer: pure business logic with no framework dependencies."""
-from .value_objects import (
+from src.domain.value_objects import (
     QubitCount,
     DissipatorType,
     InteractionType,
@@ -10,8 +10,13 @@ from .value_objects import (
     PredictionResult,
     BacktestMetrics,
 )
-from .ports import ISimulator, IPredictor, ITrajectoryStore, IModelStore
-from .events import DecoherenceDetected, RiskThresholdExceeded
+from src.domain.ports import (
+    IModelStore,
+    IPredictor,
+    ISimulator,
+    ITrajectoryStore,
+)
+from src.domain.events import RiskThresholdExceeded
 
 __all__ = [
     "QubitCount",
@@ -27,6 +32,5 @@ __all__ = [
     "IPredictor",
     "ITrajectoryStore",
     "IModelStore",
-    "DecoherenceDetected",
     "RiskThresholdExceeded",
 ]

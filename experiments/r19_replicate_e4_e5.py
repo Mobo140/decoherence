@@ -1,31 +1,47 @@
 """R19 — E4 (one model for A+B+C) and E5 (direct vs inverse) across seeds.
 
-Both were single runs. This calls e4.main / e5.main with seeds 42-44 and
-writes experiments/results/r19_e4_s<seed>.csv and r19_e5_s<seed>.csv.
+Both were single runs. This runs E4 and E5 with seeds 42-44 and writes
+experiments/results/r19_e4_s<seed>.csv and r19_e5_s<seed>.csv, one pair
+per seed.
 
 Usage
 -----
     python -m experiments.r19_replicate_e4_e5 --seeds 42 43 44
+    python -m experiments.r19_replicate_e4_e5 --fast --seeds 42
 """
 from __future__ import annotations
 
-import argparse
-import sys
-from pathlib import Path
+from collections.abc import Sequence
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from experiments import common
+from experiments import e4_cross_system
+from experiments import e5_inverse_baseline
 
-import experiments.e4_cross_system as e4
-import experiments.e5_inverse_baseline as e5
 
-RES = Path(__file__).parent / "results"
+def main(argv: Sequence[str] | None = None) -> None:
+    """Runs E4 and E5 for each seed."""
+    args = common.parse_args(__doc__, argv=argv, out=False)
+    sizes_e4 = {"n_per": 30, "n_epochs": 10} if args.fast else {}
+    sizes_e5 = (
+        {"n_per": 20, "n_epochs": 10, "recon_epochs": 10} if args.fast
+        else {})
+    suffix = "_fast" if args.fast else ""
+    tag = f"_{args.tag}" if args.tag else ""
+    for seed in args.seeds:
+        scenarios = ("A", "B", "C")
+        rows = e4_cross_system.run(
+            scenarios, scenarios, seed=seed, **sizes_e4)
+        path = common.RESULTS_DIR / f"r19_e4{tag}_s{seed}{suffix}.csv"
+        common.write_results(
+            rows, path, columns=e4_cross_system.COLUMNS, seeds=[seed],
+            config={"experiment": "E4", **sizes_e4})
+        rows = e5_inverse_baseline.run(seed=seed, **sizes_e5)
+        path = common.RESULTS_DIR / f"r19_e5{tag}_s{seed}{suffix}.csv"
+        common.write_results(
+            rows, path, columns=e5_inverse_baseline.COLUMNS, seeds=[seed],
+            config={"experiment": "E5", **sizes_e5})
+        print(f"R19 | seed {seed} done", flush=True)
+
 
 if __name__ == "__main__":
-    p = argparse.ArgumentParser()
-    p.add_argument("--seeds", type=int, nargs="+", default=[42, 43, 44])
-    a = p.parse_args()
-    for s in a.seeds:
-        e4.main(train_scenarios=["A", "B", "C"], eval_scenarios=["A", "B", "C"],
-                seed=s, out_path=RES / f"r19_e4_s{s}.csv")
-        e5.main(seed=s, out_path=RES / f"r19_e5_s{s}.csv")
-        print(f"R19 | seed {s} done", flush=True)
+    main()

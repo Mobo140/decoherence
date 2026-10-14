@@ -16,89 +16,190 @@ Estimators:
   ssa_ols   SSA denoising (embedding 10, leading component), then ols_log
   holt      Holt double exponential smoothing of log C, final trend
 
-Writes ONLY to experiments/results/r17_slope_estimators.csv.
+Writes ONLY to experiments/results/r17_slope_estimators[_<tag>][_fast].csv.
 
 Usage
 -----
+    python -m experiments.r17_slope_estimators --fast
     python -m experiments.r17_slope_estimators
 """
+from __future__ import annotations
 
-import sys; sys.path.insert(0, ".")
+from collections.abc import Sequence
+
 import numpy as np
-from experiments._config import build_configs, trajectory_store
-from src.application.generate_dataset import GenerateDatasetUseCase, GenerateDatasetCommand
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
 
-DT, TMAX = 0.1, 20.0
-def r2(y, p): return 1 - np.sum((y-p)**2) / np.sum((y-y.mean())**2)
+from experiments import common
+from src.application import generate_dataset
+from src.data import scenarios as scenario_lib
+from src.evaluation import metrics
+from src.simulation import simulator as simulator_lib
 
-def ols(t, y, w=None):
+DT = 0.1
+TMAX = 20.0
+WINDOW = 50
+COLUMNS = ("estimator", "sigma", "seed", "r2")
+SIGMAS = (0.0, 0.01, 0.02, 0.05, 0.10)
+ESTIMATORS = ("ols_log", "wls_log", "exp_fit", "ssa_ols", "holt")
+
+
+def ols(t: np.ndarray, y: np.ndarray, w: np.ndarray | None = None) -> float:
+    """Fits the slope of ``y`` against ``t`` by weighted least squares."""
     w = np.ones_like(t) if w is None else w
     tm, ym = np.average(t, weights=w), np.average(y, weights=w)
-    return np.sum(w*(t-tm)*(y-ym)) / np.sum(w*(t-tm)**2)
+    return np.sum(w * (t - tm) * (y - ym)) / np.sum(w * (t - tm) ** 2)
 
-def exp_fit(t, c):
-    s = ols(t, np.log(np.maximum(np.abs(c), 1e-3)))
-    a = np.exp(np.mean(np.log(np.maximum(np.abs(c), 1e-3)) - s*t))
+
+def exp_fit(t: np.ndarray, c: np.ndarray) -> float:
+    """Fits C = A exp(s t) in linear space by Gauss-Newton; returns s.
+
+    Starts from the log-space OLS estimate. Returns 0 if the iteration
+    diverges.
+    """
+    log_c = np.log(np.maximum(np.abs(c), 1e-3))
+    s = ols(t, log_c)
+    a = np.exp(np.mean(log_c - s * t))
     for _ in range(30):
-        f = a*np.exp(s*t); J = np.stack([np.exp(s*t), a*t*np.exp(s*t)], 1)
-        step, *_ = np.linalg.lstsq(J, c - f, rcond=None)
+        f = a * np.exp(s * t)
+        jac = np.stack([np.exp(s * t), a * t * np.exp(s * t)], 1)
+        step, *_ = np.linalg.lstsq(jac, c - f, rcond=None)
         a, s = a + step[0], s + step[1]
-        if not np.isfinite(s): return 0.0
+        if not np.isfinite(s):
+            return 0.0
     return s
 
-def ssa_denoise(x, L=10, k=1):
-    N = len(x); K = N - L + 1
-    X = np.stack([x[i:i+K] for i in range(L)])
-    U, S, Vt = np.linalg.svd(X, full_matrices=False)
-    Xr = (U[:, :k] * S[:k]) @ Vt[:k]
-    out = np.zeros(N); cnt = np.zeros(N)
-    for i in range(L):
-        out[i:i+K] += Xr[i]; cnt[i:i+K] += 1
-    return out / cnt
 
-def holt(y, a=0.3, b=0.1):
-    lvl, tr = y[0], (y[-1]-y[0])/(len(y)-1)
+def ssa_denoise(x: np.ndarray, window: int = 10, rank: int = 1) -> np.ndarray:
+    """Denoises ``x`` with singular spectrum analysis.
+
+    Args:
+        x: Signal.
+        window: Embedding dimension.
+        rank: Number of leading components kept.
+
+    Returns:
+        The signal rebuilt from the leading components by diagonal
+        averaging.
+    """
+    n = len(x)
+    k = n - window + 1
+    trajectory = np.stack([x[i:i + k] for i in range(window)])
+    u, sv, vt = np.linalg.svd(trajectory, full_matrices=False)
+    low_rank = (u[:, :rank] * sv[:rank]) @ vt[:rank]
+    out = np.zeros(n)
+    count = np.zeros(n)
+    for i in range(window):
+        out[i:i + k] += low_rank[i]
+        count[i:i + k] += 1
+    return out / count
+
+
+def holt(y: np.ndarray, a: float = 0.3, b: float = 0.1) -> float:
+    """Returns the final trend of Holt's double exponential smoothing."""
+    level, trend = y[0], (y[-1] - y[0]) / (len(y) - 1)
     for v in y[1:]:
-        prev = lvl; lvl = a*v + (1-a)*(lvl+tr); tr = b*(lvl-prev) + (1-b)*tr
-    return tr / DT
+        prev = level
+        level = a * v + (1 - a) * (level + trend)
+        trend = b * (level - prev) + (1 - b) * trend
+    return trend / DT
 
-def t2_from(s, t_obs):
-    rem = -1.0/s - t_obs if s < -1e-6 else TMAX
+
+def t2_from(s: float, t_obs: float) -> float:
+    """Converts a log-slope ``s`` at time ``t_obs`` to a T2 estimate."""
+    rem = -1.0 / s - t_obs if s < -1e-6 else TMAX
     return float(np.clip(t_obs + max(rem, 0.0), 0.0, TMAX))
 
-gen = GenerateDatasetUseCase(QuTipSimulator(), store=trajectory_store())
-res = {}
-for seed in (42, 43, 44):
-    g = build_configs(n_per_scenario=100, seed=seed)
-    ds = gen.execute(GenerateDatasetCommand(configs=g["B"]+g["C"], window_length=50, horizon=1.0,
-                     samples_per_trajectory=5, seed=seed, dataset_name=f"slopenoise_{seed}"))
-    idx = ds.test_idx; ci = ds.feature_names.index("coherence_l1")
-    y = ds.t_decoh_abs[idx]
-    rng = np.random.default_rng(seed)
-    base = rng.normal(0, 1, (len(idx), 50))
-    t = np.arange(50) * DT
-    for sigma in (0.0, 0.01, 0.02, 0.05, 0.10):
-        preds = {k: [] for k in ("ols_log", "wls_log", "exp_fit", "ssa_ols", "holt")}
-        for k, i in enumerate(idx):
-            c = ds.sequences[i][:, ci].astype(float) + sigma*base[k]
-            lc = np.log(np.maximum(np.abs(c), 1e-8)); to = float(ds.t_obs[i])
-            preds["ols_log"].append(t2_from(ols(t, lc), to))
-            preds["wls_log"].append(t2_from(ols(t, lc, np.maximum(c, 1e-3)**2), to))
-            preds["exp_fit"].append(t2_from(exp_fit(t, c), to))
-            cs = ssa_denoise(c)
-            preds["ssa_ols"].append(t2_from(ols(t, np.log(np.maximum(np.abs(cs), 1e-8))), to))
-            preds["holt"].append(t2_from(holt(lc), to))
-        for kname, p in preds.items():
-            res.setdefault((kname, sigma), []).append(r2(y, np.array(p)))
-import csv
-from pathlib import Path
-out = Path(__file__).parent / "results" / "r17_slope_estimators.csv"
-with out.open("w", newline="") as f:
-    w = csv.writer(f); w.writerow(["estimator", "sigma", "seed", "r2"])
-    for (kname, s), vals in res.items():
-        for seed, v in zip((42, 43, 44), vals):
-            w.writerow([kname, s, seed, v])
-print(f"{'method':<9}" + "".join(f"{s:>16}" for s in (0.0, 0.01, 0.02, 0.05, 0.10)))
-for kname in ("ols_log", "wls_log", "exp_fit", "ssa_ols", "holt"):
-    print(f"{kname:<9}" + "".join(f"{np.mean(res[(kname,s)]):>9.3f}±{np.std(res[(kname,s)],ddof=1):.3f}" for s in (0.0, 0.01, 0.02, 0.05, 0.10)))
+
+def estimate_t2(c: np.ndarray, t: np.ndarray, t_obs: float) -> dict:
+    """Applies every estimator to one noisy coherence window."""
+    log_c = np.log(np.maximum(np.abs(c), 1e-8))
+    smooth = ssa_denoise(c)
+    return {
+        "ols_log": t2_from(ols(t, log_c), t_obs),
+        "wls_log": t2_from(ols(t, log_c, np.maximum(c, 1e-3) ** 2), t_obs),
+        "exp_fit": t2_from(exp_fit(t, c), t_obs),
+        "ssa_ols": t2_from(
+            ols(t, np.log(np.maximum(np.abs(smooth), 1e-8))), t_obs
+        ),
+        "holt": t2_from(holt(log_c), t_obs),
+    }
+
+
+def run(seeds: Sequence[int], n_per: int = 100) -> dict:
+    """Scores every estimator for every seed and noise level.
+
+    Args:
+        seeds: Seeds of the configurations, datasets and noise.
+        n_per: Trajectories per scenario.
+
+    Returns:
+        Dictionary mapping (estimator, sigma) to the list of R2 scores,
+        one per seed.
+    """
+    generator = generate_dataset.GenerateDatasetUseCase(
+        simulator_lib.QuTipSimulator(),
+        store=scenario_lib.trajectory_store())
+    res = {}
+    for seed in seeds:
+        groups = scenario_lib.build_configs(n_per_scenario=n_per, seed=seed)
+        ds = generator.execute(generate_dataset.GenerateDatasetCommand(
+            configs=groups["B"] + groups["C"], window_length=WINDOW,
+            horizon=1.0, samples_per_trajectory=5, seed=seed,
+            dataset_name=f"slopenoise_{seed}"))
+        idx = ds.test_idx
+        coherence = ds.feature_names.index("coherence_l1")
+        y = ds.t_decoh_abs[idx]
+        rng = np.random.default_rng(seed)
+        base = rng.normal(0, 1, (len(idx), WINDOW))
+        t = np.arange(WINDOW) * DT
+        for sigma in SIGMAS:
+            preds = {name: [] for name in ESTIMATORS}
+            for k, i in enumerate(idx):
+                c = ds.sequences[i][:, coherence].astype(float)
+                c = c + sigma * base[k]
+                estimates = estimate_t2(c, t, float(ds.t_obs[i]))
+                for name in ESTIMATORS:
+                    preds[name].append(estimates[name])
+            for name, p in preds.items():
+                res.setdefault((name, sigma), []).append(
+                    metrics.r2_unguarded(y, np.array(p)))
+    return res
+
+
+def to_rows(res: dict, seeds: Sequence[int]) -> list[dict[str, object]]:
+    """Flattens the scores to estimator, sigma, seed, r2 rows."""
+    return [
+        {"estimator": name, "sigma": sigma, "seed": seed, "r2": value}
+        for (name, sigma), values in res.items()
+        for seed, value in zip(seeds, values)
+    ]
+
+
+def print_table(res: dict) -> None:
+    """Prints mean +- std over seeds for each estimator and noise level."""
+    print(f"{'method':<9}" + "".join(f"{s:>16}" for s in SIGMAS))
+    for name in ESTIMATORS:
+        cells = "".join(
+            f"{np.mean(res[(name, s)]):>9.3f}"
+            f"±{np.std(res[(name, s)], ddof=1):.3f}"
+            for s in SIGMAS
+        )
+        print(f"{name:<9}{cells}")
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    """Scores the estimators and writes the CSV."""
+    args = common.parse_args(__doc__, argv=argv)
+    n_per = 20 if args.fast else 100
+    res = run(args.seeds, n_per)
+    common.write_results(
+        to_rows(res, args.seeds),
+        common.results_path("r17_slope_estimators", args),
+        columns=COLUMNS, seeds=args.seeds,
+        config={"n_per": n_per, "window": WINDOW, "sigmas": SIGMAS,
+                "estimators": ESTIMATORS})
+    print_table(res)
+
+
+if __name__ == "__main__":
+    main()

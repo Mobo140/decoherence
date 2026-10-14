@@ -14,7 +14,8 @@ C5: A single model trained on diverse scenarios generalises across all
 Scenarios
 ---------
 Default: train A+B+C+D+E, eval each separately.
-Paper 2: --train_scenarios D E --eval_scenarios D E.
+Paper 1: --train-scenarios A B C --eval-scenarios A B C --tag p1.
+Paper 2: --train-scenarios D E --eval-scenarios D E.
 
 Metrics
 -------
@@ -22,79 +23,96 @@ R², MAE, AUROC, n_samples per eval scenario.
 
 Output
 ------
-experiments/results/e4_cross_system_{suffix}.csv
-columns: train_set, eval_scenario, model, r2, mae, auroc, n_samples
+experiments/results/e4_cross_system[_<tag>][_fast].csv
+columns: name, variant, window_fraction, noise_sigma, mae, rmse, r2, mape,
+auroc, n_samples
 
 Usage
 -----
-    python -m experiments.e4_cross_system
-    python -m experiments.e4_cross_system --train_scenarios D E --eval_scenarios D E --suffix p2
+    python -m experiments.e4_cross_system --fast
+    python -m experiments.e4_cross_system --train-scenarios D E \\
+        --eval-scenarios D E --tag p2
 """
 from __future__ import annotations
 
-import csv
-import sys
-from pathlib import Path
+from collections.abc import Sequence
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+from experiments import common
+from src.application import run_cross_system
+from src.data import scenarios as scenario_lib
+from src.simulation import simulator as simulator_lib
 
-from experiments._config import build_configs, trajectory_store
-from src.application.run_cross_system import CrossSystemCommand, CrossSystemUseCase
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+COLUMNS = ("name", "variant", "window_fraction", "noise_sigma", "mae",
+           "rmse", "r2", "mape", "auroc", "n_samples")
+ALL_SCENARIOS = ("A", "B", "C", "D", "E")
 
 
-def main(train_scenarios: list | None = None, eval_scenarios: list | None = None, suffix: str = "",
-         *, seed: int = 42, out_path=None) -> None:
-    results_dir = Path(__file__).parent / "results"
-    results_dir.mkdir(exist_ok=True)
+def run(
+    train_scenarios: Sequence[str] = ALL_SCENARIOS,
+    eval_scenarios: Sequence[str] = ALL_SCENARIOS,
+    n_per: int = 100,
+    *,
+    seed: int = 42,
+    n_epochs: int = 100,
+) -> list[dict[str, object]]:
+    """Trains one model on a mixture and scores it per scenario.
 
-    simulator = QuTipSimulator()
-    groups = build_configs(n_per_scenario=100, seed=seed)
+    Args:
+        train_scenarios: Scenario labels of the training mixture.
+        eval_scenarios: Scenario labels scored separately.
+        n_per: Trajectories per scenario.
+        seed: Seed of the configurations, datasets and training.
+        n_epochs: Training epochs.
 
-    # Defaults: train on all, eval on all individual scenarios
-    if train_scenarios is None:
-        train_scenarios = ["A", "B", "C", "D", "E"]
-    if eval_scenarios is None:
-        eval_scenarios = ["A", "B", "C", "D", "E"]
-
-    train_configs = [cfg for s in train_scenarios for cfg in groups[s]]
-    eval_groups = {s: groups[s] for s in eval_scenarios}
-
-    # E4: train on selected scenarios, evaluate per scenario
-    cmd = CrossSystemCommand(
-        train_configs=train_configs,
-        eval_groups=eval_groups,
+    Returns:
+        One row per evaluation scenario with the keys of `COLUMNS`.
+    """
+    groups = scenario_lib.build_configs(n_per_scenario=n_per, seed=seed)
+    results = run_cross_system.CrossSystemUseCase(
+        simulator_lib.QuTipSimulator(), store=scenario_lib.trajectory_store()
+    ).execute(run_cross_system.CrossSystemCommand(
+        train_configs=[cfg for label in train_scenarios
+                       for cfg in groups[label]],
+        eval_groups={label: groups[label] for label in eval_scenarios},
         window_length=50,
         horizon=1.0,
         samples_per_trajectory=5,
-        n_epochs=100,
+        n_epochs=n_epochs,
         batch_size=32,
         lr=1e-3,
         regression_loss="huber",
         seed=seed,
         verbose=True,
-    )
+    ))
+    return [result.as_dict() for result in results]
 
-    results = CrossSystemUseCase(simulator, store=trajectory_store()).execute(cmd)
 
-    fname = f"e4_cross_system{suffix}.csv" if suffix else "e4_cross_system.csv"
-    out_path = out_path or results_dir / fname
-    fieldnames = ["name", "variant", "window_fraction", "noise_sigma",
-                  "mae", "rmse", "r2", "mape", "auroc", "n_samples"]
-    with open(out_path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-        writer.writeheader()
-        writer.writerows([r.as_dict() for r in results])
+def _add_flags(parser) -> None:
+    parser.add_argument("--train-scenarios", nargs="+",
+                        default=list(ALL_SCENARIOS))
+    parser.add_argument("--eval-scenarios", nargs="+",
+                        default=list(ALL_SCENARIOS))
 
-    print(f"\nResults saved to {out_path}")
 
+def main(argv: Sequence[str] | None = None) -> None:
+    """Runs E4 and writes its CSV."""
+    args = common.parse_args(
+        __doc__, extra=_add_flags, argv=argv, seeds=None)
+    n_per, n_epochs = (30, 10) if args.fast else (100, 100)
+    rows = run(args.train_scenarios, args.eval_scenarios, n_per,
+               n_epochs=n_epochs)
+    path = common.results_path("e4_cross_system", args)
+    common.write_results(
+        rows, path, columns=COLUMNS, seeds=[42],
+        config={"train_scenarios": args.train_scenarios,
+                "eval_scenarios": args.eval_scenarios, "n_per": n_per,
+                "n_epochs": n_epochs})
+    print(f"\nResults saved to {path}")
     print(f"\n{'Scenario':>20} {'R²':>8} {'MAE':>8} {'AUROC':>8} {'N':>6}")
     print("-" * 56)
-    for r in results:
-        print(
-            f"{r.spec.name:>20} {r.r2:>8.4f} {r.mae:>8.4f} "
-            f"{r.risk_auroc:>8.4f} {r.n_samples:>6}"
-        )
+    for row in rows:
+        print(f"{row['name']:>20} {row['r2']:>8.4f} {row['mae']:>8.4f} "
+              f"{row['auroc']:>8.4f} {row['n_samples']:>6}")
 
 
 if __name__ == "__main__":

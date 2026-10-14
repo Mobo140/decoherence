@@ -1,59 +1,45 @@
-"""Master entry-point: run all experiments sequentially.
+"""Master entry point: runs E1-E5 sequentially with their defaults.
 
-Usage::
-    python experiments/run_all.py [--fast]
+Usage
+-----
+    python -m experiments.run_all [--fast]
 
-  --fast  Use reduced dataset sizes (n=30 per scenario) for a quick smoke-run.
-          Sufficient to verify the pipeline; not for publication-quality results.
+--fast runs every experiment on reduced data and writes `*_fast.csv`:
+enough to verify the pipeline, not publication-quality results.
 """
 from __future__ import annotations
 
-import argparse
-import sys
 import time
-from pathlib import Path
+from collections.abc import Sequence
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+from experiments import common
+from experiments import e1_ablation
+from experiments import e2_window_sweep
+from experiments import e3_noise_sweep
+from experiments import e4_cross_system
+from experiments import e5_inverse_baseline
 
 
-def _log(msg: str) -> None:
-    print(f"\n{'='*70}\n{msg}\n{'='*70}")
+def _log(message: str) -> None:
+    print(f"\n{'=' * 70}\n{message}\n{'=' * 70}")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--fast", action="store_true", help="Reduced dataset for quick smoke-run.")
-    args = parser.parse_args()
-
-    n = 30 if args.fast else 100
-    epochs = 10 if args.fast else 100
-
-    # Patch experiment modules to use smaller params when --fast
-    import experiments.e1_ablation as e1
-    import experiments.e2_window_sweep as e2
-    import experiments.e3_noise_sweep as e3
-    import experiments.e4_cross_system as e4
-    import experiments.e5_inverse_baseline as e5
-
-    t_start = time.time()
-
-    _log("E1: Ablation study")
-    e1.main()
-
-    _log("E2: Window fraction sweep")
-    e2.main()
-
-    _log("E3: Noise robustness sweep")
-    e3.main()
-
-    _log("E4: Cross-system generalisation")
-    e4.main()
-
-    _log("E5: Inverse-problem baseline comparison")
-    e5.main()
-
-    elapsed = time.time() - t_start
-    print(f"\nAll experiments completed in {elapsed/60:.1f} min.")
+def main(argv: Sequence[str] | None = None) -> None:
+    """Runs E1-E5."""
+    args = common.parse_fast(__doc__, argv)
+    fast = ["--fast"] if args.fast else []
+    start = time.time()
+    for title, experiment in (
+        ("E1: Ablation study", e1_ablation),
+        ("E2: Window fraction sweep", e2_window_sweep),
+        ("E3: Noise robustness sweep", e3_noise_sweep),
+        ("E4: Cross-system generalisation", e4_cross_system),
+        ("E5: Inverse-problem baseline comparison", e5_inverse_baseline),
+    ):
+        _log(title)
+        experiment.main(fast)
+    print(f"\nAll experiments completed in "
+          f"{(time.time() - start) / 60:.1f} min.")
     print("Results written to experiments/results/")
 
 

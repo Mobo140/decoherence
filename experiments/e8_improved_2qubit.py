@@ -21,9 +21,9 @@ R², MAE, AUROC. Paper 2 baseline: E8c D=0.740, E=0.575.
 
 Output
 ------
-experiments/results/e8a_ablation.csv
-experiments/results/e8b_noise_sweep.csv
-experiments/results/e8c_cross_system.csv
+experiments/results/e8a_ablation[_<tag>][_fast].csv
+experiments/results/e8b_noise_sweep[_<tag>][_fast].csv
+experiments/results/e8c_cross_system[_<tag>][_fast].csv
 
 Usage
 -----
@@ -32,60 +32,90 @@ Usage
 """
 from __future__ import annotations
 
-import argparse
-import csv
-import sys
-from pathlib import Path
+import functools
+from collections.abc import Sequence
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+from experiments import common
+from src.application import run_ablation
+from src.application import run_cross_system
+from src.application import run_noise_sweep
+from src.data import scenarios as scenario_lib
+from src.domain import ports
+from src.domain import value_objects
+from src.models import registry
+from src.simulation import simulator as simulator_lib
 
-from experiments._config import build_configs, trajectory_store
-from src.application.run_ablation import AblationCommand, AblationStudyUseCase
-from src.application.run_noise_sweep import NoiseSweepCommand, NoiseSweepUseCase
-from src.application.run_cross_system import CrossSystemCommand, CrossSystemUseCase
-from src.domain.value_objects import PredictorVariant
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
-
-
-RESULTS_DIR = Path(__file__).parent / "results"
 WINDOW_2Q = 30       # wider window for 2-qubit physics slope stability
-MIN_GAP   = 15       # min window gap (half of WINDOW_2Q)
-
-
-def _save_csv(rows: list, path: Path, fieldnames: list) -> None:
-    RESULTS_DIR.mkdir(exist_ok=True)
-    path = Path(path)
-    if path.exists():
-        path = path.with_name(f"{path.stem}_rerun{path.suffix}")
-    with open(path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-        writer.writeheader()
-        writer.writerows(rows)
-    print(f"Saved → {path}")
-
-
-# ---------------------------------------------------------------------------
-# Per-scenario τ mapping (from E7b results)
-# ---------------------------------------------------------------------------
-
+MIN_GAP = 15         # min window gap (half of WINDOW_2Q)
+# Per-scenario τ (from the E7b results).
 TAU_PER_SCENARIO = {"D": 0.5, "E": 0.0}
+SIGMAS = (0.0, 0.01, 0.02, 0.05, 0.10)
+
+ABLATION_COLUMNS = (
+    "scenario", "tau", "name", "variant", "window_fraction", "noise_sigma",
+    "mae", "rmse", "r2", "mape", "auroc", "n_samples")
+RESULT_COLUMNS = (
+    "name", "variant", "window_fraction", "noise_sigma", "mae", "rmse",
+    "r2", "mape", "auroc", "n_samples")
+
+# Training choices of E8: no weighted BCE, small input noise augmentation.
+_LSTM_SIZE = {"hidden_size": 128, "num_layers": 2, "dropout": 0.3}
+_TRAINING = {"risk_pos_weight": 0.0, "augment_sigma": 0.02}
 
 
-# ---------------------------------------------------------------------------
-# E8a — ablation
-# ---------------------------------------------------------------------------
+def _improved_lstm(tau: float) -> ports.IPredictor:
+    return registry.build_model(
+        "physics_lstm", **_LSTM_SIZE, adaptive_prior_r2_threshold=tau,
+        **_TRAINING)
 
-def run_e8a(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
-    """Ablation: physics_lstm(improved) vs Transformer on D and E."""
-    all_rows = []
 
-    for scenario_label in ["D", "E"]:
-        tau = TAU_PER_SCENARIO[scenario_label]
-        print(f"\n{'='*60}\nE8a — Scenario {scenario_label}  (τ={tau})\n{'='*60}")
+def _ablation_predictor(
+    variant: value_objects.PredictorVariant,
+    command: run_ablation.AblationCommand,
+    *,
+    tau: float,
+) -> ports.IPredictor:
+    """Builds the predictor of one E8a variant for a scenario's τ.
 
-        cmd = AblationCommand(
-            configs=groups[scenario_label],
-            variants=list(PredictorVariant),
+    The variants without an E8 setting (physics_only, stretched_exp) come
+    from the registry through the use case's default factory.
+    """
+    variants = value_objects.PredictorVariant
+    if variant == variants.LSTM_ONLY:
+        return registry.build_model("lstm_only", **_LSTM_SIZE, **_TRAINING)
+    if variant == variants.PHYSICS_LSTM:
+        return _improved_lstm(tau)
+    if variant == variants.TRANSFORMER:
+        return registry.build_model("transformer_large")
+    return run_ablation.default_predictor(variant, command)
+
+
+def run_e8a(simulator, groups, n_epochs: int,
+            verbose: bool = True) -> list[dict[str, object]]:
+    """E8a: ablation of every variant on D and on E.
+
+    Args:
+        simulator: The simulator.
+        groups: Scenario label -> configurations.
+        n_epochs: Training epochs.
+        verbose: Whether to print training progress.
+
+    Returns:
+        One row per scenario and variant, with the keys of
+        `ABLATION_COLUMNS`.
+    """
+    rows = []
+    for label in ("D", "E"):
+        tau = TAU_PER_SCENARIO[label]
+        print(f"\n{'=' * 60}\nE8a — Scenario {label}  (τ={tau})\n"
+              f"{'=' * 60}")
+        results = run_ablation.AblationStudyUseCase(
+            simulator, store=scenario_lib.trajectory_store(),
+            predictor_factory=functools.partial(
+                _ablation_predictor, tau=tau),
+        ).execute(run_ablation.AblationCommand(
+            configs=groups[label],
+            variants=list(value_objects.PredictorVariant),
             window_length=WINDOW_2Q,
             horizon=1.0,
             samples_per_trajectory=5,
@@ -96,67 +126,41 @@ def run_e8a(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
             seed=42,
             verbose=verbose,
             min_window_gap=MIN_GAP,
-        )
+        ))
+        for result in results:
+            rows.append({**result.as_dict(), "scenario": label, "tau": tau})
 
-        _tau = tau  # capture for closure
-
-        class E8Ablation(AblationStudyUseCase):
-            def _build_predictor(self, variant, command):
-                from src.infrastructure.ml.lstm_predictor import LSTMPredictor
-                from src.infrastructure.ml.physics_only_predictor import PhysicsOnlyPredictor
-                from src.infrastructure.ml.transformer_predictor import TransformerPredictor
-                if variant == PredictorVariant.PHYSICS_ONLY:
-                    return PhysicsOnlyPredictor(t_max=max(c.t_max for c in command.configs))
-                if variant == PredictorVariant.LSTM_ONLY:
-                    return LSTMPredictor(
-                        hidden_size=128, num_layers=2, dropout=0.3,
-                        use_physics_prior=False,
-                        risk_pos_weight=0.0, augment_sigma=0.02,
-                    )
-                if variant == PredictorVariant.PHYSICS_LSTM:
-                    return LSTMPredictor(
-                        hidden_size=128, num_layers=2, dropout=0.3,
-                        use_physics_prior=True,
-                        adaptive_prior_r2_threshold=_tau,
-                        risk_pos_weight=0.0, augment_sigma=0.02,
-                    )
-                if variant == PredictorVariant.TRANSFORMER:
-                    return TransformerPredictor(
-                        d_model=128, n_heads=4, n_layers=3, dim_ff=512, dropout=0.1,
-                    )
-                raise ValueError(variant)
-
-        results = E8Ablation(simulator, store=trajectory_store()).execute(cmd)
-        for r in results:
-            row = r.as_dict()
-            row["scenario"] = scenario_label
-            row["tau"] = tau
-            all_rows.append(row)
-
-    _save_csv(all_rows, RESULTS_DIR / "e8a_ablation.csv",
-              ["scenario", "tau", "name", "variant", "window_fraction", "noise_sigma",
-               "mae", "rmse", "r2", "mape", "auroc", "n_samples"])
-
-    print(f"\n{'Scenario':<8} {'τ':>5} {'Variant':<16} {'R²':>8} {'MAE':>8} {'AUROC':>8}")
+    print(f"\n{'Scenario':<8} {'τ':>5} {'Variant':<16} {'R²':>8} {'MAE':>8} "
+          f"{'AUROC':>8}")
     print("-" * 58)
-    for r in all_rows:
-        print(f"{r['scenario']:<8} {r['tau']:>5.1f} {r['variant']:<16} "
-              f"{r['r2']:>8.4f} {r['mae']:>8.4f} {r['auroc']:>8.4f}")
-    return all_rows
+    for row in rows:
+        print(f"{row['scenario']:<8} {row['tau']:>5.1f} "
+              f"{row['variant']:<16} {row['r2']:>8.4f} {row['mae']:>8.4f} "
+              f"{row['auroc']:>8.4f}")
+    return rows
 
 
-# ---------------------------------------------------------------------------
-# E8b — noise sweep
-# ---------------------------------------------------------------------------
+def run_e8b(simulator, groups, n_epochs: int, verbose: bool = True,
+            *, seed: int = 42) -> list[dict[str, object]]:
+    """E8b: noise robustness of the improved model on the D+E mixture.
 
-def run_e8b(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
-    """Noise robustness: improved physics_lstm on D+E mixture."""
-    from src.infrastructure.ml.lstm_predictor import LSTMPredictor
+    Args:
+        simulator: The simulator.
+        groups: Scenario label -> configurations.
+        n_epochs: Training epochs.
+        verbose: Whether to print training progress.
+        seed: Seed of the dataset, training and noise.
 
-    configs = groups["D"] + groups["E"]
-    cmd = NoiseSweepCommand(
-        configs=configs,
-        sigmas=[0.0, 0.01, 0.02, 0.05, 0.10],
+    Returns:
+        One row per sigma, with the keys of `RESULT_COLUMNS`.
+    """
+    results = run_noise_sweep.NoiseSweepUseCase(
+        simulator,
+        # A compromise between τ of D (0.5) and of E (0.0).
+        predictor_factory=functools.partial(_improved_lstm, 0.5),
+    ).execute(run_noise_sweep.NoiseSweepCommand(
+        configs=groups["D"] + groups["E"],
+        sigmas=list(SIGMAS),
         window_length=WINDOW_2Q,
         horizon=1.0,
         samples_per_trajectory=5,
@@ -167,45 +171,38 @@ def run_e8b(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
         seed=seed,
         verbose=verbose,
         min_window_gap=MIN_GAP,
-    )
-
-    class E8NoiseSweep(NoiseSweepUseCase):
-        def _build_predictor(self):
-            return LSTMPredictor(
-                hidden_size=128, num_layers=2, dropout=0.3,
-                use_physics_prior=True,
-                adaptive_prior_r2_threshold=0.5,  # compromise between D(0.5) and E(0.0)
-                risk_pos_weight=0.0, augment_sigma=0.02,
-            )
-
-    results = E8NoiseSweep(simulator).execute(cmd)
-    rows = [r.as_dict() for r in results]
-    _save_csv(rows, RESULTS_DIR / "e8b_noise_sweep.csv",
-              ["name", "variant", "window_fraction", "noise_sigma",
-               "mae", "rmse", "r2", "mape", "auroc", "n_samples"])
+    ))
+    rows = [result.as_dict() for result in results]
 
     print(f"\n{'σ_noise':>9} {'R²':>8} {'MAE':>8} {'AUROC':>8}")
     print("-" * 38)
-    for r in results:
-        flag = " ✓" if r.risk_auroc >= 0.90 else " ✗"
-        print(f"{r.spec.noise.sigma:>9.3f} {r.r2:>8.4f} {r.mae:>8.4f} {r.risk_auroc:>8.4f}{flag}")
+    for row in rows:
+        flag = " ✓" if row["auroc"] >= 0.90 else " ✗"
+        print(f"{row['noise_sigma']:>9.3f} {row['r2']:>8.4f} "
+              f"{row['mae']:>8.4f} {row['auroc']:>8.4f}{flag}")
     return rows
 
 
-# ---------------------------------------------------------------------------
-# E8c — cross-system
-# ---------------------------------------------------------------------------
-
 def run_e8c(simulator, groups, n_epochs: int, verbose: bool = True,
-            *, seed: int = 42, out_path=None) -> list:
-    """Cross-system: improved physics_lstm trained on D+E, eval per scenario.
+            *, seed: int = 42) -> list[dict[str, object]]:
+    """E8c: improved physics + LSTM trained on D+E, scored per scenario.
 
-    Defaults reproduce the published run; see _noise_sweep in
-    e6_2qubit_improved.py for why the keyword-only arguments exist.
+    Args:
+        simulator: The simulator.
+        groups: Scenario label -> configurations.
+        n_epochs: Training epochs.
+        verbose: Whether to print training progress.
+        seed: Seed of the datasets and of training; evaluation uses
+            `seed + 1`.
+
+    Returns:
+        One row per evaluation scenario, with the keys of
+        `RESULT_COLUMNS`.
     """
-    from src.infrastructure.ml.lstm_predictor import LSTMPredictor
-
-    cmd = CrossSystemCommand(
+    results = run_cross_system.CrossSystemUseCase(
+        simulator, store=scenario_lib.trajectory_store(),
+        predictor_factory=functools.partial(_improved_lstm, 0.5),
+    ).execute(run_cross_system.CrossSystemCommand(
         train_configs=groups["D"] + groups["E"],
         eval_groups={"D": groups["D"], "E": groups["E"]},
         window_length=WINDOW_2Q,
@@ -215,64 +212,51 @@ def run_e8c(simulator, groups, n_epochs: int, verbose: bool = True,
         batch_size=64,
         lr=5e-4,
         regression_loss="huber",
-        seed=42,
+        seed=seed,
         verbose=verbose,
         min_window_gap=MIN_GAP,
-    )
-
-    class E8CrossSystem(CrossSystemUseCase):
-        def _build_predictor(self):
-            return LSTMPredictor(
-                hidden_size=128, num_layers=2, dropout=0.3,
-                use_physics_prior=True,
-                adaptive_prior_r2_threshold=0.5,
-                risk_pos_weight=0.0, augment_sigma=0.02,
-            )
-
-    results = E8CrossSystem(simulator, store=trajectory_store()).execute(cmd)
-    rows = [r.as_dict() for r in results]
-    _save_csv(rows, out_path or RESULTS_DIR / "e8c_cross_system.csv",
-              ["name", "variant", "window_fraction", "noise_sigma",
-               "mae", "rmse", "r2", "mape", "auroc", "n_samples"])
+    ))
+    rows = [result.as_dict() for result in results]
 
     print(f"\n{'Scenario':>20} {'R²':>8} {'MAE':>8} {'AUROC':>8} {'N':>6}")
     print("-" * 56)
-    for r in results:
-        print(f"{r.spec.name:>20} {r.r2:>8.4f} {r.mae:>8.4f} {r.risk_auroc:>8.4f} {r.n_samples:>6}")
+    for row in rows:
+        print(f"{row['name']:>20} {row['r2']:>8.4f} {row['mae']:>8.4f} "
+              f"{row['auroc']:>8.4f} {row['n_samples']:>6}")
     return rows
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
+def main(argv: Sequence[str] | None = None) -> None:
+    """Runs E8a, E8b and E8c and writes their CSVs."""
+    args = common.parse_args(__doc__, argv=argv, seeds=None, out=False)
+    n_per, epochs = (50, 10) if args.fast else (500, 150)
+    config = {"n_per": n_per, "n_epochs": epochs, "window": WINDOW_2Q,
+              "min_gap": MIN_GAP}
+    simulator = simulator_lib.QuTipSimulator()
+    groups = scenario_lib.build_configs(n_per_scenario=n_per, seed=42)
 
-def main(fast: bool = False) -> None:
-    n_per  = 50  if fast else 500
-    epochs = 10  if fast else 150
+    print(f"\n{'=' * 70}\nE8a — Ablation (D+E) | n_per={n_per} | "
+          f"epochs={epochs} | window={WINDOW_2Q}\n{'=' * 70}")
+    rows = run_e8a(simulator, groups, epochs)
+    common.write_results(
+        rows, common.results_path("e8a_ablation", args),
+        columns=ABLATION_COLUMNS, seeds=[42], config=config)
 
-    simulator = QuTipSimulator()
-    groups = build_configs(n_per_scenario=n_per, seed=42)
+    print(f"\n{'=' * 70}\nE8b — Noise sweep (D+E) | n_per={n_per} | "
+          f"epochs={epochs}\n{'=' * 70}")
+    rows = run_e8b(simulator, groups, epochs)
+    common.write_results(
+        rows, common.results_path("e8b_noise_sweep", args),
+        columns=RESULT_COLUMNS, seeds=[42], config=config)
 
-    print(f"\n{'='*70}")
-    print(f"E8a — Ablation (D+E) | n_per={n_per} | epochs={epochs} | window={WINDOW_2Q}")
-    print(f"{'='*70}")
-    run_e8a(simulator, groups, n_epochs=epochs)
-
-    print(f"\n{'='*70}")
-    print(f"E8b — Noise sweep (D+E) | n_per={n_per} | epochs={epochs}")
-    print(f"{'='*70}")
-    run_e8b(simulator, groups, n_epochs=epochs)
-
-    print(f"\n{'='*70}")
-    print(f"E8c — Cross-system (D+E) | n_per={n_per} | epochs={epochs}")
-    print(f"{'='*70}")
-    run_e8c(simulator, groups, n_epochs=epochs)
-
-    print("\nE8 completed. Results in experiments/results/e8_*.csv")
+    print(f"\n{'=' * 70}\nE8c — Cross-system (D+E) | n_per={n_per} | "
+          f"epochs={epochs}\n{'=' * 70}")
+    rows = run_e8c(simulator, groups, epochs)
+    common.write_results(
+        rows, common.results_path("e8c_cross_system", args),
+        columns=RESULT_COLUMNS, seeds=[42], config=config)
+    print("\nE8 completed. Results in experiments/results/e8*.csv")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--fast", action="store_true")
-    args = parser.parse_args()
-    main(fast=args.fast)
+    main()

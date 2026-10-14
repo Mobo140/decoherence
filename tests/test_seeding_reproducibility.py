@@ -26,6 +26,7 @@ from src.domain.value_objects import (
     SystemConfig,
     TrajectoryResult,
 )
+from src.physics.lindblad_systems import sample_random_pure_state
 
 EXPERIMENTS = Path(__file__).resolve().parents[1] / "experiments"
 
@@ -94,6 +95,12 @@ def test_the_initial_state_draw_is_seeded_too():
     )
 
 
+def test_a_seeded_random_pure_state_is_reproducible():
+    first = sample_random_pure_state(n_qubits=1, seed=42)
+    second = sample_random_pure_state(n_qubits=1, seed=42)
+    assert np.allclose(first.full(), second.full())
+
+
 def test_different_seeds_give_different_data():
     a, b = _dataset(11), _dataset(12)
     assert not np.array_equal(a.t_decoh_abs, b.t_decoh_abs)
@@ -105,14 +112,14 @@ def test_train_model_command_accepts_a_seed():
 
 def test_training_with_the_same_seed_gives_identical_weights():
     torch = pytest.importorskip("torch")
-    from src.infrastructure.ml.lstm_predictor import LSTMPredictor
+    from src.models.lstm import LSTMPredictor
 
     ds = _dataset(5)
     weights = []
     for _ in range(2):
         p = LSTMPredictor(hidden_size=8, num_layers=1, dropout=0.0)
         p.train(ds, n_epochs=1, batch_size=8, verbose=False, seed=123)
-        weights.append([w.detach().clone() for w in p._net.parameters()])
+        weights.append([w.detach().clone() for w in p.net.parameters()])
     for a, b in zip(*weights):
         assert torch.equal(a, b), "same seed produced different weights"
 
@@ -120,14 +127,14 @@ def test_training_with_the_same_seed_gives_identical_weights():
 def test_training_without_a_seed_is_not_pinned():
     """Guards the test above from passing for the wrong reason."""
     torch = pytest.importorskip("torch")
-    from src.infrastructure.ml.lstm_predictor import LSTMPredictor
+    from src.models.lstm import LSTMPredictor
 
     ds = _dataset(5)
     weights = []
     for _ in range(2):
         p = LSTMPredictor(hidden_size=32, num_layers=1, dropout=0.0)
         p.train(ds, n_epochs=1, batch_size=8, verbose=False)
-        weights.append([w.detach().clone() for w in p._net.parameters()])
+        weights.append([w.detach().clone() for w in p.net.parameters()])
     assert any(not torch.equal(a, b) for a, b in zip(*weights))
 
 
@@ -148,7 +155,8 @@ def _training_command_sites():
                     depth -= 1
                     if depth == 0:
                         break
-            yield path.name, text[:m.start()].count("\n") + 1, m.group(1), text[i:j + 1]
+            line = text[:m.start()].count("\n") + 1
+            yield path.name, line, m.group(1), text[i:j + 1]
 
 
 def test_no_experiment_trains_without_a_seed():
@@ -159,7 +167,8 @@ def test_no_experiment_trains_without_a_seed():
         for name, line, cmd, body in _training_command_sites()
         if not re.search(r"\bseed\s*=", body)
     ]
-    assert not unseeded, "training command(s) without a seed: " + "; ".join(unseeded)
+    assert not unseeded, (
+        "training command(s) without a seed: " + "; ".join(unseeded))
 
 
 def test_the_site_scan_actually_finds_sites():

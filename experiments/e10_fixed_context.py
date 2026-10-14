@@ -20,8 +20,8 @@ R², MAE, AUROC vs E8c (D=0.740, E=0.575) and E7a (D=0.758, E=0.599).
 
 Output
 ------
-experiments/results/e10a_cross_system.csv
-experiments/results/e10b_cross_system.csv
+experiments/results/e10a_cross_system[_<tag>][_fast].csv
+experiments/results/e10b_cross_system[_<tag>][_fast].csv
 
 Usage
 -----
@@ -30,66 +30,42 @@ Usage
 """
 from __future__ import annotations
 
-import argparse
-import copy
-import csv
-import sys
-from pathlib import Path
-from typing import Dict, List
+from collections.abc import Sequence
 
-import numpy as np
+from experiments import common
+from src.application import backtest
+from src.application import generate_dataset
+from src.application import train_model
+from src.data import scenarios as scenario_lib
+from src.domain import ports
+from src.models import registry
+from src.simulation import simulator as simulator_lib
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from experiments._config import build_configs, trajectory_store
-from src.application.backtest import BacktestCommand, BacktestUseCase
-from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
-from src.application.run_cross_system import CrossSystemCommand, CrossSystemUseCase
-from src.application.train_model import TrainModelCommand, TrainModelUseCase
-from src.domain.value_objects import (
-    AblationResult, ExperimentSpec, NoiseConfig, PredictorVariant, SystemConfig,
-)
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
-
-
-RESULTS_DIR = Path(__file__).parent / "results"
-WINDOW_2Q   = 30
-MIN_GAP     = 15
-
-# 4-class system-type codes (must match generate_dataset.py)
+WINDOW_2Q = 30
+MIN_GAP = 15
+COLUMNS = (
+    "name", "variant", "window_fraction", "noise_sigma", "mae", "rmse",
+    "r2", "mape", "auroc", "n_samples")
+# 4-class system-type codes (must match the dataset encoder).
 SCENARIO_CODE = {"D": 2.0, "E": 3.0}
+# Published baselines: scenario -> name -> (R², AUROC).
+BASELINES = {
+    "D": {"physics_lstm E8c": (0.740, 0.789),
+          "Transformer E7a": (0.758, 0.863)},
+    "E": {"physics_lstm E8c": (0.575, 0.759),
+          "Transformer E7a": (0.599, 0.736)},
+}
 
 
-def _save_csv(rows: list, path: Path, fieldnames: list) -> None:
-    RESULTS_DIR.mkdir(exist_ok=True)
-    with open(path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-        writer.writeheader()
-        writer.writerows(rows)
-    print(f"Saved → {path}")
-
-
-def _force_all_test(dataset):
-    ds = copy.copy(dataset)
-    ds.test_idx  = np.arange(len(dataset.sequences))
-    ds.train_idx = np.array([], dtype=np.int64)
-    ds.val_idx   = np.array([], dtype=np.int64)
-    return ds
-
-
-# ---------------------------------------------------------------------------
-# E10a — physics_lstm, fixed 4-class context codes
-# ---------------------------------------------------------------------------
-
-def run_e10a(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True) -> list:
-    """Cross-system physics_lstm with corrected system-type codes."""
-    from src.infrastructure.ml.lstm_predictor import LSTMPredictor
-
-    print("=== E10a: training physics_lstm on D+E mixture (fixed 4-class codes) ===")
-
-    gen_uc = GenerateDatasetUseCase(simulator, store=trajectory_store())
-
-    train_dataset = gen_uc.execute(GenerateDatasetCommand(
+def _fit_on_mixture(
+    generator: generate_dataset.GenerateDatasetUseCase,
+    groups,
+    predictor: ports.IPredictor,
+    n_epochs: int,
+    verbose: bool,
+) -> None:
+    """Trains the predictor on the D+E mixture with the E8c settings."""
+    dataset = generator.execute(generate_dataset.GenerateDatasetCommand(
         configs=groups["D"] + groups["E"],
         window_length=WINDOW_2Q,
         horizon=1.0,
@@ -99,181 +75,147 @@ def run_e10a(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True)
         val_ratio=0.1,
         min_window_gap=MIN_GAP,
     ))
+    train_model.TrainModelUseCase(predictor).execute(
+        train_model.TrainModelCommand(
+            dataset=dataset,
+            n_epochs=n_epochs,
+            batch_size=64,
+            learning_rate=5e-4,
+            regression_loss="huber",
+            verbose=verbose,
+            seed=42,
+        ))
 
-    predictor = LSTMPredictor(
+
+def _score_per_scenario(
+    generator: generate_dataset.GenerateDatasetUseCase,
+    groups,
+    predictor: ports.IPredictor,
+    variant: str,
+    set_codes: bool,
+) -> list[dict[str, object]]:
+    """Scores the predictor on fresh trajectories of D and of E."""
+    rows = []
+    for label in ("D", "E"):
+        if set_codes:
+            predictor.inference_interaction_code = SCENARIO_CODE[label]
+        dataset = generator.execute(generate_dataset.GenerateDatasetCommand(
+            configs=groups[label],
+            window_length=WINDOW_2Q,
+            horizon=1.0,
+            samples_per_trajectory=5,
+            seed=43,
+            train_ratio=0.0,
+            val_ratio=0.0,
+            min_window_gap=MIN_GAP,
+        )).as_test_only()
+        metrics = backtest.BacktestUseCase(predictor).execute(
+            backtest.BacktestCommand(dataset=dataset, horizon=1.0))
+        print(f"  [{label}] → {metrics.summary()}")
+        rows.append({
+            "name": f"cross_system_{label}",
+            "variant": variant,
+            "window_fraction": WINDOW_2Q,
+            "noise_sigma": 0.0,
+            "mae": metrics.mae,
+            "rmse": metrics.rmse,
+            "r2": metrics.r2,
+            "mape": metrics.mape,
+            "auroc": metrics.risk_auroc,
+            "n_samples": metrics.n_samples,
+        })
+    return rows
+
+
+def run_e10a(simulator, groups, n_epochs: int,
+             verbose: bool = True) -> list[dict[str, object]]:
+    """E10a: physics + LSTM on D+E with the corrected system-type codes.
+
+    Args:
+        simulator: The simulator.
+        groups: Scenario label -> configurations.
+        n_epochs: Training epochs.
+        verbose: Whether to print training progress.
+
+    Returns:
+        One row per scenario, with the keys of `COLUMNS`.
+    """
+    print("=== E10a: training physics_lstm on D+E mixture "
+          "(fixed 4-class codes) ===")
+    generator = generate_dataset.GenerateDatasetUseCase(
+        simulator, store=scenario_lib.trajectory_store())
+    predictor = registry.build_model(
+        "physics_lstm",
         hidden_size=128, num_layers=2, dropout=0.3,
-        use_physics_prior=True,
         adaptive_prior_r2_threshold=0.5,
         risk_pos_weight=0.0, augment_sigma=0.02,
-        inference_interaction_code=2.0,  # XXZ default; overridden per scenario below
+        # XXZ default; set per scenario when scoring.
+        inference_interaction_code=2.0,
         inference_dissipator_code=0.0,
     )
-    TrainModelUseCase(predictor).execute(TrainModelCommand(
-        dataset=train_dataset,
-        n_epochs=n_epochs,
-        batch_size=64,
-        learning_rate=5e-4,
-        regression_loss="huber",
-        verbose=verbose,
-        seed=42,
-    ))
-
-    rows = []
-    for scenario_label in ["D", "E"]:
-        # Set the correct inference code for this scenario
-        predictor.inference_interaction_code = SCENARIO_CODE[scenario_label]
-
-        eval_dataset = gen_uc.execute(GenerateDatasetCommand(
-            configs=groups[scenario_label],
-            window_length=WINDOW_2Q,
-            horizon=1.0,
-            samples_per_trajectory=5,
-            seed=43,
-            train_ratio=0.0,
-            val_ratio=0.0,
-            min_window_gap=MIN_GAP,
-        ))
-        eval_dataset = _force_all_test(eval_dataset)
-
-        metrics = BacktestUseCase(predictor).execute(
-            BacktestCommand(dataset=eval_dataset, horizon=1.0)
-        )
-        print(f"  [{scenario_label}] → {metrics.summary()}")
-
-        rows.append({
-            "name": f"cross_system_{scenario_label}",
-            "variant": "physics_lstm",
-            "window_fraction": WINDOW_2Q,
-            "noise_sigma": 0.0,
-            "mae":  metrics.mae,
-            "rmse": metrics.rmse,
-            "r2":   metrics.r2,
-            "mape": metrics.mape,
-            "auroc": metrics.risk_auroc,
-            "n_samples": metrics.n_samples,
-        })
-
-    _save_csv(rows, RESULTS_DIR / "e10a_cross_system.csv",
-              ["name", "variant", "window_fraction", "noise_sigma",
-               "mae", "rmse", "r2", "mape", "auroc", "n_samples"])
-    return rows
+    _fit_on_mixture(generator, groups, predictor, n_epochs, verbose)
+    return _score_per_scenario(
+        generator, groups, predictor, "physics_lstm", set_codes=True)
 
 
-# ---------------------------------------------------------------------------
-# E10b — Transformer cross-system, E8c training settings
-# ---------------------------------------------------------------------------
+def run_e10b(simulator, groups, n_epochs: int,
+             verbose: bool = True) -> list[dict[str, object]]:
+    """E10b: Transformer on D+E with the E8c window and gap.
 
-def run_e10b(simulator, groups, n_epochs: int, n_per: int, verbose: bool = True) -> list:
-    """Cross-system Transformer with E8c config."""
-    from src.infrastructure.ml.transformer_predictor import TransformerPredictor
+    Args:
+        simulator: The simulator.
+        groups: Scenario label -> configurations.
+        n_epochs: Training epochs.
+        verbose: Whether to print training progress.
 
+    Returns:
+        One row per scenario, with the keys of `COLUMNS`.
+    """
     print("=== E10b: training Transformer on D+E mixture (E8c config) ===")
-
-    gen_uc = GenerateDatasetUseCase(simulator, store=trajectory_store())
-
-    train_dataset = gen_uc.execute(GenerateDatasetCommand(
-        configs=groups["D"] + groups["E"],
-        window_length=WINDOW_2Q,
-        horizon=1.0,
-        samples_per_trajectory=5,
-        seed=42,
-        train_ratio=0.9,
-        val_ratio=0.1,
-        min_window_gap=MIN_GAP,
-    ))
-
-    predictor = TransformerPredictor(
-        d_model=128, n_heads=4, n_layers=3, dim_ff=512, dropout=0.1,
-    )
-    TrainModelUseCase(predictor).execute(TrainModelCommand(
-        dataset=train_dataset,
-        n_epochs=n_epochs,
-        batch_size=64,
-        learning_rate=5e-4,
-        regression_loss="huber",
-        verbose=verbose,
-        seed=42,
-    ))
-
-    rows = []
-    for scenario_label in ["D", "E"]:
-        eval_dataset = gen_uc.execute(GenerateDatasetCommand(
-            configs=groups[scenario_label],
-            window_length=WINDOW_2Q,
-            horizon=1.0,
-            samples_per_trajectory=5,
-            seed=43,
-            train_ratio=0.0,
-            val_ratio=0.0,
-            min_window_gap=MIN_GAP,
-        ))
-        eval_dataset = _force_all_test(eval_dataset)
-
-        metrics = BacktestUseCase(predictor).execute(
-            BacktestCommand(dataset=eval_dataset, horizon=1.0)
-        )
-        print(f"  [{scenario_label}] → {metrics.summary()}")
-
-        rows.append({
-            "name": f"cross_system_{scenario_label}",
-            "variant": "transformer",
-            "window_fraction": WINDOW_2Q,
-            "noise_sigma": 0.0,
-            "mae":  metrics.mae,
-            "rmse": metrics.rmse,
-            "r2":   metrics.r2,
-            "mape": metrics.mape,
-            "auroc": metrics.risk_auroc,
-            "n_samples": metrics.n_samples,
-        })
-
-    _save_csv(rows, RESULTS_DIR / "e10b_cross_system.csv",
-              ["name", "variant", "window_fraction", "noise_sigma",
-               "mae", "rmse", "r2", "mape", "auroc", "n_samples"])
-    return rows
+    generator = generate_dataset.GenerateDatasetUseCase(
+        simulator, store=scenario_lib.trajectory_store())
+    predictor = registry.build_model("transformer_large")
+    _fit_on_mixture(generator, groups, predictor, n_epochs, verbose)
+    return _score_per_scenario(
+        generator, groups, predictor, "transformer", set_codes=False)
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
+def main(argv: Sequence[str] | None = None) -> None:
+    """Runs E10a and E10b and writes their CSVs."""
+    args = common.parse_args(__doc__, argv=argv, seeds=None, out=False)
+    n_per, epochs = (50, 10) if args.fast else (500, 150)
+    config = {"n_per": n_per, "n_epochs": epochs, "window": WINDOW_2Q,
+              "min_gap": MIN_GAP}
+    simulator = simulator_lib.QuTipSimulator()
+    groups = scenario_lib.build_configs(n_per_scenario=n_per, seed=42)
 
-def main(fast: bool = False) -> None:
-    n_per  = 50  if fast else 500
-    epochs = 10  if fast else 150
+    print(f"\n{'=' * 70}\nE10a — Fixed context (physics_lstm) | "
+          f"n_per={n_per} | epochs={epochs}\n{'=' * 70}")
+    rows_a = run_e10a(simulator, groups, epochs)
+    common.write_results(
+        rows_a, common.results_path("e10a_cross_system", args),
+        columns=COLUMNS, seeds=[42], config=config)
 
-    simulator = QuTipSimulator()
-    groups = build_configs(n_per_scenario=n_per, seed=42)
-
-    print(f"\n{'='*70}")
-    print(f"E10a — Fixed context (physics_lstm) | n_per={n_per} | epochs={epochs}")
-    print(f"{'='*70}")
-    rows_a = run_e10a(simulator, groups, n_epochs=epochs, n_per=n_per)
-
-    print(f"\n{'='*70}")
-    print(f"E10b — Transformer cross-system | n_per={n_per} | epochs={epochs}")
-    print(f"{'='*70}")
-    rows_b = run_e10b(simulator, groups, n_epochs=epochs, n_per=n_per)
+    print(f"\n{'=' * 70}\nE10b — Transformer cross-system | "
+          f"n_per={n_per} | epochs={epochs}\n{'=' * 70}")
+    rows_b = run_e10b(simulator, groups, epochs)
+    common.write_results(
+        rows_b, common.results_path("e10b_cross_system", args),
+        columns=COLUMNS, seeds=[42], config=config)
 
     print("\n\n=== SUMMARY ===")
     print(f"\n{'Model':<20} {'Scenario':<10} {'R²':>8} {'AUROC':>8}")
     print("-" * 50)
-    baselines = {
-        "D": {"physics_lstm E8c": (0.740, 0.789), "Transformer E7a": (0.758, 0.863)},
-        "E": {"physics_lstm E8c": (0.575, 0.759), "Transformer E7a": (0.599, 0.736)},
-    }
     for row in rows_a + rows_b:
-        sc = row["name"].split("_")[-1]
-        print(f"{row['variant']:<20} {sc:<10} {row['r2']:>8.4f} {row['auroc']:>8.4f}")
+        scenario = row["name"].split("_")[-1]
+        print(f"{row['variant']:<20} {scenario:<10} {row['r2']:>8.4f} "
+              f"{row['auroc']:>8.4f}")
     print("\nBaselines:")
-    for sc, models in baselines.items():
+    for scenario, models in BASELINES.items():
         for name, (r2, auroc) in models.items():
-            print(f"  {name:<20} {sc:<10} {r2:>8.4f} {auroc:>8.4f}")
-
-    print("\nE10 completed. Results in experiments/results/e10_*.csv")
+            print(f"  {name:<20} {scenario:<10} {r2:>8.4f} {auroc:>8.4f}")
+    print("\nE10 completed. Results in experiments/results/e10*.csv")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--fast", action="store_true")
-    args = parser.parse_args()
-    main(fast=args.fast)
+    main()

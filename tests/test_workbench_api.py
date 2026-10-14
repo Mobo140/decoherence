@@ -40,21 +40,26 @@ def test_models_slots():
 
 
 def test_simulate_scenario_a():
-    data = _client().post("/api/simulate", json={"scenario": "A", "seed": 1}).json()
+    data = _client().post(
+        "/api/simulate", json={"scenario": "A", "seed": 1}).json()
     assert data["t_decoh"] > 0
     assert len(data["times"]) == len(data["coherence"])
     assert data["n_qubits"] == 1
 
 
 def test_simulate_c_sends_l1_and_sigma_x():
-    data = _client().post("/api/simulate", json={"scenario": "C", "seed": 42}).json()
+    data = _client().post(
+        "/api/simulate", json={"scenario": "C", "seed": 42}).json()
     assert data["observable_name"] == "sigma_x"
     assert len(data["observable"]) == len(data["coherence"])
     assert data["coherence"] != data["observable"]
 
 
 def test_predict_fallback_physics_only():
-    data = _client().post("/api/predict", json={"scenario": "A", "seed": 2, "horizon": 1.0, "alarm": 0.7}).json()
+    data = _client().post(
+        "/api/predict",
+        json={"scenario": "A", "seed": 2, "horizon": 1.0, "alarm": 0.7},
+    ).json()
     assert "t_pred" in data
     assert data["source"] in ("registry", "physics_only fallback")
     assert 0.0 <= data["risk"] <= 1.0
