@@ -166,8 +166,8 @@ def sample_window_ends(
         rng: Source of randomness.
 
     Returns:
-        The chosen end indices. With a gap, fewer than `n_samples` may be
-        found.
+        The chosen end indices; none for `n_samples` = 0. With a gap,
+        fewer than `n_samples` may be found.
 
     Raises:
         ValueError: If `n_samples` or `min_gap` is negative.
@@ -177,7 +177,7 @@ def sample_window_ends(
     if min_gap < 0:
         raise ValueError(f"min_gap must be non-negative, got {min_gap}.")
     n_sample = min(n_samples, len(valid_ends))
-    if min_gap > 0 and len(valid_ends) > 1:
+    if min_gap > 0 and len(valid_ends) > 1 and n_sample > 0:
         # Greedy: walk a random order and keep ends far from those kept.
         selected: list[int] = []
         for idx in rng.permutation(valid_ends):
