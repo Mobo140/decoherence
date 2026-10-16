@@ -1,6 +1,8 @@
 """Lindblad systems: Hamiltonian, jump operators and the rate gamma(t)."""
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import qutip as qt
 from scipy.special import comb
@@ -32,7 +34,14 @@ def bernstein_gamma(t: float, coeffs: np.ndarray, t_max: float) -> float:
 
     Returns:
         The rate at ``t``, clipped at 0 so that it is never negative.
+
+    Raises:
+        ValueError: If ``coeffs`` is empty or ``t_max`` is not positive.
     """
+    if len(coeffs) == 0:
+        raise ValueError("Bernstein coefficients must not be empty.")
+    if not t_max > 0:
+        raise ValueError(f"t_max must be positive, got {t_max!r}.")
     t_norm = np.clip(t / t_max, 0.0, 1.0)
     degree = len(coeffs) - 1
     gamma_val = sum(
@@ -63,6 +72,18 @@ class _LindbladSystem:
         gamma_coeffs: np.ndarray | None,
         gamma_t_max: float,
     ) -> None:
+        """Stores the rate; raises ValueError if it is invalid."""
+        if gamma_const is not None and not (
+                math.isfinite(gamma_const) and gamma_const >= 0):
+            raise ValueError(
+                "gamma_const must be finite and non-negative, "
+                f"got {gamma_const!r}.")
+        if gamma_coeffs is not None and len(gamma_coeffs) == 0:
+            raise ValueError("gamma_coeffs must not be empty.")
+        if not (math.isfinite(gamma_t_max) and gamma_t_max > 0):
+            raise ValueError(
+                f"gamma_t_max must be finite and positive, "
+                f"got {gamma_t_max!r}.")
         self.gamma_const = gamma_const
         self.gamma_coeffs = gamma_coeffs
         self.gamma_t_max = gamma_t_max
@@ -124,7 +145,9 @@ class SingleQubitSystem(_LindbladSystem):
             gamma_t_max: Time that normalises gamma(t).
 
         Raises:
-            ValueError: If a jump operator name is unknown.
+            ValueError: If a jump operator name is unknown, the rate is
+                negative or not finite, `gamma_coeffs` is empty or
+                `gamma_t_max` is not positive.
         """
         self._init_rate(gamma_const, gamma_coeffs, gamma_t_max)
         self.omega = omega
@@ -201,7 +224,8 @@ class TwoQubitSystem(_LindbladSystem):
 
         Raises:
             ValueError: If the interaction type or a jump operator name is
-                unknown.
+                unknown, the rate is negative or not finite, `gamma_coeffs`
+                is empty or `gamma_t_max` is not positive.
         """
         self._init_rate(gamma_const, gamma_coeffs, gamma_t_max)
         self.J = J
@@ -247,7 +271,13 @@ def sample_random_pure_state(
 
     Returns:
         The density matrix |psi><psi| with dims [[2]*n, [2]*n].
+
+    Raises:
+        ValueError: If `n_qubits` is not a positive integer.
     """
+    if int(n_qubits) != n_qubits or n_qubits < 1:
+        raise ValueError(
+            f"n_qubits must be a positive integer, got {n_qubits!r}.")
     dim = 2 ** n_qubits
     if seed is not None:
         rng = np.random.default_rng(seed)

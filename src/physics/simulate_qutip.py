@@ -46,6 +46,24 @@ def _collapse_operators(system: _System) -> list:
     return [[L, sqrt_gamma] for L in system.L_list]
 
 
+def _check_inputs(
+    system: _System,
+    initial_state: qt.Qobj,
+    times: np.ndarray,
+) -> None:
+    """Raises ValueError if the time grid or the initial state is invalid."""
+    grid = np.asarray(times, dtype=float)
+    if grid.ndim != 1 or grid.size == 0:
+        raise ValueError(
+            f"times must be a non-empty 1-D array, got shape {grid.shape}.")
+    if not np.all(np.isfinite(grid)) or np.any(np.diff(grid) <= 0):
+        raise ValueError("times must be finite and strictly increasing.")
+    if initial_state.shape != system.H.shape:
+        raise ValueError(
+            f"The initial state has shape {initial_state.shape} but the "
+            f"Hamiltonian has shape {system.H.shape}.")
+
+
 def _simulate(
     system: _System,
     initial_state: qt.Qobj,
@@ -67,7 +85,14 @@ def _simulate(
     Returns:
         Dictionary of observable trajectories (arrays) plus
         ``density_matrices``, the list of density matrices as arrays.
+
+    Raises:
+        ValueError: If `times` is empty, not 1-D, not finite or not strictly
+            increasing; if `initial_state` does not fit the system; or if a
+            name in `observable_names` is not produced by
+            `compute_observables`.
     """
+    _check_inputs(system, initial_state, times)
     result = qt.mesolve(
         system.H,
         initial_state,
@@ -83,9 +108,13 @@ def _simulate(
     trajectories["coherence_l1"] = []
     for rho in density_matrices:
         values = compute_observables(rho)
+        unknown = [name for name in observable_names if name not in values]
+        if unknown:
+            raise ValueError(
+                f"Unknown observables {unknown}; valid names are "
+                f"{sorted(values)}.")
         for name in observable_names:
-            if name in values:
-                trajectories[name].append(values[name])
+            trajectories[name].append(values[name])
         trajectories["purity"].append(values["purity"])
         trajectories["coherence_l1"].append(values["coherence_l1"])
 
@@ -113,6 +142,9 @@ def simulate_single_qubit(
     Returns:
         Dictionary of observable trajectories, including ``purity`` and
         ``coherence_l1``, and ``density_matrices``.
+
+    Raises:
+        ValueError: As `_simulate`.
     """
     if observables is None:
         observables = list(_SINGLE_QUBIT_OBSERVABLES)
@@ -140,6 +172,9 @@ def simulate_two_qubit(
     Returns:
         Dictionary of observable trajectories, including ``purity`` and
         ``coherence_l1``, and ``density_matrices``.
+
+    Raises:
+        ValueError: As `_simulate`.
     """
     if observables is None:
         observables = list(_TWO_QUBIT_OBSERVABLES)
