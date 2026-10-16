@@ -8,6 +8,13 @@ from typing import Any
 import numpy as np
 
 
+# Arrays with one entry per window; the codes and `censored` may be empty.
+_REQUIRED_PER_WINDOW = (
+    "t_obs", "t_decoh_abs", "remaining_time", "risk_labels")
+_OPTIONAL_PER_WINDOW = (
+    "interaction_type_codes", "dissipator_type_codes", "J_values", "censored")
+
+
 @dataclasses.dataclass
 class Dataset:
     """Labelled windows ready for training and backtesting.
@@ -41,6 +48,12 @@ class Dataset:
             unknown.
         censored: True where t_decoh_abs is only a lower bound (the
             threshold was not crossed by t_max). Empty if unknown.
+
+    Raises:
+        ValueError: If `sequences` is not 3-D, its last axis does not match
+            `feature_names`, a per-window array does not have one entry per
+            window (the optional ones may be empty), or an index is not a
+            window.
     """
 
     sequences: np.ndarray
@@ -62,6 +75,32 @@ class Dataset:
     censored: np.ndarray = dataclasses.field(
         default_factory=lambda: np.zeros(0, dtype=bool))
 
+    def __post_init__(self) -> None:
+        n_windows = len(self.sequences)
+        if self.sequences.ndim != 3:
+            raise ValueError(
+                "sequences must have shape (N, window_length, n_features), "
+                f"got {self.sequences.shape}.")
+        if self.sequences.shape[2] != len(self.feature_names):
+            raise ValueError(
+                f"sequences have {self.sequences.shape[2]} features but "
+                f"feature_names has {len(self.feature_names)}.")
+        for name in _REQUIRED_PER_WINDOW:
+            if len(getattr(self, name)) != n_windows:
+                raise ValueError(
+                    f"{name} has {len(getattr(self, name))} entries for "
+                    f"{n_windows} windows.")
+        for name in _OPTIONAL_PER_WINDOW:
+            if len(getattr(self, name)) not in (0, n_windows):
+                raise ValueError(
+                    f"{name} has {len(getattr(self, name))} entries for "
+                    f"{n_windows} windows; it must be empty or complete.")
+        for name in ("train_idx", "val_idx", "test_idx"):
+            index = np.asarray(getattr(self, name))
+            if index.size and (index.min() < 0 or index.max() >= n_windows):
+                raise ValueError(
+                    f"{name} contains an index outside 0..{n_windows - 1}.")
+
     def with_sequences(self, sequences: np.ndarray) -> Dataset:
         """Returns the dataset with other input windows.
 
@@ -74,7 +113,9 @@ class Dataset:
             A new Dataset; labels, indices and codes are unchanged.
 
         Raises:
-            ValueError: If `sequences` has a different number of windows.
+            ValueError: If `sequences` has a different number of windows,
+                is not 3-D, or its last axis does not match the feature
+                names.
         """
         if len(sequences) != len(self.sequences):
             raise ValueError(
@@ -94,9 +135,11 @@ class Dataset:
             A new Dataset with the selected columns.
 
         Raises:
-            ValueError: If a name is not in `feature_names`.
+            TypeError: If `names` is a single string.
+            ValueError: If a name is not in `feature_names`, or no column
+                is left.
         """
-        wanted = set(names)
+        wanted = _name_set(names)
         missing = wanted - set(self.feature_names)
         if missing:
             raise ValueError(f"Unknown features: {sorted(missing)}")
@@ -113,8 +156,12 @@ class Dataset:
 
         Returns:
             A new Dataset without the dropped columns.
+
+        Raises:
+            TypeError: If `names` is a single string.
+            ValueError: If every column would be removed.
         """
-        dropped = set(names)
+        dropped = _name_set(names)
         keep = [i for i, name in enumerate(self.feature_names)
                 if name not in dropped]
         return self._take_columns(keep)
@@ -134,8 +181,19 @@ class Dataset:
         )
 
     def _take_columns(self, keep: list[int]) -> Dataset:
+        if not keep:
+            raise ValueError("A dataset needs at least one feature column.")
         return dataclasses.replace(
             self,
             sequences=np.ascontiguousarray(self.sequences[:, :, keep]),
             feature_names=[self.feature_names[i] for i in keep],
         )
+
+
+def _name_set(names: Iterable[str]) -> set[str]:
+    """Returns the names as a set; a bare string is a mistake, not a name."""
+    if isinstance(names, str):
+        raise TypeError(
+            f"Expected a collection of feature names, got the string "
+            f"{names!r}; pass [{names!r}].")
+    return set(names)

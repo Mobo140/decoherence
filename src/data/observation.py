@@ -14,6 +14,7 @@ sets of the noise-aware experiments (R16, R21, R22).
 from __future__ import annotations
 
 import dataclasses
+import math
 import types
 from collections.abc import Callable, Mapping
 
@@ -32,6 +33,20 @@ _PER_WINDOW_FIELDS = (
 _AUGMENT_SIGMA_RANGE = (0.005, 0.12)
 
 
+def _check_sigma(sigma: float) -> None:
+    """Raises ValueError unless `sigma` is finite and non-negative."""
+    if not (math.isfinite(sigma) and sigma >= 0):
+        raise ValueError(
+            f"sigma must be finite and non-negative, got {sigma!r}.")
+
+
+def _check_rng(rng: object) -> None:
+    """Raises TypeError unless `rng` is a numpy Generator."""
+    if not isinstance(rng, np.random.Generator):
+        raise TypeError(
+            f"rng must be a numpy.random.Generator, got {rng!r}.")
+
+
 def ar1_filter(eta: np.ndarray, phi: float | np.ndarray) -> np.ndarray:
     """Turns white noise into stationary unit-variance AR(1) noise.
 
@@ -47,8 +62,24 @@ def ar1_filter(eta: np.ndarray, phi: float | np.ndarray) -> np.ndarray:
 
     Returns:
         Noise of the same shape and dtype as `eta`.
+
+    Raises:
+        ValueError: If `eta` is not at least 2-D with one step or more,
+            `phi` is neither a scalar nor a 1-D array with one value per
+            window, or `phi` has an absolute value of 1 or more (or is
+            NaN), for which the noise is not stationary.
     """
     phi = np.asarray(phi, dtype=np.float64)
+    if eta.ndim < 2 or eta.shape[1] == 0:
+        raise ValueError(
+            "eta must have shape (n_windows, n_steps, ...) with at least "
+            f"one step, got {eta.shape}.")
+    if phi.ndim > 1 or (phi.ndim == 1 and phi.shape[0] != eta.shape[0]):
+        raise ValueError(
+            f"phi must be a scalar or have one value per window "
+            f"({eta.shape[0]}), got shape {phi.shape}.")
+    if not np.all(np.abs(phi) < 1.0):
+        raise ValueError("phi must satisfy |phi| < 1.")
     if not phi.any():
         return eta
     if phi.ndim == 1:
@@ -107,12 +138,15 @@ def gaussian(
         A dataset with noisy windows.
 
     Raises:
-        ValueError: If `phi` is not 0.
+        ValueError: If `phi` is not 0 or `sigma` is negative or not finite.
+        TypeError: If `sigma` is positive and `rng` is not a Generator.
     """
     if phi != 0.0:
         raise ValueError("Gaussian noise is white; use 'ar1' for phi > 0")
+    _check_sigma(sigma)
     if sigma == 0.0:
         return dataset
+    _check_rng(rng)
     noise = rng.normal(0.0, sigma, size=dataset.sequences.shape)
     return dataset.with_sequences(dataset.sequences + noise.astype(np.float32))
 
@@ -139,7 +173,14 @@ def ar1(
 
     Returns:
         A dataset with noisy windows.
+
+    Raises:
+        ValueError: If `sigma` is negative or not finite, or `phi` is not
+            in (-1, 1).
+        TypeError: If `rng` is not a Generator.
     """
+    _check_sigma(sigma)
+    _check_rng(rng)
     eta = rng.normal(0.0, 1.0, size=dataset.sequences.shape)
     noise = ar1_filter(eta, phi)
     return dataset.with_sequences(dataset.sequences + sigma * noise)
@@ -179,7 +220,16 @@ def noise_augmented(
     Returns:
         A dataset with the original windows followed by the copies. The
         copies join the train and val splits of their originals.
+
+    Raises:
+        ValueError: If `copies` is negative or `phi_max` is not in [0, 1].
+        TypeError: If `rng` is not a Generator.
     """
+    if copies < 0:
+        raise ValueError(f"copies must be non-negative, got {copies}.")
+    if not 0.0 <= phi_max <= 1.0:
+        raise ValueError(f"phi_max must be in [0, 1], got {phi_max!r}.")
+    _check_rng(rng)
     n = len(dataset.sequences)
     source = np.concatenate([dataset.train_idx, dataset.val_idx])
     is_train = np.concatenate([np.ones(len(dataset.train_idx), bool),

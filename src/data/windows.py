@@ -18,6 +18,9 @@ from src.domain import value_objects
 # (coherence_l1 and purity) so that those stay at a fixed position.
 PHYSICS_COLUMNS = 2
 
+# Slack for ratios such as 0.9 + 0.1 whose float sum is not exactly 1.
+_RATIO_TOLERANCE = 1e-9
+
 
 @dataclasses.dataclass
 class _Windows:
@@ -33,6 +36,18 @@ class _Windows:
     dissipator_codes: list[float] = dataclasses.field(default_factory=list)
     coupling: list[float] = dataclasses.field(default_factory=list)
     censored: list[bool] = dataclasses.field(default_factory=list)
+
+
+def _check_ratios(train_ratio: float, val_ratio: float) -> None:
+    """Raises ValueError unless the ratios are in [0, 1] with sum <= 1."""
+    for name, ratio in (("train_ratio", train_ratio),
+                        ("val_ratio", val_ratio)):
+        if not 0.0 <= ratio <= 1.0:
+            raise ValueError(f"{name} must be in [0, 1], got {ratio!r}.")
+    if train_ratio + val_ratio > 1.0 + _RATIO_TOLERANCE:
+        raise ValueError(
+            f"train_ratio + val_ratio must not exceed 1, got "
+            f"{train_ratio} + {val_ratio}.")
 
 
 def assign_splits(
@@ -54,7 +69,15 @@ def assign_splits(
 
     Returns:
         One of "train", "val" or "test" per trajectory.
+
+    Raises:
+        ValueError: If `n_trajectories` is negative, a ratio is not in
+            [0, 1], or the ratios add up to more than 1.
     """
+    if n_trajectories < 0:
+        raise ValueError(
+            f"n_trajectories must be non-negative, got {n_trajectories}.")
+    _check_ratios(train_ratio, val_ratio)
     order = rng.permutation(n_trajectories)
     n_train = int(n_trajectories * train_ratio)
     n_val = int(n_trajectories * val_ratio)
@@ -115,7 +138,13 @@ def valid_window_ends(
     Returns:
         Increasing indices into `times`; empty if T2 is shorter than a
         window.
+
+    Raises:
+        ValueError: If `window_length` is less than 1.
     """
+    if window_length < 1:
+        raise ValueError(
+            f"window_length must be at least 1, got {window_length}.")
     ends = np.where(times < t_decoh)[0]
     return ends[ends >= window_length]
 
@@ -139,7 +168,14 @@ def sample_window_ends(
     Returns:
         The chosen end indices. With a gap, fewer than `n_samples` may be
         found.
+
+    Raises:
+        ValueError: If `n_samples` or `min_gap` is negative.
     """
+    if n_samples < 0:
+        raise ValueError(f"n_samples must be non-negative, got {n_samples}.")
+    if min_gap < 0:
+        raise ValueError(f"min_gap must be non-negative, got {min_gap}.")
     n_sample = min(n_samples, len(valid_ends))
     if min_gap > 0 and len(valid_ends) > 1:
         # Greedy: walk a random order and keep ends far from those kept.
@@ -164,7 +200,16 @@ def pad_features(sequences: list[np.ndarray]) -> list[np.ndarray]:
 
     Returns:
         Windows that all have the largest n_features.
+
+    Raises:
+        ValueError: If `sequences` is empty, a window is not 2-D, or a
+            window that needs padding has fewer than `PHYSICS_COLUMNS`
+            columns.
     """
+    if not sequences:
+        raise ValueError("There are no windows to pad.")
+    if any(s.ndim != 2 for s in sequences):
+        raise ValueError("Every window must have shape (length, n_features).")
     width = max(s.shape[-1] for s in sequences)
     if width == min(s.shape[-1] for s in sequences):
         return sequences
@@ -172,6 +217,10 @@ def pad_features(sequences: list[np.ndarray]) -> list[np.ndarray]:
     for window in sequences:
         n_pad = width - window.shape[-1]
         if n_pad > 0:
+            if window.shape[-1] < PHYSICS_COLUMNS:
+                raise ValueError(
+                    f"A window to pad needs at least {PHYSICS_COLUMNS} "
+                    f"columns, got {window.shape[-1]}.")
             window = np.concatenate(
                 [window[:, :-PHYSICS_COLUMNS],
                  np.zeros((window.shape[0], n_pad), dtype=window.dtype),
@@ -253,8 +302,24 @@ def build_dataset(
         The dataset.
 
     Raises:
+        ValueError: If `window_length` or `samples_per_trajectory` is less
+            than 1, `horizon` is not positive, `min_window_gap` is
+            negative, or the split ratios are invalid (see
+            `assign_splits`).
         RuntimeError: If no trajectory yields a pre-decoherence window.
     """
+    if window_length < 1:
+        raise ValueError(
+            f"window_length must be at least 1, got {window_length}.")
+    if samples_per_trajectory < 1:
+        raise ValueError(
+            "samples_per_trajectory must be at least 1, "
+            f"got {samples_per_trajectory}.")
+    if not horizon > 0:
+        raise ValueError(f"horizon must be positive, got {horizon!r}.")
+    if min_window_gap < 0:
+        raise ValueError(
+            f"min_window_gap must be non-negative, got {min_window_gap}.")
     split_of = assign_splits(len(trajectories), train_ratio, val_ratio, rng)
     rows = _Windows()
     n_skipped = 0
