@@ -16,6 +16,24 @@ def test_aliases_build_the_variants():
                       variants.EntanglementSimulator)
 
 
+def test_every_registered_alias_builds_its_class():
+    arguments = {
+        "stochastic_gamma": dict(s=0.1, tau=1.0, seed=0),
+        "parity_sector": dict(sector=1),
+    }
+    assert set(registry.SIMULATORS) == {
+        "plain", "correlators", "entanglement", "stochastic_gamma",
+        "parity_sector"}
+    for alias, cls in registry.SIMULATORS.items():
+        built = registry.build_simulator(alias, **arguments.get(alias, {}))
+        assert type(built) is cls
+
+
+def test_each_call_builds_a_new_simulator():
+    assert registry.build_simulator("plain") is not (
+        registry.build_simulator("plain"))
+
+
 def test_parameters_reach_the_constructor():
     sim = registry.build_simulator(
         "stochastic_gamma", s=0.3, tau=2.0, seed=4)
@@ -39,6 +57,45 @@ def test_parity_sector_projects_the_initial_operator_from_the_left():
 def test_unknown_alias_lists_the_valid_ones():
     with pytest.raises(KeyError, match="plain"):
         registry.build_simulator("nope")
+
+
+def test_unknown_alias_message_names_the_alias_and_every_valid_one():
+    with pytest.raises(KeyError) as excinfo:
+        registry.build_simulator("nope")
+    message = str(excinfo.value)
+    assert "'nope'" in message
+    for alias in registry.SIMULATORS:
+        assert alias in message
+
+
+@pytest.mark.parametrize("alias", ["Plain", "PLAIN", " plain", "", None, 3])
+def test_alias_is_matched_exactly(alias):
+    with pytest.raises(KeyError, match="Unknown simulator"):
+        registry.build_simulator(alias)
+
+
+def test_registry_cannot_be_modified():
+    with pytest.raises(TypeError):
+        registry.SIMULATORS["extra"] = simulator.QuTipSimulator
+
+
+def test_parameter_the_simulator_does_not_take_raises_type_error():
+    with pytest.raises(TypeError, match="foo|takes no arguments"):
+        registry.build_simulator("plain", foo=1)
+
+
+def test_missing_required_parameters_raise_type_error():
+    with pytest.raises(TypeError, match="missing"):
+        registry.build_simulator("stochastic_gamma")
+    with pytest.raises(TypeError, match="sector"):
+        registry.build_simulator("parity_sector")
+
+
+def test_invalid_parameters_reach_the_constructor_validation():
+    with pytest.raises(ValueError, match="sector must be"):
+        registry.build_simulator("parity_sector", sector=0)
+    with pytest.raises(ValueError, match="tau must be"):
+        registry.build_simulator("stochastic_gamma", s=0.3, tau=0, seed=1)
 
 
 def test_parity_sector_leaves_one_qubit_alone_and_checks_the_sector():
