@@ -5,6 +5,8 @@ physics and the decoherence-time logic untouched.
 """
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import qutip as qt
 
@@ -72,9 +74,19 @@ class StochasticGammaSimulator(simulator.QuTipSimulator):
 
         Args:
             s: Fixed strength, or None to draw it for each trajectory.
-            tau: Fixed correlation time; ignored when ``s`` is None.
+            tau: Fixed correlation time; ignored when ``s`` is None or 0.
             seed: Seed of the generator of the OU paths.
+
+        Raises:
+            ValueError: If `s` is negative or not finite, or `s` is positive
+                and `tau` is not a finite positive number.
         """
+        if s is not None and not (math.isfinite(s) and s >= 0):
+            raise ValueError(
+                f"s must be finite and non-negative, got {s!r}.")
+        if s and not (tau is not None and math.isfinite(tau) and tau > 0):
+            raise ValueError(
+                f"tau must be finite and positive, got {tau!r}.")
         self.s, self.tau = s, tau
         self.rng = np.random.default_rng(seed)
 
