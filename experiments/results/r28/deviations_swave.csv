@@ -1,0 +1,21 @@
+figure,quantity,max_abs_deviation,n_points,note
+PRB Fig. 3,"SW1 rate, N=4",1.7763568394002505e-15,81,"kondo_rates vs sum K_ll' C_l C_l' (ED amplitudes), G = Delta"
+PRB Fig. 3,"SW2 rate, N=4",8.881784197001252e-16,81,"kondo_rates vs sum K_ll' C_l C_l' (ED amplitudes), G = Delta"
+PRB Eq. 37,"SW1 rate at k_F d = 0, N=4",1.3322676295501878e-15,1,ratio to the single-spin rate vs N
+PRB Fig. 3(d),"SW2 rate at k_F d = 0, N=4",5.326627391833539e-17,1,SW2 is orthogonal to SW1: no decay at k_F d = 0
+PRB Sec. V A,"Delta_SW1 / (2S-1)|J|, N=4",1.7763568394002505e-15,1,meV
+PRB Fig. 3,"SW1 rate, N=5",3.552713678800501e-15,81,"kondo_rates vs sum K_ll' C_l C_l' (ED amplitudes), G = Delta"
+PRB Fig. 3,"SW2 rate, N=5",8.881784197001252e-16,81,"kondo_rates vs sum K_ll' C_l C_l' (ED amplitudes), G = Delta"
+PRB Eq. 37,"SW1 rate at k_F d = 0, N=5",4.440892098500626e-15,1,ratio to the single-spin rate vs N
+PRB Fig. 3(d),"SW2 rate at k_F d = 0, N=5",4.760912066202432e-17,1,SW2 is orthogonal to SW1: no decay at k_F d = 0
+PRB Sec. V A,"Delta_SW1 / (2S-1)|J|, N=5",0.0,1,meV
+PRB Fig. 3,"SW1 rate, N=6",4.440892098500626e-15,81,"kondo_rates vs sum K_ll' C_l C_l' (ED amplitudes), G = Delta"
+PRB Fig. 3,"SW2 rate, N=6",1.1102230246251565e-15,81,"kondo_rates vs sum K_ll' C_l C_l' (ED amplitudes), G = Delta"
+PRB Eq. 37,"SW1 rate at k_F d = 0, N=6",5.329070518200751e-15,1,ratio to the single-spin rate vs N
+PRB Fig. 3(d),"SW2 rate at k_F d = 0, N=6",4.444451822584069e-17,1,SW2 is orthogonal to SW1: no decay at k_F d = 0
+PRB Sec. V A,"Delta_SW1 / (2S-1)|J|, N=6",3.552713678800501e-15,1,meV
+PRB Fig. 3,"SW1 rate, N=8",3.552713678800501e-15,81,"kondo_rates vs sum K_ll' C_l C_l' (ED amplitudes), G = Delta"
+PRB Fig. 3,"SW2 rate, N=8",1.7763568394002505e-15,81,"kondo_rates vs sum K_ll' C_l C_l' (ED amplitudes), G = Delta"
+PRB Eq. 37,"SW1 rate at k_F d = 0, N=8",7.993605777301127e-15,1,ratio to the single-spin rate vs N
+PRB Fig. 3(d),"SW2 rate at k_F d = 0, N=8",2.0616484468365932e-17,1,SW2 is orthogonal to SW1: no decay at k_F d = 0
+PRB Sec. V A,"Delta_SW1 / (2S-1)|J|, N=8",0.0,1,meV

@@ -1,0 +1,22 @@
+{
+  "csv": "r28_surfsci.csv",
+  "created_utc": "2026-11-07T16:11:18+00:00",
+  "command": [
+    "r28_kondo_reproduction.py",
+    "--part",
+    "surf"
+  ],
+  "seeds": [
+    0
+  ],
+  "config": "Surf. Sci. Eqs. 14, 15, 21, 23, 24",
+  "environment": {
+    "python": "3.12.1",
+    "numpy": "2.4.4",
+    "scipy": "1.17.1",
+    "qutip": "5.2.3",
+    "torch": "2.11.0",
+    "git_commit": "03fae0e545b11a1a571316f564bc8cf846310fea",
+    "torch_threads": 4
+  }
+}

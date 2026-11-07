@@ -1,0 +1,15 @@
+figure,quantity,max_abs_deviation,n_points,note
+PRB Eqs. 42-44,"ED vs kernel sum, FM",5.684341886080802e-14,1,"N = 2..8, d = 1, 2, 3, kondo_rates between the two degenerate ground states"
+PRB Eqs. 42-44,"ED vs kernel sum, AFM",1.2434497875801753e-14,1,"N = 2..8, d = 1, 2, 3, kondo_rates between the two degenerate ground states"
+PRB Fig. 4(a),Lambda^FM_1D/N^2 vs Eq. C3,1.078580211441249,200,closed form as printed; see README
+PRB Fig. 4(c),Lambda^AFM_1D even N vs Eq. C5,0.5319200711427814,100,closed form as printed
+PRB Fig. 4(b),Lambda^AFM_1D odd N vs cos-cos form,0.5319200711422623,100,Eq. C6 is misprinted; cos-cos arithmetic of Eq. C1
+PRB Eq. C3,Eq. C3 vs cos(q r_l) cos(q r_l') sum,7.275957614183426e-12,200,the paper's 1D formula is the cos-cos part only
+PRB Eq. C5,"Eq. C5 vs cos-cos sum, even N",4.4853010194856324e-14,100,as above
+PRB Fig. 4(a),"Lambda^FM_1D/N^2, arg 2xi, vs Eq. C3",0.05399631260108784,200,same sums with kernel argument 2 k_F |r-r'|
+PRB Fig. 4(c),"Lambda^AFM_1D even, arg 2xi, vs Eq. C5",2.0000000000033986,100,same sums with kernel argument 2 k_F |r-r'|
+PRB Fig. 4(a),Lambda^FM_2D vs Eq. C4,2.000888343900442e-11,40,N <= 40
+"PRB Fig. 4(b, c)",Lambda^AFM_2D vs C-sums,4.685141163918161e-13,40,N <= 40
+PRB Fig. 4(a),Lambda^FM_3D vs Eq. C4,5.9117155615240335e-12,40,N <= 40
+"PRB Fig. 4(b, c)",Lambda^AFM_3D vs C-sums,2.717825964282383e-13,40,N <= 40
+PRB Fig. 4(a),Lambda^FM/N^2 at N=1 vs 4,0.0,3,k_F d -> 0 limit is 4 N^2
