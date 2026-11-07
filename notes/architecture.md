@@ -11,8 +11,8 @@
 | Пакет | Содержимое | Ключевые функции и реестры |
 |---|---|---|
 | `src/domain/` | Типы-значения (`SystemConfig`, `TrajectoryResult`, критерии) и порты | — |
-| `src/physics/` | Системы Линдблада, решение уравнения, меры, операторы Паули | `measures.coherence_l1`, `measures.concurrence`, … |
-| `src/simulation/` | Адаптер QuTiP и его варианты; реестр по псевдониму | `simulator.QuTipSimulator`, `variants.*`; `registry.build_simulator(alias, **params)`; `SIMULATORS`: `"plain"`, `"correlators"`, `"entanglement"`, `"stochastic_gamma"`, `"parity_sector"` |
+| `src/physics/` | Системы Линдблада, решение уравнения, меры, операторы Паули, ванна Кондо (скорости и операторы схлопывания для спинов в электронном газе) | `measures.coherence_l1`, `measures.concurrence`, `kondo_bath.kondo_collapse_operators`, … |
+| `src/simulation/` | Адаптер QuTiP и его варианты; реестр по псевдониму | `simulator.QuTipSimulator`, `variants.*`; `registry.build_simulator(alias, **params)`; `SIMULATORS`: `"plain"`, `"correlators"`, `"entanglement"`, `"stochastic_gamma"`, `"parity_sector"`, `"kondo"` |
 | `src/persistence/` | Файловые хранилища: кэш траекторий и чекпойнты | `NumpyTrajectoryStore`, `PickleModelStore`, `BestModelRegistry`, `HamiltonianModelRegistry` |
 | `src/data/scenarios.py` | Сценарии A–E и генераторы конфигураций (`experiments/_config.py` оставлен как псевдоним для `paper/`) | `build_configs(n_per_scenario, seed)`, `fixed_coupling_configs`, `SCENARIOS` |
 | `src/data/dataset.py` | `Dataset` и операции над ним | `Dataset.with_sequences`, `Dataset.select_features`, `Dataset.drop_features`, `Dataset.as_test_only` |
