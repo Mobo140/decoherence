@@ -20,10 +20,11 @@ def test_every_registered_alias_builds_its_class():
     arguments = {
         "stochastic_gamma": dict(s=0.1, tau=1.0, seed=0),
         "parity_sector": dict(sector=1),
+        "kondo": dict(rho_J=0.1, kT=0.05, kF_d=1.0, dim=3),
     }
     assert set(registry.SIMULATORS) == {
         "plain", "correlators", "entanglement", "stochastic_gamma",
-        "parity_sector"}
+        "parity_sector", "kondo"}
     for alias, cls in registry.SIMULATORS.items():
         built = registry.build_simulator(alias, **arguments.get(alias, {}))
         assert type(built) is cls
@@ -38,6 +39,12 @@ def test_parameters_reach_the_constructor():
     sim = registry.build_simulator(
         "stochastic_gamma", s=0.3, tau=2.0, seed=4)
     assert (sim.s, sim.tau) == (0.3, 2.0)
+
+
+def test_kondo_parameters_reach_the_constructor():
+    sim = registry.build_simulator(
+        "kondo", rho_J=0.2, kT=0.1, kF_d=2.0, dim=2)
+    assert (sim.rho_J, sim.kT, sim.kF_d, sim.dim) == (0.2, 0.1, 2.0, 2)
 
 
 def test_parity_sector_projects_the_initial_operator_from_the_left():

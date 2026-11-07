@@ -25,6 +25,7 @@ SIMULATORS: Mapping[str, type[ports.ISimulator]] = types.MappingProxyType({
     "entanglement": variants.EntanglementSimulator,
     "stochastic_gamma": variants.StochasticGammaSimulator,
     "parity_sector": variants.ParitySectorSimulator,
+    "kondo": variants.KondoSimulator,
 })
 
 
@@ -34,7 +35,8 @@ def build_simulator(alias: str, **params: object) -> ports.ISimulator:
     Args:
         alias: A key of `SIMULATORS`.
         **params: Constructor arguments, e.g. `s`, `tau` and `seed` for
-            "stochastic_gamma".
+            "stochastic_gamma", or `rho_J`, `kT`, `kF_d` and `dim` for
+            "kondo".
 
     Returns:
         A new simulator.

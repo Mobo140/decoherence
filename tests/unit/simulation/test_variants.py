@@ -4,6 +4,8 @@ import pytest
 import qutip as qt
 
 from src.data.scenarios import build_configs
+from src.domain import value_objects
+from src.simulation import simulator
 from src.simulation import variants
 from src.simulation.simulator import QuTipSimulator
 from src.simulation.variants import (
@@ -205,6 +207,73 @@ def test_parity_sector_state_is_unit_norm_in_the_trace_norm(scenario_configs):
     assert prepared.norm() == pytest.approx(1.0)
 
 
+# --- Kondo bath ------------------------------------------------------------
+
+def _kondo(**overrides):
+    params = dict(rho_J=0.1, kT=0.05, kF_d=1.0, dim=3)
+    params.update(overrides)
+    return variants.KondoSimulator(**params)
+
+
+def _kondo_config(n_qubits, **overrides):
+    params = dict(
+        n_qubits=n_qubits, omega=1.0, J=0.8, t_max=4.0, dt=0.1,
+        dissipator=value_objects.DissipatorConfig.constant(0.5))
+    params.update(overrides)
+    return value_objects.SystemConfig(**params)
+
+
+def test_kondo_simulator_replaces_the_phenomenological_jump_operators():
+    config = _kondo_config(value_objects.QubitCount.TWO)
+    system = _kondo()._prepare_system(
+        simulator._two_qubit_system(config), config)
+    assert system.gamma_const == 1.0
+    assert system.gamma_coeffs is None
+    plain = simulator._two_qubit_system(config)
+    assert len(system.L_list) > 0
+    assert all(np.linalg.norm(L.full()) > 0 for L in system.L_list)
+    assert len(system.L_list) != len(plain.L_list)
+
+
+def test_kondo_simulator_single_qubit_relaxes_to_the_thermal_state():
+    config = _kondo_config(value_objects.QubitCount.ONE, t_max=2000.0, dt=50.0)
+    sim = _kondo(rho_J=0.3, kT=0.5)
+    np.random.seed(1)
+    system = sim._prepare_system(simulator._single_qubit_system(config), config)
+    result = qt.mesolve(
+        system.H, qt.fock_dm(2, 0), np.array([0.0, 2000.0]),
+        [np.sqrt(system.gamma_const) * L for L in system.L_list]).states[-1]
+    gibbs = (-system.H / 0.5).expm()
+    assert (result - gibbs / gibbs.tr()).norm() < 1e-3
+
+
+@pytest.mark.parametrize("n_qubits", [value_objects.QubitCount.ONE,
+                                      value_objects.QubitCount.TWO])
+def test_kondo_simulator_returns_a_decaying_trajectory(n_qubits):
+    config = _kondo_config(n_qubits, t_max=40.0, dt=1.0)
+    np.random.seed(3)
+    result = _kondo(rho_J=0.3, kT=0.5).simulate(config)
+    assert result.times.shape == result.observables["purity"].shape
+    assert np.all(np.isfinite(result.observables["coherence_l1"]))
+
+
+def test_kondo_simulator_without_coupling_conserves_purity():
+    config = _kondo_config(value_objects.QubitCount.TWO)
+    np.random.seed(3)
+    result = _kondo(rho_J=0.0).simulate(config)
+    np.testing.assert_allclose(result.observables["purity"], 1.0, atol=1e-5)
+
+
+def test_kondo_two_qubit_result_depends_on_the_pair_distance():
+    config = _kondo_config(value_objects.QubitCount.TWO, t_max=30.0, dt=1.0)
+    out = []
+    for k_f_d in (0.0, 1.5):
+        np.random.seed(4)
+        out.append(_kondo(rho_J=0.3, kF_d=k_f_d, dim=1).simulate(config))
+    assert not np.allclose(out[0].observables["purity"],
+                           out[1].observables["purity"])
+
+
 # --- Negative cases ---
 
 
@@ -287,3 +356,15 @@ def test_correlators_on_a_one_qubit_system_add_no_observables(
 def test_correlator_extra_observables_of_one_qubit_states_raise():
     with pytest.raises(ValueError):
         CorrelatorSimulator()._extra_observables([np.eye(2) / 2])
+
+
+def test_kondo_simulator_invalid_parameters_raise_value_error():
+    for bad in (dict(rho_J=-0.1), dict(rho_J=1.0), dict(kT=0.0),
+                dict(kF_d=-1.0), dict(dim=4)):
+        with pytest.raises(ValueError):
+            _kondo(**bad)
+
+
+def test_kondo_simulator_requires_all_bath_arguments():
+    with pytest.raises(TypeError):
+        variants.KondoSimulator(rho_J=0.1, kT=0.1)
