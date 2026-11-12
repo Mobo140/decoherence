@@ -182,6 +182,174 @@ def correlators(states: States) -> Observations:
     })
 
 
+SETTINGS = ("local", "tomography")
+_AXES = "xyz"
+# Eigenvalues of the two qubits for the outcomes (++, +-, -+, --).
+_SIGN_1 = np.array([1.0, 1.0, -1.0, -1.0])
+_SIGN_2 = np.array([1.0, -1.0, 1.0, -1.0])
+
+
+def _eigenprojectors(axis: str) -> list[np.ndarray]:
+    """Returns the projectors on the +1 and -1 eigenstates of sigma_axis."""
+    sigma = paulis.PAULI[axis]
+    return [(paulis.IDENTITY + sigma) / 2, (paulis.IDENTITY - sigma) / 2]
+
+
+def _outcome_probabilities(
+    rhos: np.ndarray, projectors: list[np.ndarray]
+) -> np.ndarray:
+    """Born probabilities of each outcome at each time, shape (T, K).
+
+    Rounding can leave a probability a hair below zero; those are set to
+    zero and each row is renormalised.
+    """
+    p = np.stack([
+        np.real(np.einsum("tij,ji->t", rhos, projector))
+        for projector in projectors], axis=1)
+    p = np.clip(p, 0.0, None)
+    total = p.sum(axis=1, keepdims=True)
+    if not np.all(total > 0):
+        raise ValueError("A density matrix gives no measurement outcome.")
+    return p / total
+
+
+def _draw_counts(
+    rng: np.random.Generator, n_shots: int, p: np.ndarray
+) -> np.ndarray:
+    """Draws the outcome counts of n_shots shots for each time."""
+    return np.stack([rng.multinomial(n_shots, row) for row in p])
+
+
+def finite_shots(
+    states: States,
+    n_shots: int,
+    settings: str,
+    rng: np.random.Generator,
+) -> Observations:
+    """Observes the Pauli means from a finite number of projective shots.
+
+    For every measurement basis and every time the outcome probabilities
+    are computed from rho(t) and ``n_shots`` outcomes are drawn from a
+    multinomial; the means are the sample averages of the eigenvalues, so
+    each is unbiased with variance (1 - <sigma>^2) / n_shots.
+
+    ``"local"`` measures both qubits in the same basis x, y and z (3
+    settings) and gives <sigma_a> of each qubit, the series of
+    `pauli_means`. ``"tomography"`` measures all 3^n product bases. For two
+    qubits it adds the correlators <sigma_a sigma_b> (the series of
+    `correlators`), and it reconstructs rho by linear inversion, which
+    gives ``purity`` and ``coherence_l1`` of the estimate. For one qubit
+    local and tomography are the same measurement and always give both.
+    Two qubits measured locally have no purity or coherence series: they
+    need tomography. The single-qubit means of two qubits come from the
+    basis in which both qubits are measured along that axis.
+
+    Draws are made setting by setting, in the order xx, xy, ... (tomography)
+    or x, y, z (local), and within a setting time by time.
+
+    Args:
+        states: States of one or two qubits.
+        n_shots: Shots per basis and time, at least 1.
+        settings: ``"local"`` or ``"tomography"``.
+        rng: Source of randomness.
+
+    Returns:
+        Series named as the exact blocks; see above for which exist.
+
+    Raises:
+        ValueError: If `n_shots` is not a positive integer, `settings` is
+            unknown, `states` is empty or not 2x2 or 4x4, or a density
+            matrix gives no outcome.
+        TypeError: If `rng` is not a Generator.
+    """
+    if int(n_shots) != n_shots or n_shots < 1:
+        raise ValueError(
+            f"n_shots must be a positive integer, got {n_shots!r}.")
+    if settings not in SETTINGS:
+        raise ValueError(
+            f"settings must be one of {SETTINGS}, got {settings!r}.")
+    if not isinstance(rng, np.random.Generator):
+        raise TypeError(
+            f"rng must be a numpy.random.Generator, got {rng!r}.")
+    _check_states(states)
+    size = np.shape(states.rho[0])[0]
+    if size not in (2, 4):
+        raise ValueError(
+            f"finite_shots needs 2x2 or 4x4 matrices, got size {size}.")
+    rhos = np.asarray(states.rho)
+    n_shots = int(n_shots)
+    if size == 2:
+        means = {}
+        for axis in _AXES:
+            p = _outcome_probabilities(rhos, _eigenprojectors(axis))
+            counts = _draw_counts(rng, n_shots, p)
+            means[axis] = (counts[:, 0] - counts[:, 1]) / n_shots
+        series = {f"sigma_{a}": means[a] for a in _AXES}
+        return Observations(
+            states.times, {**series, **_reconstruction_series(
+                [means[a] for a in _AXES], None)})
+
+    pairs = ([(a, a) for a in _AXES] if settings == "local"
+             else [(a, b) for a in _AXES for b in _AXES])
+    one, two, corr = {}, {}, {}
+    for a, b in pairs:
+        projectors = [
+            np.kron(pa, pb) for pa in _eigenprojectors(a)
+            for pb in _eigenprojectors(b)]
+        counts = _draw_counts(
+            rng, n_shots, _outcome_probabilities(rhos, projectors))
+        if a == b:
+            one[a] = counts @ _SIGN_1 / n_shots
+            two[a] = counts @ _SIGN_2 / n_shots
+        corr[f"corr_{a}{b}"] = counts @ (_SIGN_1 * _SIGN_2) / n_shots
+    series = {f"sigma_{a}1": one[a] for a in _AXES}
+    series.update({f"sigma_{a}2": two[a] for a in _AXES})
+    if settings == "local":
+        return Observations(states.times, series)
+    series.update({name: corr[name] for name in CORR})
+    series.update(_reconstruction_series(
+        [one[a] for a in _AXES], ([two[a] for a in _AXES], corr)))
+    return Observations(states.times, series)
+
+
+def _reconstruction_series(
+    first: list[np.ndarray], second: tuple | None
+) -> dict[str, np.ndarray]:
+    """Purity and l1 coherence of the linear-inversion estimate of rho.
+
+    Args:
+        first: Estimated <sigma_a> of the first (or only) qubit, a = x, y, z.
+        second: None for one qubit; otherwise the means of the second qubit
+            and the dict of correlators ``corr_ab``.
+    """
+    n_times = len(first[0])
+    estimates = []
+    for t in range(n_times):
+        rho = paulis.IDENTITY.copy()
+        if second is None:
+            rho = (rho + sum(
+                first[k][t] * paulis.PAULI[a] for k, a in enumerate(_AXES))
+            ) / 2
+        else:
+            means_2, corr = second
+            rho = np.kron(paulis.IDENTITY, paulis.IDENTITY)
+            for k, a in enumerate(_AXES):
+                rho = rho + first[k][t] * np.kron(
+                    paulis.PAULI[a], paulis.IDENTITY)
+                rho = rho + means_2[k][t] * np.kron(
+                    paulis.IDENTITY, paulis.PAULI[a])
+                for b in _AXES:
+                    rho = rho + corr[f"corr_{a}{b}"][t] * np.kron(
+                        paulis.PAULI[a], paulis.PAULI[b])
+            rho = rho / 4
+        estimates.append(rho)
+    return {
+        "purity": np.array([measures.purity(r) for r in estimates]),
+        "coherence_l1": np.array(
+            [measures.coherence_l1(r) for r in estimates]),
+    }
+
+
 def combine(*observations: Observations) -> Observations:
     """Merges observations of one trajectory, keeping the argument order.
 
@@ -300,7 +468,9 @@ def model_layout(obs: Observations) -> Observations:
     if missing:
         raise ValueError(
             f"model_layout needs the series {missing}; "
-            f"available: {list(obs.series)}.")
+            f"available: {list(obs.series)}. Two qubits measured with "
+            "finite_shots(settings='local') have no purity or "
+            "coherence_l1: they need tomography.")
     head = [n for n in obs.series if n not in MODEL_TAIL]
     return select(obs, head + list(MODEL_TAIL))
 

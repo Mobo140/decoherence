@@ -285,3 +285,159 @@ def test_noise_does_not_modify_its_input():
     observe.ar1_noise(obs, 0.3, 0.5, np.random.default_rng(1))
     for name, values in before.items():
         np.testing.assert_array_equal(obs.series[name], values)
+
+
+# --- finite shots ---
+
+
+def _qubit_state(bloch):
+    """A one-qubit density matrix with the given Bloch vector."""
+    rho = 0.5 * (np.eye(2, dtype=complex) + sum(
+        b * s for b, s in zip(bloch, (
+            np.array([[0, 1], [1, 0]]), np.array([[0, -1j], [1j, 0]]),
+            np.array([[1, 0], [0, -1]])))))
+    return rho
+
+
+def _one_state(bloch=(0.6, -0.3, 0.5)):
+    return evolve.States(np.zeros(1), [_qubit_state(bloch)])
+
+
+def _two_state():
+    ket = (np.sqrt(0.7) * qt.basis([2, 2], [0, 1])
+           + np.sqrt(0.3) * qt.basis([2, 2], [1, 0]))
+    return evolve.States(np.zeros(1), [qt.ket2dm(ket).full()])
+
+
+def _draws(states, n_shots, settings, n_draws, seed=0):
+    rng = np.random.default_rng(seed)
+    runs = [observe.finite_shots(states, n_shots, settings, rng)
+            for _ in range(n_draws)]
+    return {name: np.array([r.series[name][0] for r in runs])
+            for name in runs[0].series}
+
+
+@pytest.mark.parametrize("n_shots", [0, -5, 1.5])
+def test_finite_shots_invalid_shot_count_raises(n_shots):
+    with pytest.raises(ValueError, match="n_shots must be a positive"):
+        observe.finite_shots(
+            _one_state(), n_shots, "local", np.random.default_rng(0))
+
+
+@pytest.mark.parametrize("settings", ["full", "", None, "Local"])
+def test_finite_shots_unknown_settings_raise(settings):
+    with pytest.raises(ValueError, match="settings must be one of"):
+        observe.finite_shots(
+            _one_state(), 10, settings, np.random.default_rng(0))
+
+
+def test_finite_shots_of_other_sizes_raise():
+    states = evolve.States(np.zeros(1), [np.eye(3) / 3])
+    with pytest.raises(ValueError, match="2x2 or 4x4"):
+        observe.finite_shots(states, 10, "local", np.random.default_rng(0))
+    states = evolve.States(np.zeros(1), [np.eye(8) / 8])
+    with pytest.raises(ValueError, match="2x2 or 4x4"):
+        observe.finite_shots(
+            states, 10, "tomography", np.random.default_rng(0))
+
+
+def test_finite_shots_empty_states_and_a_bad_generator_raise():
+    with pytest.raises(ValueError, match="at least one"):
+        observe.finite_shots(
+            evolve.States(np.zeros(0), []), 10, "local",
+            np.random.default_rng(0))
+    with pytest.raises(TypeError, match="Generator"):
+        observe.finite_shots(_one_state(), 10, "local", 3)
+
+
+def test_two_qubits_measured_locally_have_no_purity_for_model_layout():
+    obs = observe.finite_shots(
+        _two_state(), 50, "local", np.random.default_rng(0))
+    assert list(obs.series) == [
+        f"sigma_{a}{q}" for q in "12" for a in "xyz"]
+    with pytest.raises(ValueError, match="need tomography"):
+        observe.model_layout(obs)
+
+
+@pytest.mark.parametrize("settings", ["local", "tomography"])
+def test_finite_shots_one_qubit_means_are_unbiased_with_the_binomial_variance(
+        settings):
+    bloch = (0.6, -0.3, 0.5)
+    n_shots, n_draws = 200, 3000
+    draws = _draws(_one_state(bloch), n_shots, settings, n_draws)
+    for axis, mean in zip("xyz", bloch):
+        values = draws[f"sigma_{axis}"]
+        variance = (1 - mean ** 2) / n_shots
+        assert abs(values.mean() - mean) < 5 * np.sqrt(variance / n_draws)
+        assert values.var() == pytest.approx(variance, rel=0.1)
+
+
+def test_finite_shots_two_qubit_tomography_is_unbiased():
+    states = _two_state()
+    exact = {**observe.pauli_means(states).series,
+             **observe.correlators(states).series}
+    n_shots, n_draws = 300, 2000
+    draws = _draws(states, n_shots, "tomography", n_draws, seed=1)
+    for name, values in exact.items():
+        mean = values[0]
+        variance = (1 - mean ** 2) / n_shots
+        assert abs(draws[name].mean() - mean) < 5 * np.sqrt(
+            variance / n_draws) + 1e-12
+        assert draws[name].var() == pytest.approx(variance, rel=0.15,
+                                                  abs=1e-6)
+
+
+def test_finite_shots_two_qubit_local_means_are_unbiased():
+    states = _two_state()
+    exact = observe.pauli_means(states).series
+    draws = _draws(states, 300, "local", 1500, seed=2)
+    assert set(draws) == set(exact)
+    for name, values in exact.items():
+        variance = (1 - values[0] ** 2) / 300
+        assert abs(draws[name].mean() - values[0]) < 5 * np.sqrt(
+            variance / 1500) + 1e-12
+
+
+@pytest.mark.parametrize("states", [_one_state(), _two_state()])
+def test_finite_shots_tends_to_the_exact_series_for_many_shots(states):
+    exact = observe.combine(
+        observe.pauli_means(states), observe.purity(states),
+        observe.coherence_l1(states)).series
+    obs = observe.finite_shots(
+        states, 4_000_000, "tomography", np.random.default_rng(3))
+    for name, values in exact.items():
+        assert obs.series[name][0] == pytest.approx(values[0], abs=5e-3)
+
+
+def test_finite_shots_series_names_and_order_match_the_exact_blocks():
+    one = observe.finite_shots(
+        _one_state(), 20, "local", np.random.default_rng(0))
+    assert list(one.series) == [
+        "sigma_x", "sigma_y", "sigma_z", "purity", "coherence_l1"]
+    two = observe.finite_shots(
+        _two_state(), 20, "tomography", np.random.default_rng(0))
+    assert list(two.series) == (
+        [f"sigma_{a}{q}" for q in "12" for a in "xyz"]
+        + list(observe.CORR) + ["purity", "coherence_l1"])
+    assert list(observe.model_layout(two).series)[-2:] == [
+        "purity", "coherence_l1"]
+
+
+def test_finite_shots_same_seed_same_output_and_different_seed_differs():
+    a = observe.finite_shots(
+        _two_state(), 50, "tomography", np.random.default_rng(7))
+    b = observe.finite_shots(
+        _two_state(), 50, "tomography", np.random.default_rng(7))
+    c = observe.finite_shots(
+        _two_state(), 50, "tomography", np.random.default_rng(8))
+    for name in a.series:
+        np.testing.assert_array_equal(a.series[name], b.series[name])
+    assert not np.array_equal(a.series["sigma_z1"], c.series["sigma_z1"])
+
+
+def test_finite_shots_works_on_a_trajectory_and_keeps_the_time_grid():
+    states = _states(2)
+    obs = observe.finite_shots(
+        states, 100, "tomography", np.random.default_rng(0))
+    np.testing.assert_array_equal(obs.times, states.times)
+    assert all(v.shape == (len(states.times),) for v in obs.series.values())
