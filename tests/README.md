@@ -10,6 +10,7 @@ the deterministic fake simulator instead of QuTiP. A unit test may run at
 most one tiny QuTiP simulation or train for a few epochs on a toy dataset.
 
     tests/unit/
+        blocks/        physics blocks: system, channels, initial, evolve
         application/   use cases (generate dataset, train, backtest, ...)
         data/          dataset, windows, scenarios, observation, features
         domain/        value objects
