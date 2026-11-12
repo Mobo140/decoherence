@@ -331,9 +331,9 @@ def test_build_dataset_context_codes_follow_each_trajectory(
         one, system_config=scenario_configs["D"])
     ds = _build([one, two], window_length=5, train_ratio=1.0, val_ratio=0.0,
                 samples_per_trajectory=2)
-    assert set(ds.interaction_type_codes) == {0.0, 2.0}
-    assert set(ds.J_values) == {0.0, np.float32(scenario_configs["D"].J)}
-    assert len(ds.dissipator_type_codes) == len(ds.sequences)
+    assert set(ds.context["interaction_type"]) == {0.0, 2.0}
+    assert set(ds.context["J"]) == {0.0, np.float32(scenario_configs["D"].J)}
+    assert len(ds.context["dissipator_type"]) == len(ds.sequences)
 
 
 def test_build_dataset_pads_one_qubit_windows_next_to_two_qubit_ones():

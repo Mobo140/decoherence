@@ -20,16 +20,15 @@ def _empty(ds: dataset_lib.Dataset) -> dataset_lib.Dataset:
 
 def test_dataset_optional_per_window_arrays_default_to_empty(small_dataset):
     ds = small_dataset
-    assert len(ds.interaction_type_codes) == 0 and len(ds.censored) == 0
-    assert len(ds.dissipator_type_codes) == 0 and len(ds.J_values) == 0
+    assert ds.context == {} and len(ds.censored) == 0
     assert ds.censored.dtype == bool
 
 
 def test_dataset_accepts_complete_optional_arrays(small_dataset):
     ds = dataclasses.replace(
         small_dataset, censored=np.zeros(6, dtype=bool),
-        J_values=np.zeros(6, dtype=np.float32))
-    assert len(ds.censored) == 6 and len(ds.J_values) == 6
+        context={"J": np.zeros(6, dtype=np.float32)})
+    assert len(ds.censored) == 6 and len(ds.context["J"]) == 6
 
 
 def test_dataset_accepts_split_indices_up_to_the_last_window(small_dataset):
@@ -135,6 +134,24 @@ def test_as_test_only_shares_the_windows(small_dataset):
     assert out.sequences is small_dataset.sequences
 
 
+# --- context ---------------------------------------------------------------
+
+def _with_context(ds):
+    return dataclasses.replace(
+        ds, context={"J": np.arange(6, dtype=np.float32)})
+
+
+def test_context_is_carried_through_the_derived_datasets(small_dataset):
+    ds = _with_context(small_dataset)
+    name = ds.feature_names[0]
+    derived = [
+        ds.with_sequences(ds.sequences), ds.select_features([name]),
+        ds.drop_features([name]), ds.as_test_only()]
+    for out in derived:
+        np.testing.assert_array_equal(out.context["J"], ds.context["J"])
+        assert out.context["J"].dtype == np.float32
+
+
 # --- Negative cases ---
 
 
@@ -161,12 +178,18 @@ def test_dataset_per_window_array_of_the_wrong_length_raises(
         dataclasses.replace(small_dataset, **{field: np.zeros(5)})
 
 
-@pytest.mark.parametrize("field", [
-    "interaction_type_codes", "dissipator_type_codes", "J_values",
-    "censored"])
-def test_dataset_partial_optional_array_raises(small_dataset, field):
-    with pytest.raises(ValueError, match=f"{field} has 3 entries for 6"):
-        dataclasses.replace(small_dataset, **{field: np.zeros(3)})
+def test_dataset_partial_censored_array_raises(small_dataset):
+    with pytest.raises(ValueError, match="censored has 3 entries for 6"):
+        dataclasses.replace(small_dataset, censored=np.zeros(3))
+
+
+@pytest.mark.parametrize("length", [0, 3, 7])
+def test_dataset_context_array_of_the_wrong_length_raises(
+        small_dataset, length):
+    with pytest.raises(
+            ValueError, match=f"context\\['J'\\] has {length} entries for 6"):
+        dataclasses.replace(
+            small_dataset, context={"J": np.zeros(length)})
 
 
 @pytest.mark.parametrize("field", ["train_idx", "val_idx", "test_idx"])

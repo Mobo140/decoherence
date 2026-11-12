@@ -43,10 +43,10 @@ def test_predict_windows_sets_j_per_window_only_when_dataset_has_it(
     ds = toy_dataset
     model = _Spy()
     backtest.predict_windows(model, ds, ds.test_idx)
-    assert model.seen == [-1.0] * len(ds.test_idx)  # J_values empty
+    assert model.seen == [-1.0] * len(ds.test_idx)  # no J in the context
 
     j = np.arange(len(ds.sequences), dtype=np.float32) * 0.5
-    ds = dataclasses.replace(ds, J_values=j)
+    ds = dataclasses.replace(ds, context={"J": j})
     model = _Spy()
     backtest.predict_windows(model, ds, ds.test_idx)
     assert model.seen == [float(j[i]) for i in ds.test_idx]

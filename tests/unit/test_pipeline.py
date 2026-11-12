@@ -57,12 +57,26 @@ def test_experiment_config_is_hashable_and_comparable():
 def test_simulator_stochastic_gamma_gets_the_offset_seed():
     spec = pipeline.SimulatorSpec(
         "stochastic_gamma", (("s", 0.3), ("tau", 2.0)), seed_offset=13)
-    sim = pipeline._simulator(spec, 5)
-    twin = pipeline._simulator(spec, 5)
-    assert (sim.s, sim.tau) == (0.3, 2.0)
-    assert sim.rng.standard_normal() == twin.rng.standard_normal()
-    other = pipeline._simulator(spec, 6)
-    assert sim.rng.standard_normal() != other.rng.standard_normal()
+    data = pipeline.DataSpec(name="t", scenarios=("B",), simulator=spec)
+    sim = pipeline._simulator(data, 5)
+    twin = pipeline._simulator(data, 5)
+    assert sim.params == {"s": 0.3, "tau": 2.0, "seed": 18}
+    assert sim._rng.standard_normal() == twin._rng.standard_normal()
+    other = pipeline._simulator(data, 6)
+    assert sim._rng.standard_normal() != other._rng.standard_normal()
+
+
+@pytest.mark.parametrize("alias, params", [
+    ("plain", ()), ("correlators", ()), ("kondo", (
+        ("rho_J", 0.1), ("kT", 0.5), ("kF_d", 1.0), ("dim", 2)))])
+def test_every_simulator_may_use_the_disk_cache(alias, params, tmp_path,
+                                                monkeypatch):
+    monkeypatch.setattr(pipeline, "STATES_CACHE", tmp_path)
+    data = pipeline.DataSpec(
+        name="t", scenarios=("B",), cache="disk",
+        simulator=pipeline.SimulatorSpec(alias, params))
+    assert pipeline._simulator(data, 1).cache_dir == tmp_path
+    assert pipeline._store(data, {}) is None
 
 
 def test_system_configs_fixed_coupling_group_takes_an_interaction():
@@ -87,8 +101,6 @@ def test_system_configs_fixed_coupling_group_takes_an_interaction():
     {"scenarios": ("Z",)},
     {"scenarios": ("B",), "cache": "tape"},
     {"scenarios": ("B",), "criterion": "nonsense"},
-    {"scenarios": ("B",), "cache": "disk",
-     "simulator": pipeline.SimulatorSpec("correlators")},
     {"scenarios": ("B",), "coupling": 1.0, "coupling_sweep": (1.0,)},
     {"scenarios": (), "coupling": 1.0, "coupling_sweep": (0.5,)},
 ])

@@ -117,6 +117,25 @@ class _LindbladSystem:
         return [(L, gamma) for L in self.L_list]
 
 
+def single_qubit_jump_operator(op_type: str) -> qt.Qobj:
+    """Builds a jump operator of a single qubit.
+
+    Args:
+        op_type: 'sigma_minus' or 'sigma_z'.
+
+    Returns:
+        The 2x2 operator.
+
+    Raises:
+        ValueError: If ``op_type`` is unknown.
+    """
+    if op_type == "sigma_minus":
+        return qt.sigmam()
+    if op_type == "sigma_z":
+        return qt.sigmaz()
+    raise ValueError(f"Unknown jump operator: {op_type}")
+
+
 class SingleQubitSystem(_LindbladSystem):
     """Single qubit, H = omega * sigma_z, with Lindblad dissipation.
 
@@ -159,15 +178,10 @@ class SingleQubitSystem(_LindbladSystem):
 
         self.L_list = []
         for op_type in self.jump_operators:
-            if op_type == "sigma_minus":
-                self.L_list.append(qt.sigmam())
-            elif op_type == "sigma_z":
-                self.L_list.append(qt.sigmaz())
-            else:
-                raise ValueError(f"Unknown jump operator: {op_type}")
+            self.L_list.append(single_qubit_jump_operator(op_type))
 
 
-def _two_qubit_jump_operator(op_type: str, qubit: int) -> qt.Qobj:
+def two_qubit_jump_operator(op_type: str, qubit: int) -> qt.Qobj:
     """Builds a single-qubit jump operator acting on one of two qubits.
 
     Args:
@@ -190,6 +204,36 @@ def _two_qubit_jump_operator(op_type: str, qubit: int) -> qt.Qobj:
     if qubit == 0:
         return qt.tensor(local_op, eye)
     return qt.tensor(eye, local_op)
+
+
+def two_qubit_hamiltonian(J: float, interaction_type: str) -> qt.Qobj:
+    """Builds the Hamiltonian of two coupled qubits.
+
+    Args:
+        J: Coupling strength.
+        interaction_type: 'XXZ' for J (XX + YY + ZZ), 'TFIM' for
+            J XX + (Z1 + Z2) with unit transverse field.
+
+    Returns:
+        The 4x4 Hamiltonian.
+
+    Raises:
+        ValueError: If ``interaction_type`` is unknown.
+    """
+    sx1 = qt.tensor(qt.sigmax(), qt.qeye(2))
+    sy1 = qt.tensor(qt.sigmay(), qt.qeye(2))
+    sz1 = qt.tensor(qt.sigmaz(), qt.qeye(2))
+    sx2 = qt.tensor(qt.qeye(2), qt.sigmax())
+    sy2 = qt.tensor(qt.qeye(2), qt.sigmay())
+    sz2 = qt.tensor(qt.qeye(2), qt.sigmaz())
+
+    if interaction_type == "XXZ":
+        # Isotropic: the anisotropy delta is fixed to 1.
+        return J * (sx1 * sx2 + sy1 * sy2 + sz1 * sz2)
+    if interaction_type == "TFIM":
+        h_field = 1.0
+        return J * sx1 * sx2 + h_field * (sz1 + sz2)
+    raise ValueError(f"Unknown interaction type: {interaction_type}")
 
 
 class TwoQubitSystem(_LindbladSystem):
@@ -231,55 +275,49 @@ class TwoQubitSystem(_LindbladSystem):
         self.J = J
         self.interaction_type = interaction_type
 
-        sx1 = qt.tensor(qt.sigmax(), qt.qeye(2))
-        sy1 = qt.tensor(qt.sigmay(), qt.qeye(2))
-        sz1 = qt.tensor(qt.sigmaz(), qt.qeye(2))
-        sx2 = qt.tensor(qt.qeye(2), qt.sigmax())
-        sy2 = qt.tensor(qt.qeye(2), qt.sigmay())
-        sz2 = qt.tensor(qt.qeye(2), qt.sigmaz())
-
-        if interaction_type == "XXZ":
-            # Isotropic: the anisotropy delta is fixed to 1.
-            self.H = J * (sx1 * sx2 + sy1 * sy2 + sz1 * sz2)
-        elif interaction_type == "TFIM":
-            h_field = 1.0
-            self.H = J * sx1 * sx2 + h_field * (sz1 + sz2)
-        else:
-            raise ValueError(f"Unknown interaction type: {interaction_type}")
+        self.H = two_qubit_hamiltonian(J, interaction_type)
 
         if jump_operators is None:
             jump_operators = ["sigma_minus"]
 
         self.L_list = []
         for op_type in jump_operators:
-            self.L_list.append(_two_qubit_jump_operator(op_type, 0))
-            self.L_list.append(_two_qubit_jump_operator(op_type, 1))
+            self.L_list.append(two_qubit_jump_operator(op_type, 0))
+            self.L_list.append(two_qubit_jump_operator(op_type, 1))
 
 
 def sample_random_pure_state(
-    n_qubits: int = 1, seed: int | None = None
+    n_qubits: int = 1,
+    seed: int | None = None,
+    rng: np.random.Generator | None = None,
 ) -> qt.Qobj:
     """Samples a Haar-random pure state as a density matrix.
 
     With ``seed=None`` the legacy global NumPy generator is used, so
     ``np.random.seed`` makes the draw reproducible (the simulator relies
-    on this).
+    on this). With ``rng`` the draw comes from that generator instead.
 
     Args:
         n_qubits: Number of qubits.
         seed: Seed of a private generator, or None for the global one.
+        rng: Generator to draw from; excludes ``seed``.
 
     Returns:
         The density matrix |psi><psi| with dims [[2]*n, [2]*n].
 
     Raises:
-        ValueError: If `n_qubits` is not a positive integer.
+        ValueError: If `n_qubits` is not a positive integer, or both `seed`
+            and `rng` are given.
     """
     if int(n_qubits) != n_qubits or n_qubits < 1:
         raise ValueError(
             f"n_qubits must be a positive integer, got {n_qubits!r}.")
+    if seed is not None and rng is not None:
+        raise ValueError("Give either seed or rng, not both.")
     dim = 2 ** n_qubits
-    if seed is not None:
+    if rng is not None:
+        vec = rng.standard_normal(dim) + 1j * rng.standard_normal(dim)
+    elif seed is not None:
         rng = np.random.default_rng(seed)
         vec = rng.standard_normal(dim) + 1j * rng.standard_normal(dim)
     else:

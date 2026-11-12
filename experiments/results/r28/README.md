@@ -13,8 +13,9 @@ Two papers: PRB = PRB 95, 075413 (2017); SS = Surf. Sci. 630, 337 (2014).
 
 `kondo_collapse_operators` is a pure function of (H, spin operators,
 positions, rho_J, kT, k_F, dim, tol). A later simulator of sequential
-measurement records can call it unchanged; `KondoSimulator` is a thin hook
-that calls it from `_prepare_system`.
+measurement records can call it unchanged; the alias `"kondo"` of
+`QuTipSimulator` is a recipe whose channel block is `channels.kondo_bath`,
+which calls it.
 
 The collapse operators reproduce the rates in the dynamics: the
 Liouvillian built from `kondo_collapse_operators` has, in the eigenbasis

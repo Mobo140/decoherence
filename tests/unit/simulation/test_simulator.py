@@ -359,39 +359,6 @@ def test_simulate_esd_criterion_changes_only_the_target():
     assert traj.t_decoh != plain.t_decoh
 
 
-def test_simulate_hooks_default_to_the_published_behaviour():
-    sim = QuTipSimulator()
-    config = _two_qubit_config()
-    system = object()
-    assert sim._prepare_system(system, config) is system
-    assert sim._extra_observables([np.eye(4)]) == {}
-    assert sim._initial_state(config).shape == (4, 4)
-
-
-def test_simulate_extra_observables_come_before_purity_and_coherence(
-        monkeypatch):
-    class Extra(QuTipSimulator):
-        def _extra_observables(self, density_matrices):
-            return {"extra": np.arange(len(density_matrices), dtype=float)}
-
-    _fix_initial_state(monkeypatch, _bell_state())
-    traj = Extra().simulate(_two_qubit_config(t_max=0.5))
-    assert traj.feature_names[-3:] == ["extra", "purity", "coherence_l1"]
-    assert "density_matrices" not in traj.observables
-    np.testing.assert_array_equal(traj.observables["extra"], np.arange(6))
-
-
-def test_simulate_extra_observables_are_not_computed_for_one_qubit(
-        monkeypatch):
-    class Extra(QuTipSimulator):
-        def _extra_observables(self, density_matrices):
-            raise AssertionError("one-qubit runs have no extra observables")
-
-    _fix_initial_state(monkeypatch, _plus_state())
-    traj = Extra().simulate(_const_sigma_minus(0.4, t_max=0.5))
-    assert "extra" not in traj.observables
-
-
 # --- Negative cases ---
 
 

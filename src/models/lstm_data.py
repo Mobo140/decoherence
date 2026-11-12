@@ -82,9 +82,8 @@ def _context_column(
     dataset: dataset_lib.Dataset, name: str, idx: np.ndarray
 ) -> np.ndarray:
     """Per-window context array, or zeros if the dataset does not have it."""
-    column = getattr(dataset, name)
-    if len(column) == len(dataset.sequences):
-        return column[idx]
+    if name in dataset.context:
+        return dataset.context[name][idx]
     return np.zeros(len(idx), dtype=np.float32)
 
 
@@ -138,9 +137,9 @@ def prepare_arrays(
         log_coh=log_coh,
         phys=phys,
         r2=r2,
-        int_code=_context_column(dataset, "interaction_type_codes", idx),
-        dis_code=_context_column(dataset, "dissipator_type_codes", idx),
-        j=_context_column(dataset, "J_values", idx),
+        int_code=_context_column(dataset, "interaction_type", idx),
+        dis_code=_context_column(dataset, "dissipator_type", idx),
+        j=_context_column(dataset, "J", idx),
         risk=risk,
         remaining=remaining,
         censored=censored,

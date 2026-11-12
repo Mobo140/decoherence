@@ -3,7 +3,7 @@ import pytest
 
 from src.data import dataset as dataset_lib
 from src.data import features
-from src.simulation import variants
+from src.blocks import observe
 
 
 def test_select_drops_the_documented_columns_per_feature_set(small_dataset):
@@ -20,7 +20,7 @@ def test_feature_sets_name_the_columns_each_alias_removes():
     assert features.FEATURE_SETS["corr_conc"] == frozenset()
     assert features.FEATURE_SETS["corr"] == {"concurrence"}
     assert features.FEATURE_SETS["base"] == (
-        set(variants.CORR) | {"concurrence"})
+        set(observe.CORR) | {"concurrence"})
 
 
 def test_select_ignores_columns_the_dataset_does_not_have(small_dataset):

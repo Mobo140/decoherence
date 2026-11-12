@@ -55,12 +55,13 @@ def test_execute_dataset_j_is_zero_for_1q_and_config_j_for_2q():
         seed=0,
         min_window_gap=0,
     ))
-    assert len(ds.J_values) == len(ds.sequences)
-    ones = ds.interaction_type_codes < 1.5
-    twos = ds.interaction_type_codes >= 1.5
+    assert len(ds.context["J"]) == len(ds.sequences)
+    ones = ds.context["interaction_type"] < 1.5
+    twos = ds.context["interaction_type"] >= 1.5
     assert ones.any() and twos.any()
-    assert np.allclose(ds.J_values[ones], 0.0)
-    assert np.all((ds.J_values[twos] == 0.25) | (ds.J_values[twos] == 0.9))
+    assert np.allclose(ds.context["J"][ones], 0.0)
+    assert np.all((ds.context["J"][twos] == 0.25)
+                  | (ds.context["J"][twos] == 0.9))
 
 
 def test_lstm_with_j_scalar_trains_and_roundtrips_through_bytes():

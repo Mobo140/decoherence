@@ -47,13 +47,8 @@ from src.models.physics_only import PhysicsOnlyPredictor
 from src.models.stretched_exp import StretchedExpPredictor
 from src.models.transformer import TransformerPredictor
 from src.persistence.stores import NumpyTrajectoryStore, PickleModelStore
+from src.blocks.observe import CORR
 from src.simulation.simulator import QuTipSimulator
-from src.simulation.variants import (
-    CORR,
-    CorrelatorSimulator,
-    EntanglementSimulator,
-    StochasticGammaSimulator,
-)
 # ---------------------------------------------------------------------------
 
 GOLDEN = Path(__file__).with_name("golden_outputs.json")
@@ -116,15 +111,16 @@ def compute() -> dict:
 
     # Experiment-specific simulators.
     reproducibility.seed_numpy_global(5)
-    out["sim/corr"] = _traj(CorrelatorSimulator().simulate(g["E"][2]))
+    out["sim/corr"] = _traj(QuTipSimulator("correlators").simulate(g["E"][2]))
     reproducibility.seed_numpy_global(5)
-    out["sim/ent"] = _traj(EntanglementSimulator().simulate(
+    out["sim/ent"] = _traj(QuTipSimulator("entanglement").simulate(
         dataclasses.replace(
             g["D"][2],
             decoherence_criterion=DecoherenceCriterion.ENTANGLEMENT_DEATH)))
     reproducibility.seed_numpy_global(5)
     out["sim/stochastic_gamma"] = _traj(
-        StochasticGammaSimulator(0.3, 0.5, seed=3).simulate(g["B"][2]))
+        QuTipSimulator(
+            "stochastic_gamma", s=0.3, tau=0.5, seed=3).simulate(g["B"][2]))
 
     # Noise model.
     eta = np.random.default_rng(0).standard_normal((50, 20, 3))
@@ -136,7 +132,8 @@ def compute() -> dict:
     ds_1q = GenerateDatasetUseCase(QuTipSimulator(), store=None).execute(
         GenerateDatasetCommand(
             configs=g["B"] + g["C"], dataset_name="golden_1q", **cmd))
-    ds_2q = GenerateDatasetUseCase(EntanglementSimulator(), store=None).execute(
+    ds_2q = GenerateDatasetUseCase(
+        QuTipSimulator("entanglement"), store=None).execute(
         GenerateDatasetCommand(
             configs=g["D"] + g["E"], dataset_name="golden_2q", **cmd))
     out["ds/1q"] = _dataset(ds_1q)
@@ -150,7 +147,7 @@ def compute() -> dict:
     trajs = []
     for i, c in enumerate(g["D"][:4]):
         reproducibility.seed_numpy_global(100 + i)
-        trajs.append(EntanglementSimulator().simulate(
+        trajs.append(QuTipSimulator("entanglement").simulate(
             dataclasses.replace(
                 c,
                 decoherence_criterion=DecoherenceCriterion.ENTANGLEMENT_DEATH)))

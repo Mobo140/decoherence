@@ -10,6 +10,7 @@ the deterministic fake simulator instead of QuTiP. A unit test may run at
 most one tiny QuTiP simulation or train for a few epochs on a toy dataset.
 
     tests/unit/
+        blocks/        physics blocks: system, channels, initial, evolve
         application/   use cases (generate dataset, train, backtest, ...)
         data/          dataset, windows, scenarios, observation, features
         domain/        value objects
@@ -18,7 +19,7 @@ most one tiny QuTiP simulation or train for a few epochs on a toy dataset.
         models/        predictors and the model registry
         persistence/   trajectory stores, model stores, champion registries
         physics/       Lindblad systems, measures, observables
-        simulation/    QuTiP simulator, variants, registry
+        simulation/    QuTiP simulator facade and its aliases
         training/      loop, losses, standardiser, trainer
         test_pipeline.py, test_reproducibility.py   (src/pipeline.py, src/reproducibility.py)
 

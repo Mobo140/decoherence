@@ -8,7 +8,7 @@ from src.application.generate_dataset import (
 from src.data import features
 from src.data.scenarios import build_configs
 from src.simulation.simulator import QuTipSimulator
-from src.simulation.variants import CorrelatorSimulator
+from src.simulation.simulator import QuTipSimulator
 
 
 def test_correlator_base_features_equal_the_plain_simulator():
@@ -19,7 +19,8 @@ def test_correlator_base_features_equal_the_plain_simulator():
                dataset_name="r23_test")
     plain = GenerateDatasetUseCase(QuTipSimulator(), store=None).execute(
         GenerateDatasetCommand(**cmd))
-    full = GenerateDatasetUseCase(CorrelatorSimulator(), store=None).execute(
+    full = GenerateDatasetUseCase(
+        QuTipSimulator("correlators"), store=None).execute(
         GenerateDatasetCommand(**cmd))
     base = features.select(full, "base")
     assert base.feature_names == plain.feature_names

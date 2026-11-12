@@ -1,29 +1,30 @@
 """QuTiP adapter for the domain ISimulator port.
 
-The physics itself (systems, master equation, measures) lives in
-``src.physics``. This module draws the initial state, runs a system and
-turns the resulting density matrices into a ``TrajectoryResult`` with a
-decoherence time. The time is the first crossing of a threshold by the
-chosen criterion, linearly interpolated, or the end of the window with
-``censored=True`` if it is never crossed.
+The physics lives in ``src.blocks`` (system, channels, initial state,
+evolution) and ``src.physics`` (measures). This module draws the initial
+state, runs a system and turns the resulting density matrices into a
+``TrajectoryResult`` with a decoherence time. The time is the first
+crossing of a threshold by the chosen criterion, linearly interpolated, or
+the end of the window with ``censored=True`` if it is never crossed.
 """
 from __future__ import annotations
 
 from collections.abc import Sequence
-
-import math
+from pathlib import Path
 
 import numpy as np
 import qutip as qt
 
+from src.blocks import initial, legacy, runner, target
+from src.blocks import system as blocks_system
+# The crossing helpers moved to blocks.target; they stay importable here.
+from src.blocks.target import (  # noqa: F401
+    first_crossing,
+    interpolate_crossing,
+    relative_level,
+    sudden_death_time,
+)
 from src.domain import ports, value_objects
-from src.physics import lindblad_systems, measures, simulate_qutip
-
-# Below this the initial value is treated as zero and the threshold is
-# absolute instead of relative to it.
-_MIN_INITIAL_VALUE = 1e-10
-# Regularises the interpolation when two neighbouring values coincide.
-_INTERPOLATION_EPS = 1e-12
 
 
 def sample_initial_state(config: value_objects.SystemConfig) -> qt.Qobj:
@@ -38,115 +39,7 @@ def sample_initial_state(config: value_objects.SystemConfig) -> qt.Qobj:
     Returns:
         Density matrix of a Haar-random pure state.
     """
-    return lindblad_systems.sample_random_pure_state(
-        n_qubits=config.n_qubits.value
-    )
-
-
-def interpolate_crossing(
-    times: np.ndarray,
-    values: Sequence[float],
-    index: int,
-    level: float,
-) -> float:
-    """Interpolates linearly where a curve crosses a level.
-
-    Args:
-        times: Time points.
-        values: Curve values at ``times``.
-        index: Index of the first value that is past the level.
-        level: The level that is crossed between ``index - 1`` and ``index``.
-
-    Returns:
-        The crossing time; ``times[0]`` if the curve starts past the level.
-
-    Raises:
-        ValueError: If `index` is not a position in both `times` and
-            `values`.
-    """
-    if not 0 <= index < min(len(times), len(values)):
-        raise ValueError(
-            f"index {index} is outside the {len(times)} times and "
-            f"{len(values)} values.")
-    if index == 0:
-        return float(times[0])
-    prev_val = float(values[index - 1])
-    val = float(values[index])
-    frac = (prev_val - level) / (prev_val - val + _INTERPOLATION_EPS)
-    frac = float(np.clip(frac, 0.0, 1.0))
-    return float(times[index - 1] + frac * (times[index] - times[index - 1]))
-
-
-def first_crossing(
-    times: np.ndarray,
-    values: Sequence[float],
-    level: float,
-    inclusive: bool = False,
-) -> tuple[float, bool]:
-    """Finds the first time a decaying curve falls below a level.
-
-    Every decoherence criterion reduces to this function.
-
-    Args:
-        times: Time points.
-        values: Curve values at ``times``.
-        level: The level to fall below.
-        inclusive: If True, a value equal to ``level`` already counts.
-
-    Returns:
-        ``(time, censored)``. ``time`` is the interpolated crossing time.
-        If the level is never reached, ``time`` is ``times[-1]``, a lower
-        bound, and ``censored`` is True.
-
-    Raises:
-        ValueError: If `times` or `values` is empty, they differ in
-            length, or `level` or a value is NaN.
-    """
-    if len(times) == 0 or len(values) == 0:
-        raise ValueError("times and values must not be empty.")
-    if len(times) != len(values):
-        raise ValueError(
-            f"times has {len(times)} points but values has {len(values)}.")
-    if math.isnan(level) or np.isnan(np.asarray(values, dtype=float)).any():
-        raise ValueError("level and values must not contain NaN.")
-    for i, value in enumerate(values):
-        crossed = value <= level if inclusive else value < level
-        if crossed:
-            return interpolate_crossing(times, values, i, level), False
-    return float(times[-1]), True
-
-
-def relative_level(values: Sequence[float], threshold: float) -> float:
-    """Returns ``threshold`` times the initial value of a curve.
-
-    Args:
-        values: Curve values; the first one is the initial value.
-        threshold: Fraction of the initial value, e.g. 1/e.
-
-    Returns:
-        The level, or ``threshold`` itself if the curve starts at zero.
-    """
-    initial = float(values[0]) if len(values) > 0 else 1.0
-    return threshold * initial if initial > _MIN_INITIAL_VALUE else threshold
-
-
-def sudden_death_time(
-    times: np.ndarray, lam: Sequence[float]
-) -> tuple[float, bool]:
-    """Finds the time of entanglement sudden death.
-
-    The first zero of the concurrence, interpolated on the unclipped
-    Wootters lambda. A state that starts separable gives 0 (no usable
-    windows); one that is still entangled at the end is censored.
-
-    Args:
-        times: Time points.
-        lam: Unclipped Wootters lambda at ``times``.
-
-    Returns:
-        ``(time, censored)`` as in ``first_crossing``.
-    """
-    return first_crossing(times, lam, 0.0, inclusive=True)
+    return initial.random_pure(build_system(config))
 
 
 def compute_t_decoh(
@@ -232,85 +125,82 @@ def energy_basis_t_decoh(
         ValueError: If `hamiltonian` is not a Hermitian square matrix, or
             as `first_crossing`.
     """
-    hamiltonian = np.asarray(hamiltonian)
-    if (hamiltonian.ndim != 2 or hamiltonian.shape[0] != hamiltonian.shape[1]
-            or not np.allclose(hamiltonian, hamiltonian.conj().T)):
-        raise ValueError("hamiltonian must be a Hermitian square matrix.")
-    eigenvectors = np.linalg.eigh(hamiltonian)[1]
-    values = [
-        measures.energy_basis_coherence_l1(
-            r.full() if hasattr(r, "full") else np.asarray(r), eigenvectors
-        )
-        for r in density_matrices
-    ]
+    values = target.energy_basis_coherence(hamiltonian, density_matrices)
     return first_crossing(
         times, values, relative_level(values, config.decoherence_threshold)
     )
 
 
-def _two_qubit_t_decoh(
+def build_system(
     config: value_objects.SystemConfig,
-    times: np.ndarray,
-    hamiltonian: np.ndarray,
-    observables: dict,
-) -> tuple[float, bool]:
-    """Dispatches the decoherence criterion of a two-qubit trajectory."""
-    criterion = config.decoherence_criterion
-    rhos = observables["density_matrices"]
-    if criterion == value_objects.DecoherenceCriterion.COHERENCE_ENERGY:
-        return energy_basis_t_decoh(config, times, hamiltonian, rhos)
-    if criterion == value_objects.DecoherenceCriterion.CONCURRENCE:
-        values = [measures.concurrence(r) for r in rhos]
-        return first_crossing(
-            times, values, relative_level(values, config.decoherence_threshold)
-        )
-    if criterion == value_objects.DecoherenceCriterion.ENTANGLEMENT_DEATH:
-        return sudden_death_time(
-            times, [measures.wootters_lambda(r) for r in rhos]
-        )
-    return compute_t_decoh(config, times, observables)
+) -> blocks_system.System:
+    """Builds the Hamiltonian block of a config.
 
+    Args:
+        config: System specification.
 
-def _gamma_coeffs(config: value_objects.SystemConfig) -> np.ndarray | None:
-    """Returns the Bernstein coefficients of the config as an array."""
-    coeffs = config.dissipator.gamma_coeffs
-    return np.array(coeffs) if coeffs is not None else None
-
-
-def _single_qubit_system(
-    config: value_objects.SystemConfig,
-) -> lindblad_systems.SingleQubitSystem:
-    """Builds the single-qubit Lindblad system of a config."""
-    return lindblad_systems.SingleQubitSystem(
-        omega=config.omega,
-        gamma_const=config.dissipator.gamma_const,
-        gamma_coeffs=_gamma_coeffs(config),
-        jump_operators=[config.dissipator.operator_type.value],
-        gamma_t_max=config.t_max,
-    )
-
-
-def _two_qubit_system(
-    config: value_objects.SystemConfig,
-) -> lindblad_systems.TwoQubitSystem:
-    """Builds the two-qubit Lindblad system of a config."""
-    return lindblad_systems.TwoQubitSystem(
-        J=config.J,
-        interaction_type=config.interaction_type.value,
-        gamma_const=config.dissipator.gamma_const,
-        gamma_coeffs=_gamma_coeffs(config),
-        gamma_t_max=config.t_max,
-        jump_operators=[config.dissipator.operator_type.value],
-    )
+    Returns:
+        The one- or two-qubit system.
+    """
+    if config.n_qubits == value_objects.QubitCount.ONE:
+        return blocks_system.single_qubit(config.omega)
+    return blocks_system.two_qubit(config.J, config.interaction_type.value)
 
 
 class QuTipSimulator(ports.ISimulator):
-    """Simulates the Lindblad master equation with QuTiP.
+    """Simulates one trajectory per config by running its recipe.
 
-    Subclasses can change a run through three hooks, each a no-op or the
-    published behaviour by default: ``_initial_state``, ``_prepare_system``
-    and ``_extra_observables``.
+    A thin facade over ``src.blocks``: `legacy.recipe_for` turns the config
+    and the simulator alias into a `Recipe` with legacy seeds, and
+    `runner.run_with_generator` runs it. The initial state is drawn from
+    NumPy's global generator, so ``np.random.seed`` fixes the trajectory;
+    the random blocks of one simulator object (the stochastic-gamma path)
+    share one generator that advances from call to call.
+
+    Attributes:
+        alias: Which published physics is simulated, a key of
+            `legacy.ALIAS_PARAMS`: ``plain`` (default), ``correlators``
+            (also the nine two-body Pauli correlators, R23),
+            ``entanglement`` (correlators and the Wootters concurrence,
+            R24), ``stochastic_gamma`` (``s``, ``tau``, ``seed``: gamma(t)
+            times a log-normal Ornstein-Uhlenbeck factor, R21),
+            ``parity_sector`` (``sector``: two-qubit initial states in one
+            parity sector, R6) and ``kondo`` (``rho_J``, ``kT``, ``kF_d``,
+            ``dim``: the Kondo bath of R28 replaces the jump operators).
+        params: The arguments of the alias.
+        cache_dir: Directory of the content-addressed states cache, or
+            None for no disk cache. The key covers the whole physics, so it
+            works for every alias.
     """
+
+    def __init__(
+        self,
+        alias: str = "plain",
+        cache_dir: str | Path | None = None,
+        **params: object,
+    ) -> None:
+        """Initialises the simulator.
+
+        Args:
+            alias: A key of `legacy.ALIAS_PARAMS`.
+            cache_dir: Directory of the states cache, or None.
+            **params: Arguments of the alias, e.g. ``s``, ``tau`` and
+                ``seed`` for ``stochastic_gamma``.
+
+        Raises:
+            KeyError: If `alias` is unknown; the message lists the valid
+                aliases.
+            TypeError: If an argument is missing or unexpected.
+            ValueError: If an argument is out of range.
+        """
+        legacy.validate_simulator(alias, params)
+        self.alias = alias
+        self.params = dict(params)
+        self.cache_dir = None if cache_dir is None else Path(cache_dir)
+        seed = self.params.get("seed")
+        self._rng = np.random.default_rng(seed)
+        self._seed = 0 if seed is None else seed
+        self._calls = 0
 
     def simulate(
         self, config: value_objects.SystemConfig
@@ -333,67 +223,15 @@ class QuTipSimulator(ports.ISimulator):
         if not isinstance(config, value_objects.SystemConfig):
             raise TypeError(
                 f"config must be a SystemConfig, got {config!r}.")
-        n_steps = int(round(config.t_max / config.dt)) + 1
-        times = np.linspace(0.0, config.t_max, n_steps)
-        initial_state = self._initial_state(config)
-
-        if config.n_qubits == value_objects.QubitCount.ONE:
-            system = self._prepare_system(_single_qubit_system(config), config)
-            observables = simulate_qutip.simulate_single_qubit(
-                system, initial_state, times
-            )
-            t_decoh, censored = compute_t_decoh(config, times, observables)
-        else:
-            system = self._prepare_system(_two_qubit_system(config), config)
-            observables = simulate_qutip.simulate_two_qubit(
-                system, initial_state, times
-            )
-            observables = self._with_extra_observables(observables)
-            t_decoh, censored = _two_qubit_t_decoh(
-                config, times, system.H.full(), observables
-            )
-
-        # The raw density matrices are large and are not model features.
-        observables.pop("density_matrices", None)
+        recipe = legacy.recipe_for(config, self.alias, **self.params)
+        result = runner.run_with_generator(
+            recipe, self._rng, index=self._calls, seed=self._seed,
+            cache_dir=self.cache_dir)
+        self._calls += 1
         return value_objects.TrajectoryResult(
-            times=times,
-            observables=observables,
-            t_decoh=t_decoh,
+            times=result.observations.times,
+            observables=result.observations.series,
+            t_decoh=result.target.time,
             system_config=config,
-            censored=censored,
+            censored=result.target.censored,
         )
-
-    def _with_extra_observables(self, observables: dict) -> dict:
-        """Inserts the hook's observables before purity and coherence_l1."""
-        extra = self._extra_observables(observables["density_matrices"])
-        if not extra:
-            return observables
-        tail = {
-            key: observables.pop(key)
-            for key in ("purity", "coherence_l1", "density_matrices")
-        }
-        return {**observables, **extra, **tail}
-
-    def _initial_state(self, config: value_objects.SystemConfig) -> qt.Qobj:
-        """Draws the initial pure state.
-
-        Override to constrain the preparation (the parity-sector experiment
-        does); the default is what every other run used.
-        """
-        return sample_initial_state(config)
-
-    def _prepare_system(self, system, config: value_objects.SystemConfig):
-        """Adjusts the Lindblad system before integration.
-
-        Override to modify it (the stochastic-rate variant does); the
-        default returns the system unchanged.
-        """
-        return system
-
-    def _extra_observables(self, density_matrices) -> dict:
-        """Computes additional two-qubit observables from rho(t).
-
-        They are inserted before purity and coherence_l1, which must stay
-        the last two feature columns. By default nothing is added.
-        """
-        return {}

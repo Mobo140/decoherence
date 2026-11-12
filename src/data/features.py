@@ -1,7 +1,7 @@
 """Feature sets: which observables a model sees.
 
 `FEATURE_SETS` maps an alias to the columns it removes from the full set
-recorded by `EntanglementSimulator`. A column that a dataset does not have
+recorded by the `entanglement` simulator. A column that a dataset does not have
 is ignored, so "base" also applies to data without concurrence.
 
     base       the base observables only
@@ -14,10 +14,10 @@ import types
 from collections.abc import Mapping
 
 from src.data import dataset as dataset_lib
-from src.simulation import variants
+from src.blocks import observe
 
 FEATURE_SETS: Mapping[str, frozenset[str]] = types.MappingProxyType({
-    "base": frozenset(variants.CORR) | {"concurrence"},
+    "base": frozenset(observe.CORR) | {"concurrence"},
     "corr": frozenset({"concurrence"}),
     "corr_conc": frozenset(),
 })
