@@ -125,6 +125,12 @@ def test_recipe_sampler_without_rng_and_n_raises():
 # --- Positive cases ---
 
 
+def test_freeze_rejects_containers_of_unhashable_data():
+    with pytest.raises(ValueError, match="must be a number"):
+        recipe.freeze((1, [2, {"a": 3}]))
+    assert recipe.freeze([1, [2, "a", None]]) == (1, (2, "a", None))
+
+
 def test_block_is_frozen_hashable_and_sorts_parameters():
     a = block("channels.jump", op_type="sigma_z", gamma=0.1)
     b = block("channels.jump", gamma=0.1, op_type="sigma_z")
