@@ -91,12 +91,16 @@ def to_dataset(
         The dataset.
 
     Raises:
-        ValueError: If `runs` is empty, the runs use a system the context
-            codes do not know, or as `windows.build_dataset`.
+        ValueError: If `runs` is empty, a run has no target, the runs use
+            a system the context codes do not know, or as
+            `windows.build_dataset`.
         RuntimeError: If no trajectory yields a window.
     """
     if len(runs) == 0:
         raise ValueError("There are no runs to build a dataset from.")
+    if any(run.target is None for run in runs):
+        raise ValueError(
+            "A run has no target; the recipe needs a target block.")
     dataset = windows.build_dataset(
         [_trajectory(run) for run in runs],
         window_length=window_length, horizon=horizon,

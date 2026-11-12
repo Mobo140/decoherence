@@ -52,6 +52,13 @@ def test_no_runs_raise_value_error():
             [], rng=np.random.default_rng(0), **WINDOW)
 
 
+def test_run_without_a_target_raises_value_error():
+    run_ = dataclasses.replace(_runs(ONE, 1)[0], target=None)
+    with pytest.raises(ValueError, match="no target"):
+        recipe_dataset.to_dataset(
+            [run_], rng=np.random.default_rng(0), **WINDOW)
+
+
 def test_run_of_an_unknown_system_raises_value_error():
     run_ = _runs(ONE, 1)[0]
     bad = dataclasses.replace(run_, system_fn="system.chain")

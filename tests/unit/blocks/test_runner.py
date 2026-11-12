@@ -236,3 +236,74 @@ def test_legacy_shared_generator_offset_changes_the_ou_path():
         _recipe(seeds="legacy", legacy_rng_offset=1), 1, seed=7)[0]
     assert not np.array_equal(
         a.observations.series["purity"], b.observations.series["purity"])
+
+
+# --- evolution stage and finite shots ---
+
+
+def _sequential_recipe(**overrides):
+    fields = dict(
+        system=block("system.single_qubit", omega=1.0),
+        channels=(block("channels.jump", op_type="sigma_minus", gamma=0.3),),
+        initial=block("initial.random_pure"),
+        evolve=block("evolve.sequential_record", basis="z"),
+        observe=(block("observe.record_series"),), target=None,
+        t_max=2.0, dt=0.1)
+    fields.update(overrides)
+    return Recipe(**fields)
+
+
+def _shots_recipe(settings="tomography"):
+    return _recipe(
+        observe=(block("observe.finite_shots", n_shots=50,
+                       settings=settings),),
+        sampler=block("samplers.fixed", omega=1.0))
+
+
+def test_states_cache_with_sequential_record_raises(tmp_path):
+    with pytest.raises(ValueError, match="master_equation only"):
+        runner.run(_sequential_recipe(), 1, seed=0, cache_dir=tmp_path)
+
+
+def test_sequential_record_recipe_runs_without_a_target():
+    run_ = runner.run(_sequential_recipe(), 1, seed=3)[0]
+    assert run_.target is None and run_.states is None
+    assert run_.record.outcomes.shape == (21, 1)
+    assert list(run_.observations.series) == ["outcome_q1"]
+    assert set(run_.observations.series["outcome_q1"]) <= {0.0, 1.0}
+
+
+def test_sequential_record_is_deterministic_per_seed_and_index():
+    a = runner.run(_sequential_recipe(), 4, seed=3)
+    b = runner.run(_sequential_recipe(), 2, seed=3)
+    for x, y in zip(a, b):
+        np.testing.assert_array_equal(x.record.outcomes, y.record.outcomes)
+    assert not all(np.array_equal(a[0].record.outcomes, r.record.outcomes)
+                   for r in a[1:])
+
+
+def test_finite_shots_is_a_recipe_observation_with_its_own_stream():
+    runs = runner.run(_shots_recipe(), 2, seed=5)
+    again = runner.run(_shots_recipe(), 2, seed=5)
+    exact = runner.run(
+        _recipe(observe=(block("observe.pauli_means"),),
+                sampler=block("samplers.fixed", omega=1.0)), 2, seed=5)
+    for a, b, c in zip(runs, again, exact):
+        for name, values in a.observations.series.items():
+            np.testing.assert_array_equal(values, b.observations.series[name])
+        assert a.params == c.params
+        assert not np.array_equal(
+            a.observations.series["sigma_z"], c.observations.series["sigma_z"])
+        assert list(a.observations.series)[-2:] == ["purity", "coherence_l1"]
+
+
+def test_two_qubits_with_local_shots_have_no_model_tail():
+    recipe = Recipe(
+        system=block("system.two_qubit", J=0.8, interaction="XXZ"),
+        channels=(block("channels.jump", op_type="sigma_z", gamma=0.2),),
+        initial=block("initial.random_pure"),
+        observe=(block("observe.finite_shots", n_shots=20, settings="local"),
+                 block("observe.model_layout")),
+        target=None, t_max=1.0, dt=0.5)
+    with pytest.raises(ValueError, match="need tomography"):
+        runner.run(recipe, 1, seed=0)

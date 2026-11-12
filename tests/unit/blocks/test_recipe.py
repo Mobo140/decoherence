@@ -163,7 +163,7 @@ def test_recipe_is_hashable_and_collects_params():
         sampler=block("samplers.fixed", omega=1.0, t_max=2.0))
     hash(r)
     assert r.referenced_params() == {"omega", "t_max"}
-    assert len(r.blocks()) == 7
+    assert len(r.blocks()) == 8
 
 
 def test_recipe_accepts_producers_and_modifiers_in_any_valid_order():
@@ -171,3 +171,46 @@ def test_recipe_accepts_producers_and_modifiers_in_any_valid_order():
         block("channels.jump", op_type="sigma_z", gamma=0.1),
         block("channels.ou_modulation", s=0.2, tau=1.0),
         block("channels.jump", op_type="sigma_minus", gamma=0.1)))
+
+
+# --- evolution stage ---
+
+
+def _sequential(**overrides):
+    fields = dict(
+        evolve=block("evolve.sequential_record", basis="z"),
+        observe=(block("observe.record_series"),), target=None)
+    fields.update(overrides)
+    return _good(**fields)
+
+
+def test_recipe_unknown_evolution_block_raises():
+    with pytest.raises(ValueError, match="evolve must be one of"):
+        _good(evolve=block("channels.jump", op_type="sigma_z", gamma=0.1))
+
+
+def test_recipe_sequential_record_needs_its_basis():
+    with pytest.raises(ValueError, match="required parameter 'basis'"):
+        _sequential(evolve=block("evolve.sequential_record"))
+
+
+def test_recipe_observe_blocks_must_match_the_evolution():
+    with pytest.raises(ValueError, match="takes 'states' but"):
+        _good(evolve=block("evolve.sequential_record", basis="z"))
+    with pytest.raises(ValueError, match="takes 'record' but"):
+        _good(observe=(block("observe.record_series"),))
+
+
+def test_recipe_target_must_match_the_evolution():
+    with pytest.raises(ValueError, match="required parameter 'states'"):
+        _sequential(target=block("target.sudden_death"))
+
+
+def test_recipe_defaults_to_the_master_equation():
+    assert _good().evolve == block("evolve.master_equation")
+
+
+def test_recipe_accepts_sequential_record_without_a_target():
+    recipe_ = _sequential()
+    assert recipe_.target is None
+    hash(recipe_)

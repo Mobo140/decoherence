@@ -441,3 +441,23 @@ def test_finite_shots_works_on_a_trajectory_and_keeps_the_time_grid():
         states, 100, "tomography", np.random.default_rng(0))
     np.testing.assert_array_equal(obs.times, states.times)
     assert all(v.shape == (len(states.times),) for v in obs.series.values())
+
+
+# --- record_series ---
+
+
+def test_record_series_with_mismatched_outcomes_raises():
+    record = evolve.Record(np.arange(3.0), np.zeros((2, 1), dtype=int))
+    with pytest.raises(ValueError, match="outcomes of shape"):
+        observe.record_series(record)
+    with pytest.raises(ValueError, match="outcomes of shape"):
+        observe.record_series(evolve.Record(np.zeros(0), np.zeros((0, 1))))
+
+
+def test_record_series_names_the_outcomes_by_qubit():
+    outcomes = np.array([[0, 1], [1, 1], [0, 0]])
+    obs = observe.record_series(
+        evolve.Record(np.arange(3.0), outcomes))
+    assert list(obs.series) == ["outcome_q1", "outcome_q2"]
+    np.testing.assert_array_equal(obs.series["outcome_q2"], [1.0, 1.0, 0.0])
+    np.testing.assert_array_equal(obs.times, np.arange(3.0))

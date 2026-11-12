@@ -25,6 +25,13 @@ RESERVED = frozenset({"system", "channels", "states", "obs", "rng"})
 # Parameters the runner supplies unless the block sets them.
 OPTIONAL_INJECTED = frozenset({"t_max"})
 SEED_MODES = ("spawn", "legacy")
+# Evolution blocks and the first parameter that the observe and target
+# blocks of a recipe take for each: the integrated states, or the record of
+# measurement outcomes.
+EVOLVERS = {
+    "evolve.master_equation": "states",
+    "evolve.sequential_record": "record",
+}
 
 _PRODUCER, _MODIFIER = "producer", "modifier"
 
@@ -233,20 +240,20 @@ def observe_role(b: Block) -> str:
         b: A block of the observe stage.
 
     Returns:
-        'producer' if the first parameter is ``states``, 'modifier' if it
-        is ``obs``.
+        'producer' if the first parameter is ``states`` or ``record``,
+        'modifier' if it is ``obs``.
 
     Raises:
-        ValueError: If the first parameter is neither.
+        ValueError: If the first parameter is none of these.
     """
     first = _first_parameter(b)
-    if first == "states":
+    if first in ("states", "record"):
         return _PRODUCER
     if first == "obs":
         return _MODIFIER
     raise ValueError(
-        f"Observe block {b.fn} must take 'states' (producer) or 'obs' "
-        f"(transform) as its first parameter, not {first!r}.")
+        f"Observe block {b.fn} must take 'states' or 'record' (producer) "
+        f"or 'obs' (transform) as its first parameter, not {first!r}.")
 
 
 @dataclass(frozen=True)
@@ -266,7 +273,9 @@ class Recipe:
         observe: Producers (first parameter ``states``) and transforms
             (first parameter ``obs``), applied in order; the series are
             put in model layout at the end if both tail series exist.
-        target: Block that takes ``states`` and ``system``.
+        target: Block that takes ``states`` (or ``record``) and ``system``,
+            or None if the recipe has no target (for instance with
+            ``sequential_record``, which has no target block yet).
         sampler: Block ``(rng, n, **params) -> list[dict]`` that gives the
             values of the `Param` placeholders, or None if there are none.
         seeds: 'spawn' (one independent stream per trajectory and stage) or
@@ -274,6 +283,10 @@ class Recipe:
             one shared generator for the other random blocks).
         legacy_rng_offset: In 'legacy' mode the shared generator is
             ``default_rng(seed + legacy_rng_offset)``.
+        evolve: ``evolve.master_equation`` (default; the observe blocks
+            take ``states``) or ``evolve.sequential_record``, e.g.
+            ``block("evolve.sequential_record", basis="z")`` (the observe
+            blocks take ``record``, e.g. ``observe.record_series``).
 
     Raises:
         ValueError: If a block does not validate, a role is wrong, a
@@ -284,12 +297,13 @@ class Recipe:
     channels: tuple[Block, ...]
     initial: Block
     observe: tuple[Block, ...]
-    target: Block
+    target: Block | None
     t_max: float | Param = 20.0
     dt: float | Param = 0.1
     sampler: Block | None = None
     seeds: str = "spawn"
     legacy_rng_offset: int = 0
+    evolve: Block = Block("evolve.master_equation")
 
     def __post_init__(self) -> None:
         if self.seeds not in SEED_MODES:
@@ -309,6 +323,14 @@ class Recipe:
             raise ValueError(
                 "A recipe needs at least one channel and one observe "
                 "block.")
+        if self.evolve.fn not in EVOLVERS:
+            raise ValueError(
+                f"evolve must be one of {sorted(EVOLVERS)}, "
+                f"got {self.evolve.fn!r}.")
+        evolved = EVOLVERS[self.evolve.fn]
+        check_block(
+            self.evolve, {"system", "channels", "rho0", "times", "rng"},
+            "evolve")
         check_block(self.system, set(), "system")
         produced = False
         for b in self.channels:
@@ -328,10 +350,16 @@ class Recipe:
                 raise ValueError(
                     f"The first observe block must be a producer, "
                     f"got {b.fn}.")
+            if role == _PRODUCER and _first_parameter(b) != evolved:
+                raise ValueError(
+                    f"The observe block {b.fn} takes "
+                    f"{_first_parameter(b)!r} but {self.evolve.fn} "
+                    f"produces {evolved!r}.")
             check_block(
-                b, {"states" if role == _PRODUCER else "obs", "rng"},
+                b, {evolved if role == _PRODUCER else "obs", "rng"},
                 "observe")
-        check_block(self.target, {"states", "system"}, "target")
+        if self.target is not None:
+            check_block(self.target, {evolved, "system"}, "target")
         if self.sampler is not None:
             if self.sampler.param_names():
                 raise ValueError("The sampler's parameters cannot be Params.")
@@ -349,8 +377,9 @@ class Recipe:
 
     def blocks(self) -> tuple[Block, ...]:
         """Returns the blocks of the pipeline stages, in order."""
-        return ((self.system,) + self.channels + (self.initial,)
-                + self.observe + (self.target,))
+        target = () if self.target is None else (self.target,)
+        return ((self.system,) + self.channels + (self.initial, self.evolve)
+                + self.observe + target)
 
     def referenced_params(self) -> set[str]:
         """Returns the names of every `Param` the recipe uses."""

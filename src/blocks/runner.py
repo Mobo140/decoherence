@@ -39,7 +39,7 @@ from src.blocks.target import Target
 
 _SAMPLER_STREAM = (0,)
 _TRAJECTORY_STREAM = 1
-_STAGES = ("channels", "initial", "observe")
+_STAGES = ("channels", "initial", "observe", "evolve")
 
 
 @dataclass(frozen=True, eq=False)
@@ -54,8 +54,10 @@ class Run:
         jump_op: Operator type of the first ``channels.jump`` block, or
             None if the recipe has none.
         observations: The observed series.
-        target: The decoherence time.
+        target: The decoherence time, or None if the recipe has no target.
         states: The states, only if ``keep_states`` was set.
+        record: The measurement record of a ``sequential_record`` recipe,
+            else None.
     """
 
     index: int
@@ -64,8 +66,9 @@ class Run:
     system_fn: str
     jump_op: str | None
     observations: observe.Observations
-    target: Target
+    target: Target | None
     states: evolve.States | None = field(default=None)
+    record: evolve.Record | None = field(default=None)
 
 
 def _resolve_value(value: Any, params: dict[str, Any]) -> Any:
@@ -134,6 +137,40 @@ def _sample(recipe: Recipe, n: int, seed: int) -> list[dict[str, Any]]:
     return [{k: freeze(v) for k, v in row.items()} for row in sampled]
 
 
+def _integrate(
+    recipe: Recipe,
+    params: dict[str, Any],
+    seed: int,
+    index: int,
+    system: Any,
+    channels: list[Channel],
+    rho0: Any,
+    times: np.ndarray,
+    t_max: float,
+    dt: float,
+    cache_dir: Path | None,
+) -> evolve.States:
+    """Integrates the master equation, through the states cache if set."""
+    description = {
+        "system": [recipe.system.fn, _resolved(recipe.system, params)],
+        "channels": [[b.fn, _resolved(b, params)] for b in recipe.channels],
+        "initial": [recipe.initial.fn, _resolved(recipe.initial, params)],
+        "t_max": t_max, "dt": dt,
+        "seed": _seed_identity(recipe, seed, index),
+    }
+    key = None
+    if cache_dir is not None:
+        key = cache.states_key(
+            description, system, channels, rho0.full(), times)
+        states = cache.load(cache_dir, key)
+        if states is not None:
+            return states
+    states = evolve.master_equation(system, channels, rho0, times)
+    if key is not None:
+        cache.store(cache_dir, key, states)
+    return states
+
+
 def _execute(
     recipe: Recipe,
     index: int,
@@ -144,6 +181,10 @@ def _execute(
     keep_states: bool,
 ) -> Run:
     """Computes one trajectory."""
+    sequential = recipe.evolve.fn == "evolve.sequential_record"
+    if sequential and cache_dir is not None:
+        raise ValueError(
+            "The states cache applies to evolve.master_equation only.")
     t_max = _resolve_value(recipe.t_max, params)
     dt = _resolve_value(recipe.dt, params)
     times = _time_grid(t_max, dt)
@@ -162,28 +203,23 @@ def _execute(
         else:
             channels = _call(b, params, {**supplied, "channels": channels})
 
-    description = {
-        "system": [recipe.system.fn, _resolved(recipe.system, params)],
-        "channels": [[b.fn, _resolved(b, params)] for b in recipe.channels],
-        "initial": [recipe.initial.fn, _resolved(recipe.initial, params)],
-        "t_max": t_max, "dt": dt,
-        "seed": _seed_identity(recipe, seed, index),
-    }
-    states = None
-    key = None
-    if cache_dir is not None:
-        key = cache.states_key(
-            description, system, channels, rho0.full(), times)
-        states = cache.load(cache_dir, key)
-    if states is None:
-        states = evolve.master_equation(system, channels, rho0, times)
-        if key is not None:
-            cache.store(cache_dir, key, states)
+    states = record = None
+    if sequential:
+        record = _call(recipe.evolve, params, {
+            "system": system, "channels": channels, "rho0": rho0,
+            "times": times, "rng": streams["evolve"]})
+        produced = {"record": record}
+    else:
+        states = _integrate(
+            recipe, params, seed, index, system, channels, rho0, times,
+            t_max, dt, cache_dir)
+        produced = {"states": states}
 
     obs = None
     for b in recipe.observe:
         if observe_role(b) == "producer":
-            part = _call(b, params, {"states": states})
+            part = _call(
+                b, params, {**produced, "rng": streams["observe"]})
             obs = part if obs is None else observe.combine(obs, part)
         else:
             obs = _call(
@@ -191,8 +227,10 @@ def _execute(
     if all(name in obs.series for name in observe.MODEL_TAIL):
         obs = observe.model_layout(obs)
 
-    result_target = _call(
-        recipe.target, params, {"states": states, "system": system})
+    result_target = None
+    if recipe.target is not None:
+        result_target = _call(
+            recipe.target, params, {**produced, "system": system})
     jump = next((b for b in recipe.channels if b.fn == "channels.jump"), None)
     return Run(
         index=index,
@@ -204,6 +242,7 @@ def _execute(
         observations=obs,
         target=result_target,
         states=states if keep_states else None,
+        record=record,
     )
 
 
@@ -240,7 +279,8 @@ def run_with_generator(
     """
     if recipe.seeds != "legacy":
         raise ValueError("run_with_generator needs a legacy-seeds recipe.")
-    streams = {"channels": rng, "initial": None, "observe": rng}
+    streams = {
+        "channels": rng, "initial": None, "observe": rng, "evolve": rng}
     return _execute(
         recipe, index, params or {}, seed, streams,
         None if cache_dir is None else Path(cache_dir), keep_states)
@@ -306,7 +346,8 @@ def run(
         np.random.seed(seed)
         shared = np.random.default_rng(seed + recipe.legacy_rng_offset)
         legacy_streams = {
-            "channels": shared, "initial": None, "observe": shared}
+            "channels": shared, "initial": None, "observe": shared,
+            "evolve": shared}
     runs = []
     for i in chosen:
         streams = legacy_streams or _streams(seed, i)

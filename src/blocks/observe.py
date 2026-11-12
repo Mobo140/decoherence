@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from src.blocks.evolve import States
+from src.blocks.evolve import Record, States
 from src.physics import measures, observables, paulis
 
 # Two-body Pauli correlators <sigma_a x sigma_b>, keyed by series name.
@@ -348,6 +348,31 @@ def _reconstruction_series(
         "coherence_l1": np.array(
             [measures.coherence_l1(r) for r in estimates]),
     }
+
+
+def record_series(record: Record) -> Observations:
+    """Observes the outcomes of a measurement record as series.
+
+    Args:
+        record: The record of a ``sequential_record`` run.
+
+    Returns:
+        One series ``outcome_q1``, ``outcome_q2``, ... per qubit, the
+        outcomes as floats (0.0 or 1.0, see `evolve.Record`).
+
+    Raises:
+        ValueError: If the record has no times or its outcomes do not have
+            one row per time.
+    """
+    outcomes = np.asarray(record.outcomes)
+    if len(record.times) == 0 or outcomes.ndim != 2 or (
+            outcomes.shape[0] != len(record.times)):
+        raise ValueError(
+            f"A record needs outcomes of shape (n_times, n_qubits) for "
+            f"{len(record.times)} times, got {outcomes.shape}.")
+    return Observations(record.times, {
+        f"outcome_q{q + 1}": outcomes[:, q].astype(float)
+        for q in range(outcomes.shape[1])})
 
 
 def combine(*observations: Observations) -> Observations:
