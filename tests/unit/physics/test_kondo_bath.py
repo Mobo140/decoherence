@@ -312,6 +312,44 @@ def test_collapse_operators_are_covariant_under_a_unitary_change_of_basis():
     assert (rotation * lhs * rotation.dag() - rhs).norm() < 1e-10
 
 
+def _energy_basis_liouvillian(hamiltonian, collapse):
+    """Dissipative Liouvillian in the eigenbasis of H, column stacking."""
+    zero = qt.Qobj(np.zeros(hamiltonian.shape), dims=hamiltonian.dims)
+    sup = qt.liouvillian(zero, collapse).full()
+    _, vectors = np.linalg.eigh(hamiltonian.full())
+    basis = np.kron(vectors.conj(), vectors)
+    return np.linalg.solve(basis, sup @ basis)
+
+
+@pytest.mark.parametrize("dim", [1, 2, 3])
+def test_collapse_dynamics_reproduce_rates_and_dephasing(dim):
+    rng = np.random.default_rng(dim)
+    ops = kondo_bath.chain_spin_operators(3)
+    ham = sum(rng.normal() * ops[i][a] for i in range(3) for a in range(3))
+    ham += sum(0.7 * ops[i][a] * ops[i + 1][a]
+               for i in range(2) for a in range(3))
+    positions = np.cumsum(rng.uniform(0.5, 2.0, 3))
+    kwargs = _kwargs(dim=dim, kt=0.3)
+    rates = kondo_bath.kondo_rates(ham, ops, positions, **kwargs)
+    sup = _energy_basis_liouvillian(
+        ham, kondo_bath.kondo_collapse_operators(
+            ham, ops, positions, **kwargs))
+    n = ham.shape[0]
+
+    def index(row, col):
+        return col * n + row
+
+    for k in range(n):
+        for m in range(n):
+            if k == m:
+                continue
+            # Population flow m -> k, and the decay of the coherence |k><m|.
+            assert sup[index(k, k), index(m, m)].real == pytest.approx(
+                rates.rates[m, k], abs=1e-14)
+            assert -sup[index(k, m), index(k, m)].real == pytest.approx(
+                rates.dephasing[k, m], abs=1e-14)
+
+
 # --- level shifts ------------------------------------------------------------
 
 def test_level_shift_of_a_spin_half_reduces_the_splitting_as_in_eq_22():
