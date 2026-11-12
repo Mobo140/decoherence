@@ -47,150 +47,130 @@ The cache is disabled for every arm: its keys do not include the
 simulator, so the projected arms would otherwise read the ordinary
 trajectories straight back.
 
-Writes ONLY to experiments/results/r6_parity_sector.csv.
+Writes ONLY to experiments/results/r6_parity_sector*.csv.
+Each CSV is accompanied by <name>.csv.provenance.json (configuration,
+seeds, software environment).
 
 Usage
 -----
-    python -m experiments.r6_parity_sector --fast
+    python -m experiments.r6_parity_sector --fast --tag smoke
     python -m experiments.r6_parity_sector --seeds 42 43 44
 """
 from __future__ import annotations
 
 import argparse
-import csv
+import collections
 import math
-import statistics as st
-import sys
-import time
-from collections import defaultdict
-from pathlib import Path
+from collections.abc import Mapping, Sequence
 
-import numpy as np
-import qutip as qt
+from experiments import common
+from experiments import j_sweep
+from src import pipeline
+from src.evaluation import stats
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from experiments.e7_paper2_extended import run_e7c
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
-
-RESULTS_DIR = Path(__file__).parent / "results"
-SCRATCH = RESULTS_DIR / "_r6_scratch.csv"
-H_FIELD = 1.0
-
-# Parity of the Hamiltonian the code actually builds, H = J sx1 sx2 + h(sz1+sz2).
-PARITY = qt.tensor(qt.sigmaz(), qt.sigmaz())
+COLUMNS = ("seed", "arm", "J", "r2", "mae", "auroc", "n_samples")
+# arm -> parity sector of the initial states (None: as published)
+SECTORS = {"generic": None, "sector+": +1, "sector-": -1}
+# J below which the coupling is weak, and from which it is strong.
+WEAK_MAX, STRONG_MIN = 0.5, 0.8
 
 
-class ParitySectorSimulator(QuTipSimulator):
-    """Projects each initial pure state onto one parity sector.
+def simulator_spec(arm: str) -> pipeline.SimulatorSpec:
+    """Returns the simulator that prepares the initial states of an arm."""
+    sector = SECTORS[arm]
+    if sector is None:
+        return pipeline.SimulatorSpec()
+    return pipeline.SimulatorSpec("parity_sector", (("sector", sector),))
 
-    Only the state preparation changes; the Hamiltonian, the dissipator and
-    the integration are the ordinary ones, so any difference in the results
-    is attributable to how many sector frequencies the signal contains.
+
+def arms(
+    names: Sequence[str], n_per_j: int, epochs: int
+) -> list[pipeline.ExperimentConfig]:
+    """Declares the J sweep of every arm.
+
+    The cache is off for every arm: its keys do not name the simulator, so
+    the projected arms would otherwise read the ordinary trajectories back.
+
+    Args:
+        names: Chosen arms among `SECTORS`.
+        n_per_j: Trajectories per coupling.
+        epochs: Training epochs.
+
+    Returns:
+        The arms in the order of the result rows.
     """
-
-    def __init__(self, sector: int) -> None:
-        if sector not in (+1, -1):
-            raise ValueError("sector must be +1 or -1")
-        self.sector = sector
-        eye = qt.qeye([2, 2])
-        self._proj = (eye + sector * PARITY) / 2
-
-    def _initial_state(self, config):
-        psi = super()._initial_state(config)
-        if config.n_qubits.value != 2:
-            return psi
-        # Redraw rather than renormalise a vanishing component: amplifying a
-        # near-zero projection would make the state an artefact of the noise
-        # in the discarded sector.
-        for _ in range(100):
-            proj = self._proj * psi
-            if proj.norm() > 1e-3:
-                return proj.unit()
-            psi = super()._initial_state(config)
-        raise RuntimeError("could not draw a state inside the requested sector")
+    configs = []
+    for name in names:
+        configs += j_sweep.arms(
+            "r6", n_per_j, epochs, simulator=simulator_spec(name),
+            cache="none", tags=(("arm", name),))
+    return configs
 
 
-def _append(path: Path, row: dict, first: bool) -> None:
-    path.parent.mkdir(exist_ok=True)
-    with path.open("w" if first else "a", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(row.keys()))
-        if first:
-            w.writeheader()
-        w.writerow(row)
-
-
-def _stats(values):
+def finite_mean_std(values: Sequence[float]) -> tuple[float, float]:
+    """Mean and s.d. over the finite entries; nan if there are none."""
     good = [v for v in values if math.isfinite(v)]
     if not good:
         return float("nan"), float("nan")
-    return st.mean(good), (st.stdev(good) if len(good) > 1 else 0.0)
+    return stats.mean_std(good)
 
 
-def main() -> None:
-    p = argparse.ArgumentParser()
-    p.add_argument("--seeds", type=int, nargs="+", default=[42, 43, 44])
-    p.add_argument("--fast", action="store_true")
-    p.add_argument("--out", type=str, default="r6_parity_sector.csv")
-    p.add_argument("--arms", nargs="+", default=["generic", "sector+", "sector-"])
-    a = p.parse_args()
+def summarize(
+    rows: Sequence[Mapping[str, object]], names: Sequence[str]
+) -> None:
+    """Prints R^2 by J for every arm and the drop from weak to strong J.
 
-    n_per_J = 30 if a.fast else 200
-    epochs = 10 if a.fast else 150
-    out = RESULTS_DIR / a.out
+    Args:
+        rows: Result rows with `arm`, `J` and `r2`.
+        names: The arms, in print order.
+    """
+    r2 = collections.defaultdict(list)
+    for row in rows:
+        r2[(row["arm"], float(row["J"]))].append(float(row["r2"]))
+    couplings = sorted({float(row["J"]) for row in rows})
 
-    print(f"R6 | seeds={a.seeds} arms={a.arms} n_per_J={n_per_J} epochs={epochs}")
-    print(f"writing -> {out}  (cache disabled, champion CSVs untouched)\n", flush=True)
-
-    sims = {"generic": QuTipSimulator(),
-            "sector+": ParitySectorSimulator(+1),
-            "sector-": ParitySectorSimulator(-1)}
-    first, t0, collected = True, time.time(), []
-
-    for seed in a.seeds:
-        for arm in a.arms:
-            ts = time.time()
-            print(f"--- seed {seed} | {arm} ---", flush=True)
-            rows = run_e7c(sims[arm], n_per_J=n_per_J, n_epochs=epochs,
-                           verbose=False, seed=seed, config_seed=seed,
-                           out_path=SCRATCH, store=None)
-            for r in rows:
-                row = {"seed": seed, "arm": arm, "J": r["J"], "r2": r["r2"],
-                       "mae": r["mae"], "auroc": r["auroc"],
-                       "n_samples": r["n_samples"]}
-                _append(out, row, first)
-                first = False
-                collected.append(row)
-            print(f"    [{time.time() - ts:.0f}s]", flush=True)
-
-    SCRATCH.unlink(missing_ok=True)
-
-    g = defaultdict(list)
-    for r in collected:
-        g[(r["arm"], float(r["J"]))].append(float(r["r2"]))
-
-    Js = sorted({float(r["J"]) for r in collected})
     print("\n" + "=" * 70)
-    print(f"{'J':>5}{'r(J)':>7}" + "".join(f"{arm:>19}" for arm in a.arms))
-    for J in Js:
-        line = f"{J:>5.1f}{J / math.sqrt(J * J + 4 * H_FIELD ** 2):>7.3f}"
-        for arm in a.arms:
-            m, sd = _stats(g[(arm, J)])
-            line += f"{m:>12.3f}±{sd:<6.3f}"
+    print(f"{'J':>5}{'r(J)':>7}" + "".join(f"{arm:>19}" for arm in names))
+    for coupling in couplings:
+        line = f"{coupling:>5.1f}{j_sweep.splitting_ratio(coupling):>7.3f}"
+        for arm in names:
+            mean, std = finite_mean_std(r2[(arm, coupling)])
+            line += f"{mean:>12.3f}±{std:<6.3f}"
         print(line)
 
     print("\nslope across J (mean R2 at J<=0.5 minus mean at J>=0.8):")
-    for arm in a.arms:
-        lo = [v for J in Js if J <= 0.5 for v in g[(arm, J)]]
-        hi = [v for J in Js if J >= 0.8 for v in g[(arm, J)]]
-        if lo and hi:
-            m_lo, _ = _stats(lo)
-            m_hi, _ = _stats(hi)
-            print(f"  {arm:<9} weak {m_lo:6.3f}  strong {m_hi:6.3f}  "
-                  f"drop {m_lo - m_hi:+.3f}")
-    print("\nThe mechanism predicts a markedly smaller drop for the single-sector")
+    for arm in names:
+        weak = [v for c in couplings if c <= WEAK_MAX for v in r2[(arm, c)]]
+        strong = [v for c in couplings if c >= STRONG_MIN
+                  for v in r2[(arm, c)]]
+        if weak and strong:
+            mean_weak = finite_mean_std(weak)[0]
+            mean_strong = finite_mean_std(strong)[0]
+            print(f"  {arm:<9} weak {mean_weak:6.3f}  "
+                  f"strong {mean_strong:6.3f}  "
+                  f"drop {mean_weak - mean_strong:+.3f}")
+    print("\nThe mechanism predicts a markedly smaller drop for the "
+          "single-sector")
     print("arms. A drop that survives them is not the two-mode picture.")
-    print(f"\ntotal {time.time() - t0:.0f}s -> {out}")
+
+
+def add_flags(parser: argparse.ArgumentParser) -> None:
+    """Adds the choice of arms to the common flags."""
+    parser.add_argument("--arms", nargs="+", choices=list(SECTORS),
+                        default=list(SECTORS))
+
+
+def main() -> None:
+    """Runs the parity-sector arms and prints the summary.
+
+    Writes experiments/results/r6_parity_sector*.csv.
+    """
+    args = common.parse_args(__doc__, extra=add_flags)
+    n_per_j, epochs = (30, 10) if args.fast else (200, 150)
+    rows = common.run_arms(
+        "R6", arms(args.arms, n_per_j, epochs), args,
+        common.results_path("r6_parity_sector", args), COLUMNS)
+    summarize(rows, args.arms)
 
 
 if __name__ == "__main__":

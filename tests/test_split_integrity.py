@@ -11,10 +11,10 @@ import numpy as np
 import pytest
 
 from src.application.generate_dataset import (
-    Dataset,
     GenerateDatasetCommand,
     GenerateDatasetUseCase,
 )
+from src.data.dataset import Dataset
 from src.domain.value_objects import (
     DissipatorConfig,
     QubitCount,
@@ -33,7 +33,9 @@ def _cfg(t_max: float = 12.0, dt: float = 0.1) -> SystemConfig:
     )
 
 
-def _traj(t_decoh: float, t_max: float = 12.0, dt: float = 0.1) -> TrajectoryResult:
+def _traj(
+    t_decoh: float, t_max: float = 12.0, dt: float = 0.1
+) -> TrajectoryResult:
     """Trajectory whose T2 is unique, so it can be identified in the dataset."""
     n = int(round(t_max / dt)) + 1
     times = np.linspace(0.0, t_max, n)
@@ -41,7 +43,8 @@ def _traj(t_decoh: float, t_max: float = 12.0, dt: float = 0.1) -> TrajectoryRes
         times=times,
         observables={
             "sigma_x": np.cos(times).astype(np.float32),
-            "coherence_l1": np.exp(-times / max(t_decoh, 1e-6)).astype(np.float32),
+            "coherence_l1": np.exp(
+                -times / max(t_decoh, 1e-6)).astype(np.float32),
             "purity": np.ones(n, dtype=np.float32),
         },
         t_decoh=t_decoh,
@@ -82,7 +85,8 @@ def _build(n_traj: int = 12, **kwargs) -> Dataset:
 def _split_of(ds: Dataset) -> dict:
     """Map every sample index to the split it belongs to."""
     where = {}
-    for name, idx in (("train", ds.train_idx), ("val", ds.val_idx), ("test", ds.test_idx)):
+    for name, idx in (("train", ds.train_idx), ("val", ds.val_idx),
+                      ("test", ds.test_idx)):
         for i in idx.tolist():
             where[i] = name
     return where
@@ -173,18 +177,20 @@ def test_min_window_gap_is_enforced_within_a_trajectory():
         obs = sorted(obs)
         for a, b in zip(obs, obs[1:]):
             steps = round((b - a) / dt)
-            assert steps >= gap, f"T2={t2}: windows {steps} steps apart, need {gap}"
+            assert steps >= gap, (
+                f"T2={t2}: windows {steps} steps apart, need {gap}")
 
 
 def test_normalisation_statistics_come_from_training_rows_only():
     """Fitting the scaler on all rows would leak test information."""
     torch = pytest.importorskip("torch")
-    from src.infrastructure.ml.lstm_predictor import LSTMPredictor
+    from src.models.lstm import LSTMPredictor
 
     ds = _build(n_traj=12)
     predictor = LSTMPredictor(hidden_size=8, num_layers=1, dropout=0.0)
     predictor.train(ds, n_epochs=1, batch_size=8, verbose=False, seed=0)
-    fitted_mean = np.array(predictor._feature_mean, dtype=np.float64).copy()
+    fitted_mean = np.array(
+        predictor.feature_scaler.mean, dtype=np.float64).copy()
 
     # Corrupt only the rows the model must not have looked at.
     poisoned = Dataset(**{**ds.__dict__})
@@ -193,7 +199,7 @@ def test_normalisation_statistics_come_from_training_rows_only():
 
     predictor2 = LSTMPredictor(hidden_size=8, num_layers=1, dropout=0.0)
     predictor2.train(poisoned, n_epochs=1, batch_size=8, verbose=False, seed=0)
-    again = np.array(predictor2._feature_mean, dtype=np.float64)
+    again = np.array(predictor2.feature_scaler.mean, dtype=np.float64)
 
     assert np.allclose(fitted_mean, again), (
         "feature normalisation changed when only test rows changed"

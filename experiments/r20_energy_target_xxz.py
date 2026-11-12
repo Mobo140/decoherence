@@ -1,4 +1,4 @@
-"""R20 — the energy-basis target on the Heisenberg model and on the cross-system model.
+"""R20 — the energy-basis target: Heisenberg model and cross-system model.
 
 Why
 ---
@@ -20,112 +20,123 @@ Two checks of that explanation:
 
 Arms
 ----
-  xxz_coh      run_e7c on XXZ, computational-basis target
-  xxz_energy   run_e7c on XXZ, energy-basis target
-  cross_energy run_e11a on build_configs(500, seed) D+E, energy-basis target
+  xxz_coh      the E7c J sweep on XXZ, computational-basis target
+  xxz_energy   the E7c J sweep on XXZ, energy-basis target
+  cross_energy the E11a Transformer on D+E (500 trajectories each),
+               energy-basis target
 
 Writes ONLY to experiments/results/r20a_xxz_J_sweep*.csv and
-experiments/results/r20b_cross_energy*.csv (suffix set by --tag).
+experiments/results/r20b_cross_energy*.csv (suffix set by --tag; --out is
+not accepted because there are two files). Each CSV is accompanied by
+<name>.csv.provenance.json (configuration, seeds, software environment).
 
 Usage
 -----
-    python -m experiments.r20_energy_target_xxz --fast
-    python -m experiments.r20_energy_target_xxz --arms xxz_coh --seeds 42 --tag s42
+    python -m experiments.r20_energy_target_xxz --fast --tag smoke
+    python -m experiments.r20_energy_target_xxz --arms xxz_coh --seeds 42 \\
+        --tag s42
 """
 from __future__ import annotations
 
 import argparse
-import csv
 import dataclasses
-import sys
-import time
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from experiments import common
+from experiments import j_sweep
+from src import pipeline
+from src.domain import value_objects
 
-from experiments._config import build_configs
-from experiments.e7_paper2_extended import run_e7c
-from experiments.e11_scaling import run_e11a
-from src.domain.value_objects import DecoherenceCriterion, InteractionType
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
-
-RESULTS_DIR = Path(__file__).parent / "results"
 ARMS = ("xxz_coh", "xxz_energy", "cross_energy")
-TARGET = {"xxz_coh": DecoherenceCriterion.COHERENCE,
-          "xxz_energy": DecoherenceCriterion.COHERENCE_ENERGY}
+ENERGY = value_objects.DecoherenceCriterion.COHERENCE_ENERGY.value
+XXZ = value_objects.InteractionType.XXZ.value
+COLUMNS_A = ("seed", "target", "J", "r2", "mae", "auroc", "n_samples")
+COLUMNS_B = ("seed", "scenario", "r2", "mae", "rmse", "auroc", "n_samples")
+# E11a: window, gap between the windows of a trajectory, batch and rate.
+WINDOW_LENGTH = 20
+MIN_WINDOW_GAP = 10
+CROSS_BATCH_SIZE = 64
+CROSS_LEARNING_RATE = 5e-4
 
 
-def _energy_groups(n_per: int, seed: int) -> dict:
-    groups = build_configs(n_per_scenario=n_per, seed=seed)
-    return {sc: [dataclasses.replace(
-                c, decoherence_criterion=DecoherenceCriterion.COHERENCE_ENERGY)
-                 for c in groups[sc]]
-            for sc in ("D", "E")}
+def sweep_arms(
+    arms: list[str], n_per_j: int, epochs: int
+) -> list[pipeline.ExperimentConfig]:
+    """Declares the XXZ J-sweep arms, one per target.
+
+    Args:
+        arms: Chosen arms among "xxz_coh" and "xxz_energy".
+        n_per_j: Trajectories per coupling.
+        epochs: Training epochs.
+
+    Returns:
+        The arms in the order of the result rows.
+    """
+    targets = {"xxz_coh": (None, "computational"),
+               "xxz_energy": (ENERGY, "energy")}
+    configs = []
+    for arm in arms:
+        criterion, target = targets[arm]
+        configs += j_sweep.arms(
+            "r20a", n_per_j, epochs, criterion=criterion, interaction=XXZ,
+            tags=(("target", target),))
+    return configs
+
+
+def cross_arm(n_per: int, epochs: int) -> pipeline.ExperimentConfig:
+    """Declares the Transformer trained on D+E with the energy-basis target.
+
+    It is scored on fresh trajectories of the training configurations of
+    each scenario (data seed + 1), as E11a is.
+
+    Args:
+        n_per: Trajectories per scenario.
+        epochs: Training epochs.
+
+    Returns:
+        The arm; its two tests give the rows of D and E.
+    """
+    data = pipeline.DataSpec(
+        name="r20b", scenarios=("D", "E"), n_per_scenario=n_per,
+        criterion=ENERGY, cache="disk", window_length=WINDOW_LENGTH,
+        min_window_gap=MIN_WINDOW_GAP, train_ratio=0.9, val_ratio=0.1)
+    tests = tuple(
+        pipeline.EvalSpec(
+            data=dataclasses.replace(
+                data, name=f"r20b_eval_{scenario}", scenarios=(scenario,),
+                train_ratio=0.0, val_ratio=0.0, data_seed_offset=1),
+            tags=(("scenario", scenario),))
+        for scenario in ("D", "E"))
+    return pipeline.ExperimentConfig(
+        data=data, model=j_sweep.MODEL, epochs=epochs,
+        batch_size=CROSS_BATCH_SIZE, learning_rate=CROSS_LEARNING_RATE,
+        metrics=("r2", "mae", "rmse", "auroc"), tests=tests)
+
+
+def add_flags(parser: argparse.ArgumentParser) -> None:
+    """Adds the choice of arms to the common flags."""
+    parser.add_argument("--arms", nargs="+", choices=ARMS,
+                        default=list(ARMS))
 
 
 def main() -> None:
-    p = argparse.ArgumentParser()
-    p.add_argument("--seeds", type=int, nargs="+", default=[42, 43, 44])
-    p.add_argument("--arms", nargs="+", choices=ARMS, default=list(ARMS))
-    p.add_argument("--fast", action="store_true")
-    p.add_argument("--tag", type=str, default="")
-    a = p.parse_args()
+    """Runs the XXZ J sweeps and the cross-system energy-target model.
 
-    n_per_J = 30 if a.fast else 200
-    n_per = 50 if a.fast else 500
-    epochs = 10 if a.fast else 150
-    sfx = (f"_{a.tag}" if a.tag else "") + ("_fast" if a.fast else "")
-    out_a = RESULTS_DIR / f"r20a_xxz_J_sweep{sfx}.csv"
-    out_b = RESULTS_DIR / f"r20b_cross_energy{sfx}.csv"
-    scratch = RESULTS_DIR / f"_r20_scratch{sfx}.csv"
-    print(f"R20 | seeds={a.seeds} arms={a.arms} epochs={epochs}", flush=True)
-
-    sim = QuTipSimulator()
-    fa = fb = wa = wb = None
-    if any(arm in TARGET for arm in a.arms):
-        fa = out_a.open("w", newline="")
-        wa = csv.DictWriter(fa, fieldnames=["seed", "target", "J", "r2", "mae",
-                                            "auroc", "n_samples"])
-        wa.writeheader()
-    if "cross_energy" in a.arms:
-        fb = out_b.open("w", newline="")
-        wb = csv.DictWriter(fb, fieldnames=["seed", "scenario", "r2", "mae",
-                                            "rmse", "auroc", "n_samples"])
-        wb.writeheader()
-
-    for seed in a.seeds:
-        for arm in a.arms:
-            ts = time.time()
-            if arm in TARGET:
-                rows = run_e7c(sim, n_per_J=n_per_J, n_epochs=epochs, verbose=False,
-                               seed=seed, config_seed=seed, out_path=scratch,
-                               criterion=TARGET[arm],
-                               interaction=InteractionType.XXZ)
-                target = "energy" if arm == "xxz_energy" else "computational"
-                for r in rows:
-                    wa.writerow({"seed": seed, "target": target, "J": r["J"],
-                                 "r2": r["r2"], "mae": r["mae"],
-                                 "auroc": r["auroc"], "n_samples": r["n_samples"]})
-                    fa.flush()
-                    print(f"R20 | {arm} seed={seed} J={r['J']:.1f} "
-                          f"R2={r['r2']:.3f}", flush=True)
-            else:
-                rows = run_e11a(sim, _energy_groups(n_per, seed), n_epochs=epochs,
-                                n_per=n_per, verbose=False, seed=seed, window=20,
-                                out_path=scratch)
-                for r in rows:
-                    wb.writerow({"seed": seed, "scenario": r["scenario"],
-                                 "r2": r["r2"], "mae": r["mae"], "rmse": r["rmse"],
-                                 "auroc": r["auroc"], "n_samples": r["n_samples"]})
-                    fb.flush()
-                    print(f"R20 | {arm} seed={seed} {r['scenario']} "
-                          f"R2={r['r2']:.3f}", flush=True)
-            print(f"R20 | {arm} seed={seed} done [{time.time() - ts:.0f}s]", flush=True)
-
-    for f in (fa, fb):
-        if f is not None:
-            f.close()
-    scratch.unlink(missing_ok=True)
+    Writes experiments/results/r20a_xxz_J_sweep*.csv and
+    r20b_cross_energy*.csv (use --tag, not --out).
+    """
+    args = common.parse_args(__doc__, extra=add_flags)
+    if args.out:
+        raise SystemExit("R20 writes two files: use --tag, not --out")
+    n_per_j, n_per, epochs = (30, 50, 10) if args.fast else (200, 500, 150)
+    sweeps = [arm for arm in args.arms if arm != "cross_energy"]
+    if sweeps:
+        common.run_arms(
+            "R20a", sweep_arms(sweeps, n_per_j, epochs), args,
+            common.results_path("r20a_xxz_J_sweep", args), COLUMNS_A)
+    if "cross_energy" in args.arms:
+        common.run_arms(
+            "R20b", [cross_arm(n_per, epochs)], args,
+            common.results_path("r20b_cross_energy", args), COLUMNS_B)
 
 
 if __name__ == "__main__":

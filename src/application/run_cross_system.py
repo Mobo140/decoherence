@@ -1,46 +1,57 @@
-"""Use-case: cross-system generalisation (Experiments E4/E5 from plan.md).
+"""Use case: cross-system generalisation (experiments E4 and E5).
 
-Trains ONE model on a mixture of all system types, then evaluates on each
-subsystem separately to test claim C5:
-  "A single model generalises across σ₋/σ_z, 1-qubit/2-qubit, diverse γ(t)."
+Trains ONE model on a mixture of all system types, then evaluates it on
+each subsystem separately to test the claim that a single model
+generalises across sigma-minus / sigma-z, one and two qubits, and
+diverse gamma(t).
 
-Also supports the inverse-problem baseline comparison (E5): train a
-PhysicsOnlyPredictor or TransformerPredictor on each subsystem and compare
-with the jointly-trained physics+LSTM.
-
-Usage::
-    cmd = CrossSystemCommand(
+Example:
+    command = CrossSystemCommand(
         train_configs=all_configs,
-        eval_groups={"1q_sigma_minus": configs_1q_sm, "2q_XXZ": configs_2q},
+        eval_groups={"1q_sigma_minus": configs_1q, "2q_XXZ": configs_2q},
     )
-    results = CrossSystemUseCase(simulator).execute(cmd)
+    results = CrossSystemUseCase(simulator).execute(command)
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, List
+import dataclasses
+from collections.abc import Callable
 
-import numpy as np
+from src.application import backtest
+from src.application import generate_dataset
+from src.application import train_model
+from src.domain import ports
+from src.domain import value_objects
+from src.models import registry
 
-from ..domain.ports import ISimulator
-from ..domain.value_objects import (
-    AblationResult,
-    ExperimentSpec,
-    NoiseConfig,
-    PredictorVariant,
-    SystemConfig,
-)
-from .backtest import BacktestCommand, BacktestUseCase
-from .generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
-from .train_model import TrainModelCommand, TrainModelUseCase
+# Builds the untrained predictor to fit on the mixture.
+PredictorFactory = Callable[[], ports.IPredictor]
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class CrossSystemCommand:
-    """Input for CrossSystemUseCase."""
+    """Input of `CrossSystemUseCase`.
 
-    train_configs: List[SystemConfig]
-    eval_groups: Dict[str, List[SystemConfig]]
+    Attributes:
+        train_configs: Systems of the training mixture.
+        eval_groups: Group name -> systems evaluated separately.
+        window_length: Observation window in time steps.
+        horizon: Risk horizon.
+        samples_per_trajectory: Windows drawn from each trajectory.
+        n_epochs: Training epochs.
+        batch_size: Training batch size.
+        lr: Learning rate.
+        regression_loss: Loss alias for the remaining-time target.
+        seed: Seed of training; evaluation data uses `seed + 1`.
+        verbose: Whether to print progress.
+        min_window_gap: Minimum gap between window ends, in time steps.
+        eval_interaction_codes: Optional group name -> inference context
+            code (4-class: D = 2.0, E = 3.0) set on predictors that have
+            one.
+    """
+
+    train_configs: list[value_objects.SystemConfig]
+    eval_groups: dict[str, list[value_objects.SystemConfig]]
     window_length: int = 50
     horizon: float = 1.0
     samples_per_trajectory: int = 5
@@ -51,81 +62,132 @@ class CrossSystemCommand:
     seed: int = 42
     verbose: bool = True
     min_window_gap: int = 0
-    # Optional per-eval-group inference context codes (4-class: D=2.0, E=3.0).
-    eval_interaction_codes: Dict[str, float] = field(default_factory=dict)
+    eval_interaction_codes: dict[str, float] = dataclasses.field(
+        default_factory=dict)
+
+
+def default_predictor() -> ports.IPredictor:
+    """Builds the default physics + LSTM predictor."""
+    return registry.build_model("physics_lstm")
+
+
+def variant_of(predictor: ports.IPredictor) -> value_objects.PredictorVariant:
+    """Maps a predictor instance to its CSV and paper variant label.
+
+    Args:
+        predictor: A built predictor.
+
+    Returns:
+        The variant it corresponds to.
+    """
+    variants = value_objects.PredictorVariant
+    name = type(predictor).__name__
+    if name == "TransformerPredictor":
+        return variants.TRANSFORMER
+    if name == "PhysicsOnlyPredictor":
+        return variants.PHYSICS_ONLY
+    if name == "StretchedExpPredictor":
+        return variants.STRETCHED_EXP
+    if getattr(predictor, "use_physics_prior", True) is False:
+        return variants.LSTM_ONLY
+    return variants.PHYSICS_LSTM
 
 
 class CrossSystemUseCase:
-    """Train on mixture, evaluate per subsystem."""
+    """Trains on a mixture and evaluates per subsystem."""
 
-    def __init__(self, simulator: ISimulator, store=None) -> None:
+    def __init__(
+        self,
+        simulator: ports.ISimulator,
+        store: ports.ITrajectoryStore | None = None,
+        predictor_factory: PredictorFactory = default_predictor,
+    ) -> None:
+        """Wires the use case.
+
+        Args:
+            simulator: Simulates the configurations.
+            store: Trajectory cache; `None` disables caching.
+            predictor_factory: Builds the predictor to train; the default
+                is the registry's physics + LSTM model.
+        """
         self._simulator = simulator
         self._store = store
+        self._predictor_factory = predictor_factory
 
-    def execute(self, command: CrossSystemCommand) -> List[AblationResult]:
+    def execute(
+        self, command: CrossSystemCommand
+    ) -> list[value_objects.AblationResult]:
+        """Trains on the mixture and scores each evaluation group.
+
+        Args:
+            command: What to run.
+
+        Returns:
+            One result per evaluation group, named
+            `cross_system_<group>`.
+        """
         if command.verbose:
             print("=== Cross-system: training on mixture ===")
-
-        # Train on the full mixture
-        gen_uc = GenerateDatasetUseCase(self._simulator, store=self._store)
-        train_dataset = gen_uc.execute(GenerateDatasetCommand(
-            configs=command.train_configs,
-            window_length=command.window_length,
-            horizon=command.horizon,
-            samples_per_trajectory=command.samples_per_trajectory,
-            seed=command.seed,
-            train_ratio=0.9,   # keep more for training when eval is separate
-            val_ratio=0.1,
-            min_window_gap=command.min_window_gap,
-        ))
-
-        predictor = self._build_predictor()
-        TrainModelUseCase(predictor).execute(TrainModelCommand(
-            dataset=train_dataset,
-            n_epochs=command.n_epochs,
-            batch_size=command.batch_size,
-            learning_rate=command.lr,
-            regression_loss=command.regression_loss,
-            verbose=command.verbose,
-            seed=command.seed,
-        ))
-
-        results: List[AblationResult] = []
-
-        for group_name, eval_configs in command.eval_groups.items():
-            if command.verbose:
-                print(f"\n--- Evaluating on: {group_name} ---")
-
-            eval_dataset = gen_uc.execute(GenerateDatasetCommand(
-                configs=eval_configs,
+        generator = generate_dataset.GenerateDatasetUseCase(
+            self._simulator, store=self._store)
+        train_dataset = generator.execute(
+            generate_dataset.GenerateDatasetCommand(
+                configs=command.train_configs,
                 window_length=command.window_length,
                 horizon=command.horizon,
                 samples_per_trajectory=command.samples_per_trajectory,
-                seed=command.seed + 1,   # different seed → different splits
-                train_ratio=0.0,
-                val_ratio=0.0,
+                seed=command.seed,
+                # Keep more for training: evaluation data is separate.
+                train_ratio=0.9,
+                val_ratio=0.1,
                 min_window_gap=command.min_window_gap,
-                # All samples go to test — we evaluate only, no re-training
             ))
 
-            # Ensure all samples land in test_idx
-            eval_dataset = self._force_all_test(eval_dataset)
+        predictor = self._predictor_factory()
+        train_model.TrainModelUseCase(predictor).execute(
+            train_model.TrainModelCommand(
+                dataset=train_dataset,
+                n_epochs=command.n_epochs,
+                batch_size=command.batch_size,
+                learning_rate=command.lr,
+                regression_loss=command.regression_loss,
+                verbose=command.verbose,
+                seed=command.seed,
+            ))
 
-            if command.eval_interaction_codes and group_name in command.eval_interaction_codes:
-                if hasattr(predictor, "inference_interaction_code"):
-                    predictor.inference_interaction_code = command.eval_interaction_codes[group_name]
+        results = []
+        for group_name, eval_configs in command.eval_groups.items():
+            if command.verbose:
+                print(f"\n--- Evaluating on: {group_name} ---")
+            # A different seed gives different splits; everything goes to
+            # test because nothing is retrained on it.
+            eval_dataset = generator.execute(
+                generate_dataset.GenerateDatasetCommand(
+                    configs=eval_configs,
+                    window_length=command.window_length,
+                    horizon=command.horizon,
+                    samples_per_trajectory=command.samples_per_trajectory,
+                    seed=command.seed + 1,
+                    train_ratio=0.0,
+                    val_ratio=0.0,
+                    min_window_gap=command.min_window_gap,
+                )).as_test_only()
 
-            metrics = BacktestUseCase(predictor).execute(
-                BacktestCommand(dataset=eval_dataset, horizon=command.horizon)
-            )
+            codes = command.eval_interaction_codes
+            if group_name in codes and hasattr(
+                    predictor, "inference_interaction_code"):
+                predictor.inference_interaction_code = codes[group_name]
 
-            spec = ExperimentSpec(
+            metrics = backtest.BacktestUseCase(predictor).execute(
+                backtest.BacktestCommand(
+                    dataset=eval_dataset, horizon=command.horizon))
+            spec = value_objects.ExperimentSpec(
                 name=f"cross_system_{group_name}",
-                predictor_variant=_variant_of(predictor),
-                noise=NoiseConfig(),
+                predictor_variant=variant_of(predictor),
+                noise=value_objects.NoiseConfig(),
                 seed=command.seed,
             )
-            results.append(AblationResult(
+            results.append(value_objects.AblationResult(
                 spec=spec,
                 mae=metrics.mae,
                 rmse=metrics.rmse,
@@ -136,38 +198,4 @@ class CrossSystemUseCase:
             ))
             if command.verbose:
                 print(f"  → {metrics.summary()}")
-
         return results
-
-    # ------------------------------------------------------------------
-    # Private
-    # ------------------------------------------------------------------
-
-    def _build_predictor(self):
-        """Factory for the predictor used in training. Override to customise."""
-        from ..infrastructure.ml.lstm_predictor import LSTMPredictor
-        return LSTMPredictor(use_physics_prior=True)
-
-    @staticmethod
-    def _force_all_test(dataset):
-        """Return dataset where every sample is in test_idx."""
-        import copy
-        ds = copy.copy(dataset)
-        ds.test_idx = np.arange(len(dataset.sequences))
-        ds.train_idx = np.array([], dtype=np.int64)
-        ds.val_idx = np.array([], dtype=np.int64)
-        return ds
-
-
-def _variant_of(predictor) -> PredictorVariant:
-    """Map a live predictor instance to the CSV/paper variant label."""
-    name = type(predictor).__name__
-    if name == "TransformerPredictor":
-        return PredictorVariant.TRANSFORMER
-    if name == "PhysicsOnlyPredictor":
-        return PredictorVariant.PHYSICS_ONLY
-    if name == "StretchedExpPredictor":
-        return PredictorVariant.STRETCHED_EXP
-    if getattr(predictor, "use_physics_prior", True) is False:
-        return PredictorVariant.LSTM_ONLY
-    return PredictorVariant.PHYSICS_LSTM

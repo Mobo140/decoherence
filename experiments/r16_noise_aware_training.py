@@ -29,115 +29,77 @@ Each training window gets two noisy copies with sigma drawn log-uniformly
 from [0.005, 0.12]. Test windows are clean and get the same noise as in R15
 (one realisation scaled by sigma, sigma in {0, 0.01, 0.02, 0.05, 0.10}).
 
-Writes ONLY to experiments/results/r16_noise_aware_training.csv.
+Writes ONLY to experiments/results/r16_noise_aware_training*.csv.
+Each CSV is accompanied by <name>.csv.provenance.json (configuration,
+seeds, software environment).
 
 Usage
 -----
-    python -m experiments.r16_noise_aware_training --fast
+    python -m experiments.r16_noise_aware_training --fast --tag smoke
     python -m experiments.r16_noise_aware_training --seeds 42 43 44
 """
 from __future__ import annotations
 
 import argparse
-import csv
-import dataclasses
-import sys
-from pathlib import Path
 
-import numpy as np
+from experiments import common
+from src import pipeline
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from experiments._config import build_configs, trajectory_store
-from src.application.backtest import BacktestCommand, BacktestUseCase
-from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
-from src.application.run_noise_sweep import NoiseSweepUseCase
-from src.application.train_model import TrainModelCommand, TrainModelUseCase
-from src.infrastructure.quantum.noise import ar1_filter
-from src.infrastructure.ml.lstm_predictor import LSTMPredictor
-from src.infrastructure.ml.transformer_predictor import TransformerPredictor
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
-
-RESULTS = Path(__file__).parent / "results" / "r16_noise_aware_training.csv"
-SIGMAS = [0.0, 0.01, 0.02, 0.05, 0.10]
+SIGMAS = (0.0, 0.01, 0.02, 0.05, 0.10)
+# arm -> (model alias, trained on the noise-augmented set)
 ARMS = {
-    "physics_lstm": (lambda: LSTMPredictor(use_physics_prior=True), False),
-    "physics_lstm_aug": (lambda: LSTMPredictor(use_physics_prior=True), True),
-    "lstm_only_aug": (lambda: LSTMPredictor(use_physics_prior=False), True),
-    "transformer": (lambda: TransformerPredictor(), False),
-    "transformer_aug": (lambda: TransformerPredictor(), True),
+    "physics_lstm": ("physics_lstm", False),
+    "physics_lstm_aug": ("physics_lstm", True),
+    "lstm_only_aug": ("lstm_only", True),
+    "transformer": ("transformer", False),
+    "transformer_aug": ("transformer", True),
 }
+COLUMNS = ("seed", "arm", "sigma", "r2", "mae", "auroc")
 
 
-def noise_augmented(ds, copies: int, rng: np.random.Generator, phi_max: float = 0.0):
-    """Append `copies` noisy versions of every train/val window.
+def arms(
+    n_per: int, epochs: int, copies: int
+) -> list[pipeline.ExperimentConfig]:
+    """Declares the arms: clean and noise-aware training.
 
-    The noise goes into the raw window, so every quantity the model derives
-    from it (log channels, slope, OLS R^2, T_phys) is computed from the noisy
-    copy. Test windows are left untouched.
+    Args:
+        n_per: Trajectories per scenario.
+        epochs: Training epochs.
+        copies: Noisy copies of every training window.
 
-    phi_max > 0 makes the noise AR(1) in time with a lag-one correlation drawn
-    per window from U[0, phi_max] (R22); the default draws exactly what R16
-    drew.
+    Returns:
+        The arms in the order of the result rows.
     """
-    per_window = [
-        "sequences", "t_obs", "t_decoh_abs", "remaining_time", "risk_labels",
-        "interaction_type_codes", "dissipator_type_codes", "J_values", "censored",
+    data = pipeline.DataSpec(
+        name="r16", scenarios=("B", "C"), n_per_scenario=n_per,
+        cache="disk")
+    tests = tuple(
+        pipeline.EvalSpec("gaussian", sigma=sigma, tags=(("sigma", sigma),))
+        for sigma in SIGMAS)
+    return [
+        pipeline.ExperimentConfig(
+            data=data, model=alias, epochs=epochs, tests=tests,
+            augmentation=pipeline.Augmentation(copies) if aug else None,
+            tags=(("arm", arm),))
+        for arm, (alias, aug) in ARMS.items()
     ]
-    n = len(ds.sequences)
-    src = np.concatenate([ds.train_idx, ds.val_idx])
-    is_train = np.concatenate([np.ones(len(ds.train_idx), bool), np.zeros(len(ds.val_idx), bool)])
-    parts = {k: [getattr(ds, k)] for k in per_window}
-    new_train, new_val = [ds.train_idx], [ds.val_idx]
-    offset = n
-    for _ in range(copies):
-        sig = np.exp(rng.uniform(np.log(0.005), np.log(0.12), len(src))).astype(np.float32)
-        eta = rng.normal(0.0, 1.0, ds.sequences[src].shape).astype(np.float32)
-        if phi_max > 0.0:
-            eta = ar1_filter(eta, rng.uniform(0.0, phi_max, len(src)))
-        noisy = ds.sequences[src] + eta * sig[:, None, None]
-        for k in per_window:
-            arr = getattr(ds, k)
-            parts[k].append(noisy if k == "sequences" else (arr[src] if len(arr) == n else arr))
-        new_idx = offset + np.arange(len(src))
-        new_train.append(new_idx[is_train]); new_val.append(new_idx[~is_train])
-        offset += len(src)
-    fields = {k: np.concatenate(v) if len(getattr(ds, k)) == n else getattr(ds, k) for k, v in parts.items()}
-    return dataclasses.replace(ds, **fields,
-                               train_idx=np.concatenate(new_train),
-                               val_idx=np.concatenate(new_val))
+
+
+def add_flags(parser: argparse.ArgumentParser) -> None:
+    """Adds the number of noisy copies to the common flags."""
+    parser.add_argument("--copies", type=int, default=2)
 
 
 def main() -> None:
-    p = argparse.ArgumentParser()
-    p.add_argument("--seeds", type=int, nargs="+", default=[42, 43, 44])
-    p.add_argument("--copies", type=int, default=2)
-    p.add_argument("--fast", action="store_true")
-    a = p.parse_args()
-    n_per, epochs = (30, 5) if a.fast else (100, 100)
-    gen = GenerateDatasetUseCase(QuTipSimulator(), store=trajectory_store())
-    with RESULTS.open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["seed", "arm", "sigma", "r2", "mae", "auroc"])
-        w.writeheader()
-        for seed in a.seeds:
-            groups = build_configs(n_per_scenario=n_per, seed=seed)
-            ds = gen.execute(GenerateDatasetCommand(
-                configs=groups["B"] + groups["C"], window_length=50, horizon=1.0,
-                samples_per_trajectory=5, seed=seed, dataset_name=f"r16_{seed}"))
-            ds_aug = noise_augmented(ds, a.copies, np.random.default_rng(seed + 7))
-            for arm, (build, aug) in ARMS.items():
-                pred = build()
-                TrainModelUseCase(pred).execute(TrainModelCommand(
-                    dataset=ds_aug if aug else ds, n_epochs=epochs, batch_size=32,
-                    learning_rate=1e-3, regression_loss="huber", verbose=False, seed=seed))
-                for sigma in SIGMAS:
-                    noisy = NoiseSweepUseCase._add_noise(ds, sigma, seed=seed)
-                    m = BacktestUseCase(pred).execute(BacktestCommand(dataset=noisy, horizon=1.0))
-                    w.writerow({"seed": seed, "arm": arm, "sigma": sigma,
-                                "r2": m.r2, "mae": m.mae, "auroc": m.risk_auroc})
-                    f.flush()
-                    print(f"R16 | seed={seed} {arm:<17} sigma={sigma:.2f} R2={m.r2:.3f} "
-                          f"AUROC={m.risk_auroc:.3f}", flush=True)
+    """Trains the residual model with noise-aware augmentation.
+
+    Writes experiments/results/r16_noise_aware_training*.csv.
+    """
+    args = common.parse_args(__doc__, extra=add_flags)
+    n_per, epochs = (30, 5) if args.fast else (100, 100)
+    common.run_arms(
+        "R16", arms(n_per, epochs, args.copies), args,
+        common.results_path("r16_noise_aware_training", args), COLUMNS)
 
 
 if __name__ == "__main__":

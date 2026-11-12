@@ -21,8 +21,8 @@ R², MAE, AUROC vs E8c (D=0.740, E=0.575). After code fix: D=0.537, E=0.452.
 
 Output
 ------
-experiments/results/e9a_cross_system.csv
-experiments/results/e9b_ablation.csv
+experiments/results/e9a_cross_system[_<tag>][_fast].csv
+experiments/results/e9b_ablation[_<tag>][_fast].csv
 
 Usage
 -----
@@ -31,55 +31,87 @@ Usage
 """
 from __future__ import annotations
 
-import argparse
-import csv
-import sys
-from pathlib import Path
+import functools
+from collections.abc import Sequence
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+from experiments import common
+from src.application import run_ablation
+from src.application import run_cross_system
+from src.data import scenarios as scenario_lib
+from src.domain import ports
+from src.domain import value_objects
+from src.models import registry
+from src.simulation import simulator as simulator_lib
 
-from experiments._config import build_configs, trajectory_store
-from src.application.run_ablation import AblationCommand, AblationStudyUseCase
-from src.application.run_cross_system import CrossSystemCommand, CrossSystemUseCase
-from src.domain.value_objects import PredictorVariant
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
-
-
-RESULTS_DIR = Path(__file__).parent / "results"
-WINDOW_2Q   = 30
-MIN_GAP     = 15
-
-
-def _save_csv(rows: list, path: Path, fieldnames: list) -> None:
-    RESULTS_DIR.mkdir(exist_ok=True)
-    with open(path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-        writer.writeheader()
-        writer.writerows(rows)
-    print(f"Saved → {path}")
+WINDOW_2Q = 30
+MIN_GAP = 15
+E9A_COLUMNS = (
+    "name", "variant", "window_fraction", "noise_sigma", "mae", "rmse",
+    "r2", "mape", "auroc", "n_samples")
+E9B_COLUMNS = (
+    "scenario", "context_code", "name", "variant", "mae", "rmse", "r2",
+    "mape", "auroc", "n_samples")
 
 
-def _make_context_predictor(interaction_code: float = 0.5, dissipator_code: float = 0.0):
-    """Build the context-aware physics_lstm."""
-    from src.infrastructure.ml.lstm_predictor import LSTMPredictor
-    return LSTMPredictor(
+def make_context_predictor(
+    interaction_code: float = 0.5,
+    dissipator_code: float = 0.0,
+    tau: float = 0.5,
+) -> ports.IPredictor:
+    """Builds the context-aware physics + LSTM predictor.
+
+    Args:
+        interaction_code: Inference-time system-type code.
+        dissipator_code: Inference-time jump-operator code.
+        tau: Adaptive-prior threshold on the OLS R² of log C.
+
+    Returns:
+        The untrained predictor.
+    """
+    return registry.build_model(
+        "physics_lstm",
         hidden_size=128, num_layers=2, dropout=0.3,
-        use_physics_prior=True,
-        adaptive_prior_r2_threshold=0.5,
+        adaptive_prior_r2_threshold=tau,
         risk_pos_weight=0.0, augment_sigma=0.02,
         inference_interaction_code=interaction_code,
         inference_dissipator_code=dissipator_code,
     )
 
 
-# ---------------------------------------------------------------------------
-# E9a — cross-system with context codes
-# ---------------------------------------------------------------------------
+def _ablation_predictor(
+    variant: value_objects.PredictorVariant,
+    command: run_ablation.AblationCommand,
+    *,
+    tau: float,
+    code: float,
+) -> ports.IPredictor:
+    """Builds the physics + LSTM (with context) or Transformer of E9b."""
+    del command  # Part of the factory signature; not needed here.
+    if variant == value_objects.PredictorVariant.TRANSFORMER:
+        return registry.build_model("transformer_large")
+    return make_context_predictor(code, 0.0, tau)
 
-def run_e9a(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
-    """Cross-system: physics_lstm+context trained on D+E, eval per scenario."""
 
-    cmd = CrossSystemCommand(
+def run_e9a(simulator, groups, n_epochs: int,
+            verbose: bool = True) -> list[dict[str, object]]:
+    """E9a: context-aware physics + LSTM trained on D+E, scored per scenario.
+
+    Training reads the 4-class codes from the dataset (D=2, E=3); at
+    evaluation `eval_interaction_codes` sets the code of each group.
+
+    Args:
+        simulator: The simulator.
+        groups: Scenario label -> configurations.
+        n_epochs: Training epochs.
+        verbose: Whether to print training progress.
+
+    Returns:
+        One row per evaluation scenario, with the keys of `E9A_COLUMNS`.
+    """
+    results = run_cross_system.CrossSystemUseCase(
+        simulator, store=scenario_lib.trajectory_store(),
+        predictor_factory=functools.partial(make_context_predictor, 2.5),
+    ).execute(run_cross_system.CrossSystemCommand(
         train_configs=groups["D"] + groups["E"],
         eval_groups={"D": groups["D"], "E": groups["E"]},
         window_length=WINDOW_2Q,
@@ -93,44 +125,42 @@ def run_e9a(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
         verbose=verbose,
         min_window_gap=MIN_GAP,
         eval_interaction_codes={"D": 2.0, "E": 3.0},
-    )
-
-    class E9CrossSystem(CrossSystemUseCase):
-        def _build_predictor(self):
-            # Training reads 4-class codes from the dataset (D=2, E=3).
-            # Eval overrides inference_interaction_code per group via
-            # CrossSystemCommand.eval_interaction_codes.
-            return _make_context_predictor(interaction_code=2.5)
-
-    results = E9CrossSystem(simulator, store=trajectory_store()).execute(cmd)
-    rows = [r.as_dict() for r in results]
-    _save_csv(rows, RESULTS_DIR / "e9a_cross_system.csv",
-              ["name", "variant", "window_fraction", "noise_sigma",
-               "mae", "rmse", "r2", "mape", "auroc", "n_samples"])
-
+    ))
+    rows = [result.as_dict() for result in results]
     print(f"\n{'Scenario':>20} {'R²':>8} {'MAE':>8} {'AUROC':>8} {'N':>6}")
     print("-" * 56)
-    for r in results:
-        print(f"{r.spec.name:>20} {r.r2:>8.4f} {r.mae:>8.4f} {r.risk_auroc:>8.4f} {r.n_samples:>6}")
+    for row in rows:
+        print(f"{row['name']:>20} {row['r2']:>8.4f} {row['mae']:>8.4f} "
+              f"{row['auroc']:>8.4f} {row['n_samples']:>6}")
     return rows
 
 
-# ---------------------------------------------------------------------------
-# E9b — ablation: context vs no-context on single-scenario
-# ---------------------------------------------------------------------------
+def run_e9b(simulator, groups, n_epochs: int,
+            verbose: bool = True) -> list[dict[str, object]]:
+    """E9b: physics + LSTM with context codes vs the Transformer.
 
-def run_e9b(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
-    """Ablation: compare physics_lstm with and without context codes."""
-    from src.infrastructure.ml.lstm_predictor import LSTMPredictor
+    Args:
+        simulator: The simulator.
+        groups: Scenario label -> configurations.
+        n_epochs: Training epochs.
+        verbose: Whether to print training progress.
 
-    all_rows = []
-    for scenario_label, int_code in [("D", 2.0), ("E", 3.0)]:
-        tau = 0.5 if scenario_label == "D" else 0.0
-        print(f"\n{'='*60}\nE9b — Scenario {scenario_label}  (context code={int_code})\n{'='*60}")
-
-        cmd = AblationCommand(
-            configs=groups[scenario_label],
-            variants=[PredictorVariant.PHYSICS_LSTM, PredictorVariant.TRANSFORMER],
+    Returns:
+        One row per scenario and variant, with the keys of `E9B_COLUMNS`.
+    """
+    variants = value_objects.PredictorVariant
+    rows = []
+    for label, code in (("D", 2.0), ("E", 3.0)):
+        tau = 0.5 if label == "D" else 0.0
+        print(f"\n{'=' * 60}\nE9b — Scenario {label}  "
+              f"(context code={code})\n{'=' * 60}")
+        results = run_ablation.AblationStudyUseCase(
+            simulator, store=scenario_lib.trajectory_store(),
+            predictor_factory=functools.partial(
+                _ablation_predictor, tau=tau, code=code),
+        ).execute(run_ablation.AblationCommand(
+            configs=groups[label],
+            variants=[variants.PHYSICS_LSTM, variants.TRANSFORMER],
             window_length=WINDOW_2Q,
             horizon=1.0,
             samples_per_trajectory=5,
@@ -141,72 +171,44 @@ def run_e9b(simulator, groups, n_epochs: int, verbose: bool = True) -> list:
             seed=42,
             verbose=verbose,
             min_window_gap=MIN_GAP,
-        )
+        ))
+        for result in results:
+            rows.append(
+                {**result.as_dict(), "scenario": label, "context_code": code})
 
-        _ic = int_code
-        _tau = tau
-
-        class E9Ablation(AblationStudyUseCase):
-            def _build_predictor(self, variant, command):
-                from src.infrastructure.ml.transformer_predictor import TransformerPredictor
-                if variant == PredictorVariant.TRANSFORMER:
-                    return TransformerPredictor(
-                        d_model=128, n_heads=4, n_layers=3, dim_ff=512, dropout=0.1,
-                    )
-                return LSTMPredictor(
-                    hidden_size=128, num_layers=2, dropout=0.3,
-                    use_physics_prior=True,
-                    adaptive_prior_r2_threshold=_tau,
-                    risk_pos_weight=0.0, augment_sigma=0.02,
-                    inference_interaction_code=_ic,
-                    inference_dissipator_code=0.0,
-                )
-
-        results = E9Ablation(simulator, store=trajectory_store()).execute(cmd)
-        for r in results:
-            row = r.as_dict()
-            row["scenario"] = scenario_label
-            row["context_code"] = int_code
-            all_rows.append(row)
-
-    _save_csv(all_rows, RESULTS_DIR / "e9b_ablation.csv",
-              ["scenario", "context_code", "name", "variant",
-               "mae", "rmse", "r2", "mape", "auroc", "n_samples"])
-
-    print(f"\n{'Scenario':<8} {'Code':>6} {'Variant':<14} {'R²':>8} {'AUROC':>8}")
+    print(f"\n{'Scenario':<8} {'Code':>6} {'Variant':<14} {'R²':>8} "
+          f"{'AUROC':>8}")
     print("-" * 50)
-    for r in all_rows:
-        print(f"{r['scenario']:<8} {r['context_code']:>6.1f} {r['variant']:<14} "
-              f"{r['r2']:>8.4f} {r['auroc']:>8.4f}")
-    return all_rows
+    for row in rows:
+        print(f"{row['scenario']:<8} {row['context_code']:>6.1f} "
+              f"{row['variant']:<14} {row['r2']:>8.4f} {row['auroc']:>8.4f}")
+    return rows
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
+def main(argv: Sequence[str] | None = None) -> None:
+    """Runs E9a and E9b and writes their CSVs."""
+    args = common.parse_args(__doc__, argv=argv, seeds=None, out=False)
+    n_per, epochs = (50, 10) if args.fast else (500, 150)
+    config = {"n_per": n_per, "n_epochs": epochs, "window": WINDOW_2Q,
+              "min_gap": MIN_GAP}
+    simulator = simulator_lib.QuTipSimulator()
+    groups = scenario_lib.build_configs(n_per_scenario=n_per, seed=42)
 
-def main(fast: bool = False) -> None:
-    n_per  = 50  if fast else 500
-    epochs = 10  if fast else 150
+    print(f"\n{'=' * 70}\nE9a — Context cross-system | n_per={n_per} | "
+          f"epochs={epochs}\n{'=' * 70}")
+    rows = run_e9a(simulator, groups, epochs)
+    common.write_results(
+        rows, common.results_path("e9a_cross_system", args),
+        columns=E9A_COLUMNS, seeds=[42], config=config)
 
-    simulator = QuTipSimulator()
-    groups = build_configs(n_per_scenario=n_per, seed=42)
-
-    print(f"\n{'='*70}")
-    print(f"E9a — Context cross-system | n_per={n_per} | epochs={epochs}")
-    print(f"{'='*70}")
-    run_e9a(simulator, groups, n_epochs=epochs)
-
-    print(f"\n{'='*70}")
-    print(f"E9b — Context ablation (D, E) | n_per={n_per} | epochs={epochs}")
-    print(f"{'='*70}")
-    run_e9b(simulator, groups, n_epochs=epochs)
-
-    print("\nE9 completed. Results in experiments/results/e9_*.csv")
+    print(f"\n{'=' * 70}\nE9b — Context ablation (D, E) | n_per={n_per} | "
+          f"epochs={epochs}\n{'=' * 70}")
+    rows = run_e9b(simulator, groups, epochs)
+    common.write_results(
+        rows, common.results_path("e9b_ablation", args),
+        columns=E9B_COLUMNS, seeds=[42], config=config)
+    print("\nE9 completed. Results in experiments/results/e9*.csv")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--fast", action="store_true")
-    args = parser.parse_args()
-    main(fast=args.fast)
+    main()

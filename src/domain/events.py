@@ -13,15 +13,6 @@ from datetime import datetime, timezone
 def _utcnow() -> datetime:
     return datetime.now(tz=timezone.utc)
 
-@dataclass(frozen=True)
-class DecoherenceDetected:
-    """Fired when the coherence/purity measure crosses its threshold."""
-
-    t_decoh: float
-    criterion: str       # 'coherence' | 'purity'
-    threshold: float
-    occurred_at: datetime = field(default_factory=_utcnow)
-
 
 @dataclass(frozen=True)
 class RiskThresholdExceeded:

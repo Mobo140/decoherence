@@ -2,21 +2,21 @@
 
 Following the Ports & Adapters (Hexagonal) pattern:
 - Ports live in the domain layer.
-- Concrete adapters live in infrastructure.
+- Concrete adapters live in models, persistence and simulation.
 - The application layer depends only on ports, never on adapters directly.
 """
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 if TYPE_CHECKING:
-    from .value_objects import (
+    from src.domain.value_objects import (
+        PredictionResult,
         SystemConfig,
         TrajectoryResult,
-        PredictionResult,
     )
 
 
@@ -69,11 +69,11 @@ class IPredictor(ABC):
         """Fit the predictor to a Dataset.
 
         Args:
-            dataset: application.generate_dataset.Dataset instance.
+            dataset: data.dataset.Dataset instance.
             **kwargs: Hyper-parameters (n_epochs, batch_size, lr, …).
 
         Returns:
-            TrainModelResult (defined in application layer).
+            training.loop.TrainResult for the trainable predictors.
         """
 
 
@@ -81,15 +81,17 @@ class ITrajectoryStore(ABC):
     """Port: persist and retrieve trajectory collections."""
 
     @abstractmethod
-    def save(self, trajectories: List["TrajectoryResult"], name: str) -> None:
+    def save(
+        self, trajectories: list["TrajectoryResult"], name: str
+    ) -> None:
         """Persist a list of trajectories under *name*."""
 
     @abstractmethod
-    def load(self, name: str) -> List["TrajectoryResult"]:
+    def load(self, name: str) -> list["TrajectoryResult"]:
         """Load a previously saved trajectory collection by *name*."""
 
     @abstractmethod
-    def list_available(self) -> List[str]:
+    def list_available(self) -> list[str]:
         """Return all stored trajectory collection names."""
 
 
@@ -108,13 +110,15 @@ class IModelStore(ABC):
 class ILossFunction(ABC):
     """Port: pluggable scalar loss for training predictors.
 
-    Concrete implementations live in infrastructure/ml/loss_functions.py.
+    Concrete implementations live in training/losses.py.
     The application layer depends only on this interface, making it trivial
     to swap Huber → Quantile → custom without touching training logic.
     """
 
     @abstractmethod
-    def __call__(self, predictions: "np.ndarray", targets: "np.ndarray") -> float:
+    def __call__(
+        self, predictions: "np.ndarray", targets: "np.ndarray"
+    ) -> float:
         """Compute scalar loss.
 
         Args:
@@ -129,16 +133,3 @@ class ILossFunction(ABC):
     @abstractmethod
     def name(self) -> str:
         """Human-readable identifier used in logs and result dicts."""
-
-
-class ITrajectoryTransform(ABC):
-    """Port: stateless transform applied to a TrajectoryResult.
-
-    Used to inject measurement noise, normalise observables, or apply
-    domain-specific pre-processing without modifying simulation logic.
-    Transforms are composable (see infrastructure/quantum/noise.py).
-    """
-
-    @abstractmethod
-    def __call__(self, trajectory: "TrajectoryResult") -> "TrajectoryResult":
-        """Return a transformed copy of *trajectory*."""

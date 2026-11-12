@@ -35,199 +35,190 @@ the cache does not store correlators.
 
 Writes ONLY to experiments/results/r23_two_body_correlators*.csv and
 r23c_target_sensitivity*.csv.
+Each CSV is accompanied by <name>.csv.provenance.json (configuration,
+seeds, software environment).
 
 Usage
 -----
-    python -m experiments.r23_two_body_correlators --fast
+    python -m experiments.r23_two_body_correlators --fast --tag smoke
     python -m experiments.r23_two_body_correlators --part a --seeds 42 --tag a42
 """
 from __future__ import annotations
 
 import argparse
-import copy
-import csv
-import sys
-import time
-from pathlib import Path
+import dataclasses
+import pathlib
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from experiments import common
+from src import pipeline
+from src import reproducibility
+from src.data import scenarios
+from src.domain import value_objects
+from src.simulation import simulator
 
-from experiments._config import build_configs
-from experiments.e7_paper2_extended import _make_tfim_configs_fixed_J
-from src.application.backtest import BacktestCommand, BacktestUseCase
-from src.application.generate_dataset import GenerateDatasetCommand, GenerateDatasetUseCase
-from src.application.train_model import TrainModelCommand, TrainModelUseCase
-from src.infrastructure.ml.lstm_predictor import LSTMPredictor
-from src.infrastructure.ml.transformer_predictor import TransformerPredictor
-from src.infrastructure.quantum.qutip_simulator import QuTipSimulator
+J_VALUES = (0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0)
+COLUMNS = ("part", "seed", "scenario", "J", "model", "features", "test", "r2",
+           "mae", "auroc", "n_samples")
 
-RESULTS_DIR = Path(__file__).parent / "results"
-PAULI = {
-    "x": np.array([[0, 1], [1, 0]], dtype=complex),
-    "y": np.array([[0, -1j], [1j, 0]], dtype=complex),
-    "z": np.array([[1, 0], [0, -1]], dtype=complex),
-}
-CORR = {f"corr_{a}{b}": np.kron(PAULI[a], PAULI[b]) for a in "xyz" for b in "xyz"}
-J_VALUES = [0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0]
+# CSV label -> model alias
+MODELS = {"transformer": "transformer_large", "lstm_only": "lstm_only"}
+BATCH_SIZE = 64
+LEARNING_RATE = 5e-4
 
 
-class CorrelatorSimulator(QuTipSimulator):
-    """QuTiP simulator that also records <sigma_a x sigma_b> for all a, b."""
+def part_a(
+    n_per: int, n_eval: int, epochs: int
+) -> list[pipeline.ExperimentConfig]:
+    """Declares the single-scenario arms of part (a).
 
-    def _extra_observables(self, density_matrices) -> dict:
-        rhos = np.asarray(density_matrices)
-        return {name: np.real(np.einsum("tij,ji->t", rhos, op)) for name, op in CORR.items()}
+    Scenarios D and E, each model with the base set and with the base set
+    plus correlators, scored on the own test split and on independent
+    trajectories (generator seed + 1000). Both feature sets are cut from
+    one simulation, so the comparison is paired on identical windows.
 
+    Args:
+        n_per: Training trajectories per scenario.
+        n_eval: Independent trajectories per scenario.
+        epochs: Training epochs.
 
-def base_features(ds):
-    """The same dataset without the correlator columns."""
-    keep = [i for i, n in enumerate(ds.feature_names) if n not in CORR]
-    out = copy.copy(ds)
-    out.sequences = np.ascontiguousarray(ds.sequences[:, :, keep])
-    out.feature_names = [ds.feature_names[i] for i in keep]
-    return out
-
-
-def _all_test(ds):
-    out = copy.copy(ds)
-    out.test_idx = np.arange(len(ds.sequences))
-    out.train_idx = np.array([], dtype=np.int64)
-    out.val_idx = np.array([], dtype=np.int64)
-    return out
-
-
-def _transformer():
-    return TransformerPredictor(d_model=128, n_heads=4, n_layers=3, dim_ff=512, dropout=0.1)
-
-
-def _train(pred, ds, epochs, seed):
-    TrainModelUseCase(pred).execute(TrainModelCommand(
-        dataset=ds, n_epochs=epochs, batch_size=64, learning_rate=5e-4,
-        regression_loss="huber", verbose=False, seed=seed))
-    return pred
-
-
-MODELS = {"transformer": _transformer,
-          "lstm_only": lambda: LSTMPredictor(use_physics_prior=False)}
-
-
-def part_a(seed, n_per, n_eval, epochs, w):
-    gen = GenerateDatasetUseCase(CorrelatorSimulator(), store=None)
-    groups = build_configs(n_per_scenario=n_per, seed=seed)
-    eval_groups = build_configs(n_per_scenario=n_eval, seed=seed + 1000)
-    for sc in ("D", "E"):
-        ts = time.time()
-        full = gen.execute(GenerateDatasetCommand(
-            configs=groups[sc], window_length=20, horizon=1.0,
-            samples_per_trajectory=5, seed=seed, dataset_name=f"r23a_{seed}_{sc}"))
-        full_ev = _all_test(gen.execute(GenerateDatasetCommand(
-            configs=eval_groups[sc], window_length=20, horizon=1.0,
-            samples_per_trajectory=5, seed=seed + 1, train_ratio=0.0, val_ratio=0.0,
-            dataset_name=f"r23a_eval_{seed}_{sc}")))
-        print(f"R23a | seed={seed} {sc} data [{time.time() - ts:.0f}s]", flush=True)
-        for feats, (tr, ev) in {"base": (base_features(full), base_features(full_ev)),
-                                "corr": (full, full_ev)}.items():
-            for model, build in MODELS.items():
-                pred = _train(build(), tr, epochs, seed)
-                for split, ds in (("own", tr), ("independent", ev)):
-                    m = BacktestUseCase(pred).execute(BacktestCommand(dataset=ds, horizon=1.0))
-                    w.writerow({"part": "a", "seed": seed, "scenario": sc, "J": "",
-                                "model": model, "features": feats, "test": split,
-                                "r2": m.r2, "mae": m.mae, "auroc": m.risk_auroc,
-                                "n_samples": m.n_samples})
-                    print(f"R23a | seed={seed} {sc} {model:<11} {feats} {split:<11} "
-                          f"R2={m.r2:.3f} AUROC={m.risk_auroc:.3f}", flush=True)
-                w.flush_file()
+    Returns:
+        The arms in the order of the result rows.
+    """
+    arms = []
+    for scenario in ("D", "E"):
+        data = pipeline.DataSpec(
+            name="r23a", scenarios=(scenario,), n_per_scenario=n_per,
+            simulator=pipeline.SimulatorSpec("correlators"),
+            window_length=20)
+        independent = dataclasses.replace(
+            data, name="r23a_eval", n_per_scenario=n_eval, train_ratio=0.0,
+            val_ratio=0.0, config_seed_offset=1000, data_seed_offset=1)
+        tests = (
+            pipeline.EvalSpec(tags=(("test", "own"),)),
+            pipeline.EvalSpec(
+                data=independent, tags=(("test", "independent"),)),
+        )
+        for feats in ("base", "corr"):
+            for model, alias in MODELS.items():
+                arms.append(pipeline.ExperimentConfig(
+                    data=data, model=alias, features=feats, epochs=epochs,
+                    batch_size=BATCH_SIZE, learning_rate=LEARNING_RATE,
+                    tests=tests,
+                    tags=(("part", "a"), ("scenario", scenario), ("J", ""),
+                          ("model", model), ("features", feats))))
+    return arms
 
 
-def part_b(seed, n_per_J, epochs, w):
-    gen = GenerateDatasetUseCase(CorrelatorSimulator(), store=None)
-    rng = np.random.default_rng(seed)
-    for J in J_VALUES:
-        ts = time.time()
-        full = gen.execute(GenerateDatasetCommand(
-            configs=_make_tfim_configs_fixed_J(n_per_J, J, rng), window_length=20,
-            horizon=1.0, samples_per_trajectory=5, seed=seed,
-            dataset_name=f"r23b_{seed}_{J}"))
-        for feats, ds in (("base", base_features(full)), ("corr", full)):
-            pred = _train(_transformer(), ds, epochs, seed)
-            m = BacktestUseCase(pred).execute(BacktestCommand(dataset=ds, horizon=1.0))
-            w.writerow({"part": "b", "seed": seed, "scenario": "E", "J": J,
-                        "model": "transformer", "features": feats, "test": "own",
-                        "r2": m.r2, "mae": m.mae, "auroc": m.risk_auroc,
-                        "n_samples": m.n_samples})
-            print(f"R23b | seed={seed} J={J:.1f} {feats} R2={m.r2:.3f} "
-                  f"[{time.time() - ts:.0f}s]", flush=True)
-        w.flush_file()
+def part_b(
+    n_per_j: int, epochs: int
+) -> list[pipeline.ExperimentConfig]:
+    """Declares the TFIM coupling-sweep arms of part (b).
+
+    One Transformer per coupling and feature set, scored on its own test
+    split. The groups of all couplings are drawn from one generator
+    seeded with the seed, in the order of `J_VALUES`.
+
+    Args:
+        n_per_j: Trajectories per coupling.
+        epochs: Training epochs.
+
+    Returns:
+        The arms in the order of the result rows.
+    """
+    arms = []
+    for coupling in J_VALUES:
+        data = pipeline.DataSpec(
+            name="r23b", coupling=coupling, coupling_sweep=J_VALUES,
+            n_per_scenario=n_per_j,
+            simulator=pipeline.SimulatorSpec("correlators"),
+            window_length=20)
+        for feats in ("base", "corr"):
+            arms.append(pipeline.ExperimentConfig(
+                data=data, model="transformer_large", features=feats,
+                epochs=epochs, batch_size=BATCH_SIZE,
+                learning_rate=LEARNING_RATE,
+                tests=(pipeline.EvalSpec(tags=(("test", "own"),)),),
+                tags=(("part", "b"), ("scenario", "E"), ("J", coupling),
+                      ("model", "transformer"), ("features", feats))))
+    return arms
 
 
-def part_c(seed, n, out_path):
-    import dataclasses
-    from src.domain.value_objects import DecoherenceCriterion, InteractionType
-    sim = QuTipSimulator()
+def part_c(seed: int, n: int, out_path: pathlib.Path) -> None:
+    """Measures how T2 and T2^E respond to a 2% change of the rate.
+
+    Not an `ExperimentConfig` arm: nothing is trained; every trajectory is
+    simulated twice with the same initial state. Writes the CSV.
+
+    Args:
+        seed: Seed of the configurations and the initial states.
+        n: Configurations per (system, J).
+        out_path: The CSV file.
+    """
+    sim = simulator.QuTipSimulator()
     rows = []
-    for inter in (InteractionType.TFIM, InteractionType.XXZ):
+    for inter in (value_objects.InteractionType.TFIM,
+                  value_objects.InteractionType.XXZ):
         rng = np.random.default_rng(seed)
-        for J in (0.2, 0.8, 1.5):
-            for i, cfg in enumerate(_make_tfim_configs_fixed_J(n, J, rng, interaction=inter)):
-                scaled = dataclasses.replace(cfg, dissipator=dataclasses.replace(
-                    cfg.dissipator, gamma_coeffs=tuple(1.02 * c for c in cfg.dissipator.gamma_coeffs)))
-                row = {"seed": seed, "system": inter.value, "J": J, "index": i}
-                for crit, tag in ((DecoherenceCriterion.COHERENCE, "t2"),
-                                  (DecoherenceCriterion.COHERENCE_ENERGY, "t2e")):
+        for coupling in (0.2, 0.8, 1.5):
+            configs = scenarios.fixed_coupling_configs(
+                n, coupling, rng, interaction=inter)
+            for i, cfg in enumerate(configs):
+                gamma = tuple(1.02 * c for c in cfg.dissipator.gamma_coeffs)
+                scaled = dataclasses.replace(
+                    cfg, dissipator=dataclasses.replace(
+                        cfg.dissipator, gamma_coeffs=gamma))
+                row = {"seed": seed, "system": inter.value, "J": coupling,
+                       "index": i}
+                for crit, tag in (
+                        (value_objects.DecoherenceCriterion.COHERENCE, "t2"),
+                        (value_objects.DecoherenceCriterion.COHERENCE_ENERGY,
+                         "t2e")):
                     out = []
                     for c in (cfg, scaled):
-                        np.random.seed(seed * 100000 + i)
-                        traj = sim.simulate(dataclasses.replace(c, decoherence_criterion=crit))
+                        reproducibility.seed_numpy_global(seed * 100000 + i)
+                        traj = sim.simulate(dataclasses.replace(
+                            c, decoherence_criterion=crit))
                         out.append((traj.t_decoh, traj.censored))
                     row[tag], row[f"{tag}_scaled"] = out[0][0], out[1][0]
                     row[f"{tag}_censored"] = out[0][1] or out[1][1]
                 rows.append(row)
-            print(f"R23c | seed={seed} {inter.value} J={J} done", flush=True)
-    with out_path.open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0]))
-        w.writeheader()
-        w.writerows(rows)
+            print(f"R23c | seed={seed} {inter.value} J={coupling} done",
+                  flush=True)
+    common.write_results(
+        rows, out_path, seeds=[seed],
+        config="R23 (c): T2 and T2^E under a 2% larger gamma(t), "
+               f"{n} configurations per (system, J)")
 
 
-class _Writer(csv.DictWriter):
-    def __init__(self, f):
-        super().__init__(f, fieldnames=["part", "seed", "scenario", "J", "model",
-                                        "features", "test", "r2", "mae", "auroc",
-                                        "n_samples"])
-        self._f = f
-
-    def flush_file(self):
-        self._f.flush()
+def add_flags(parser: argparse.ArgumentParser) -> None:
+    """Adds the choice of parts to the common flags."""
+    parser.add_argument("--part", choices=["a", "b", "ab", "c"],
+                        default="ab")
 
 
 def main() -> None:
-    p = argparse.ArgumentParser()
-    p.add_argument("--seeds", type=int, nargs="+", default=[42, 43, 44])
-    p.add_argument("--part", choices=["a", "b", "ab", "c"], default="ab")
-    p.add_argument("--fast", action="store_true")
-    p.add_argument("--tag", type=str, default="")
-    a = p.parse_args()
-    n_per, n_eval, n_per_J, epochs = (30, 20, 20, 5) if a.fast else (500, 200, 200, 150)
-    sfx = (f"_{a.tag}" if a.tag else "") + ("_fast" if a.fast else "")
-    out = RESULTS_DIR / f"r23_two_body_correlators{sfx}.csv"
-    print(f"R23 | seeds={a.seeds} part={a.part} epochs={epochs}", flush=True)
-    if a.part == "c":
-        part_c(a.seeds[0], 10 if a.fast else 100,
-               RESULTS_DIR / f"r23c_target_sensitivity{sfx}.csv")
+    """Runs the two-body correlator experiment (parts a, b, c).
+
+    Writes experiments/results/r23_two_body_correlators*.csv for
+    parts a and b and r23c_target_sensitivity*.csv for part c.
+    """
+    args = common.parse_args(__doc__, extra=add_flags)
+    n_per, n_eval, n_per_j, epochs = (
+        (30, 20, 20, 5) if args.fast else (500, 200, 200, 150))
+    if args.part == "c":
+        part_c(args.seeds[0], 10 if args.fast else 100,
+               common.results_path("r23c_target_sensitivity", args))
         return
-    with out.open("w", newline="") as f:
-        w = _Writer(f)
-        w.writeheader()
-        for seed in a.seeds:
-            ts = time.time()
-            if "a" in a.part:
-                part_a(seed, n_per, n_eval, epochs, w)
-            if "b" in a.part:
-                part_b(seed, n_per_J, epochs, w)
-            print(f"R23 | seed={seed} done [{time.time() - ts:.0f}s]", flush=True)
+    arms = []
+    if "a" in args.part:
+        arms += part_a(n_per, n_eval, epochs)
+    if "b" in args.part:
+        arms += part_b(n_per_j, epochs)
+    common.run_arms(
+        "R23", arms, args,
+        common.results_path("r23_two_body_correlators", args), COLUMNS)
 
 
 if __name__ == "__main__":

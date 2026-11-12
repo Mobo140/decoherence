@@ -44,22 +44,20 @@ Usage
     python -m experiments.r9_target_modulation          # ~5 min on a laptop
     python -m experiments.r9_target_modulation --fast   # smoke test
 
-Writes ONLY to experiments/results/r9_target_modulation.csv.
+Writes ONLY to experiments/results/r9_target_modulation[_<tag>][_fast].csv.
 """
 from __future__ import annotations
 
-import argparse
-import csv
 import itertools
-from pathlib import Path
+from collections.abc import Sequence
 
 import numpy as np
 import qutip as qt
 
-from experiments._config import _bernstein_coeffs
+from experiments import common
+from src.data.scenarios import bernstein_coeffs
+from src.evaluation import stats
 from src.physics.lindblad_systems import TwoQubitSystem
-
-RESULTS = Path(__file__).parent / "results" / "r9_target_modulation.csv"
 
 T_MAX, DT = 20.0, 0.1
 TIMES = np.linspace(0.0, T_MAX, int(round(T_MAX / DT)) + 1)
@@ -86,7 +84,8 @@ def _first_crossing(rel: np.ndarray) -> float | None:
     i = below[0]
     if i == 0:
         return float(TIMES[0])
-    return float(TIMES[i - 1] + (rel[i - 1] - THR) / (rel[i - 1] - rel[i] + 1e-12) * DT)
+    step = (rel[i - 1] - THR) / (rel[i - 1] - rel[i] + 1e-12)
+    return float(TIMES[i - 1] + step * DT)
 
 
 def _unitary_min(H: np.ndarray, psi0: np.ndarray) -> float:
@@ -100,13 +99,29 @@ def _unitary_min(H: np.ndarray, psi0: np.ndarray) -> float:
 
 
 def _coef(system: TwoQubitSystem):
-    def g(t, args):
-        v = system.get_gamma(t)
-        return np.sqrt(v) if v > 0 else 0.0
-    return g
+    def sqrt_gamma(t, args):
+        """Returns sqrt(gamma(t)), or 0 where the rate is not positive.
+
+        Args:
+            t: Time.
+            args: Unused; required by the QuTiP coefficient signature.
+        """
+        rate = system.get_gamma(t)
+        return np.sqrt(rate) if rate > 0 else 0.0
+    return sqrt_gamma
 
 
 def part1(n_states: int, seed: int) -> list[dict]:
+    """Measures unitary-only coherence dips from Haar-random states.
+
+    Args:
+        n_states: Number of Haar-random initial states per (model, J).
+        seed: Seed of the state generator.
+
+    Returns:
+        One row per model and J with the share of states whose coherence
+        crosses the threshold and the median modulation depth.
+    """
     rng = np.random.default_rng(seed)
     states = [_haar(rng) for _ in range(n_states)]
     rows = []
@@ -123,6 +138,17 @@ def part1(n_states: int, seed: int) -> list[dict]:
 
 
 def part2(n_traj: int, seed: int) -> list[dict]:
+    """Measures T2 ambiguity on dissipative Bernstein-gamma trajectories.
+
+    Args:
+        n_traj: Number of trajectories per (model, J).
+        seed: Seed of the generator of rates and initial states.
+
+    Returns:
+        One row per model and J with the non-monotone share, the mean
+        crossing gap, the correlation with the energy-basis T2 and T2
+        statistics.
+    """
     rng = np.random.default_rng(seed)
     rows = []
     for model in MODELS:
@@ -130,7 +156,8 @@ def part2(n_traj: int, seed: int) -> list[dict]:
             shapes = itertools.cycle(SHAPES)
             t2, t2e, gaps, nonmono, censored = [], [], [], 0, 0
             for _ in range(n_traj):
-                coeffs = np.array(_bernstein_coeffs(next(shapes), rng, gamma_max=0.8))
+                coeffs = np.array(bernstein_coeffs(
+                    next(shapes), rng, gamma_max=0.8))
                 system = TwoQubitSystem(J=J, interaction_type=model,
                                         gamma_coeffs=coeffs, gamma_t_max=T_MAX)
                 psi = qt.Qobj(_haar(rng).reshape(-1, 1), dims=[[2, 2], [1, 1]])
@@ -157,7 +184,7 @@ def part2(n_traj: int, seed: int) -> list[dict]:
             ok = np.isfinite(b)
             if ok.sum() > 5:
                 k, c0 = np.polyfit(b[ok], a[ok], 1)
-                corr = float(np.corrcoef(b[ok], a[ok])[0, 1])
+                corr = stats.pearson(b[ok], a[ok])
                 resid = float(np.std(a[ok] - (k * b[ok] + c0)))
             else:
                 corr = resid = float("nan")
@@ -170,28 +197,33 @@ def part2(n_traj: int, seed: int) -> list[dict]:
                 "mean_T2": float(np.mean(a)) if n else float("nan"),
                 "std_T2": float(np.std(a)) if n else float("nan"),
             })
-            print(f"R9 | {model} J={J}: nonmono={rows[-1]['frac_nonmonotone']:.2f} "
-                  f"gap={rows[-1]['mean_gap']:.2f} corr={corr:.3f}", flush=True)
+            row = rows[-1]
+            print(f"R9 | {model} J={J}: "
+                  f"nonmono={row['frac_nonmonotone']:.2f} "
+                  f"gap={row['mean_gap']:.2f} corr={corr:.3f}", flush=True)
     return rows
 
 
-def main() -> None:
-    p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    p.add_argument("--n-states", type=int, default=400)
-    p.add_argument("--n-traj", type=int, default=150)
-    p.add_argument("--seed", type=int, default=0)
-    p.add_argument("--fast", action="store_true")
-    a = p.parse_args()
-    if a.fast:
-        a.n_states, a.n_traj = 20, 6
-    rows = part1(a.n_states, a.seed) + part2(a.n_traj, a.seed + 1)
-    keys = sorted({k for r in rows for k in r}, key=lambda k: (k not in ("part", "model", "J", "n"), k))
-    RESULTS.parent.mkdir(parents=True, exist_ok=True)
-    with RESULTS.open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=keys)
-        w.writeheader()
-        w.writerows(rows)
-    print(f"R9 | wrote {RESULTS}")
+def _add_flags(parser) -> None:
+    parser.add_argument("--n-states", type=int, default=400)
+    parser.add_argument("--n-traj", type=int, default=150)
+    parser.add_argument("--seed", type=int, default=0)
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    """Runs both parts and writes the CSV."""
+    args = common.parse_args(
+        __doc__.split("\n")[0], extra=_add_flags, argv=argv, seeds=None)
+    n_states, n_traj = (20, 6) if args.fast else (args.n_states, args.n_traj)
+    rows = part1(n_states, args.seed) + part2(n_traj, args.seed + 1)
+    columns = sorted(
+        {k for r in rows for k in r},
+        key=lambda k: (k not in ("part", "model", "J", "n"), k))
+    path = common.results_path("r9_target_modulation", args)
+    common.write_results(
+        rows, path, columns=columns, seeds=[args.seed, args.seed + 1],
+        config={"n_states": n_states, "n_traj": n_traj, "J_grid": J_GRID})
+    print(f"R9 | wrote {path}")
 
 
 if __name__ == "__main__":

@@ -7,65 +7,60 @@ Runs all experiments relevant to Paper 1:
   E4 — cross-system generalisation, trained on A+B+C, evaluated per scenario
   E5 — direct vs inverse-problem baseline on B
 
-Results land in experiments/results/ with suffix _p1 to avoid collisions with
-global runs.
+Results land in experiments/results/ with the tag p1 (E5: no tag) to avoid
+collisions with global runs. With --fast every experiment runs on reduced
+data and writes `*_fast.csv`, which does not touch the published files.
 
-Usage::
-    python experiments/run_paper1.py [--fast]
-
-  --fast  Use n=30 per scenario and 10 epochs for a smoke-run.
+Usage
+-----
+    python -m experiments.run_paper1 [--fast]
 """
 from __future__ import annotations
 
-import argparse
-import sys
 import time
-from pathlib import Path
+from collections.abc import Sequence
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+from experiments import common
+from experiments import e1_ablation
+from experiments import e2_window_sweep
+from experiments import e3_noise_sweep
+from experiments import e4_cross_system
+from experiments import e5_inverse_baseline
 
 
-def _log(msg: str) -> None:
-    print(f"\n{'='*70}\n{msg}\n{'='*70}")
+def _log(message: str) -> None:
+    print(f"\n{'=' * 70}\n{message}\n{'=' * 70}")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--fast", action="store_true", help="Smoke-run with reduced data.")
-    args = parser.parse_args()
-
-    import experiments.e1_ablation as e1
-    import experiments.e2_window_sweep as e2
-    import experiments.e3_noise_sweep as e3
-    import experiments.e4_cross_system as e4
-    import experiments.e5_inverse_baseline as e5
-
-    n = 30 if args.fast else 100
-
-    t_start = time.time()
+def main(argv: Sequence[str] | None = None) -> None:
+    """Runs E1-E5 for Paper 1."""
+    args = common.parse_fast(__doc__, argv)
+    fast = ["--fast"] if args.fast else []
+    tag = ["--tag", "p1"]
+    start = time.time()
 
     _log("PAPER 1 — E1: Ablation (scenarios A, B, C)")
-    e1.main(scenarios=["A", "B", "C"], n_per=n, suffix="_p1")
+    e1_ablation.main(
+        ["--scenarios", "A", "B", "C", "--n-per", "100", *tag, *fast])
 
     _log("PAPER 1 — E2: Window fraction sweep (scenarios B, C)")
-    e2.main(scenarios=["B", "C"], suffix="_p1")
+    e2_window_sweep.main(["--scenarios", "B", "C", *tag, *fast])
 
     _log("PAPER 1 — E3: Noise robustness (scenarios B, C)")
-    e3.main(scenarios=["B", "C"], suffix="_p1")
+    e3_noise_sweep.main(["--scenarios", "B", "C", *tag, *fast])
 
-    _log("PAPER 1 — E4: Cross-system generalisation (train A+B+C, eval A/B/C)")
-    e4.main(
-        train_scenarios=["A", "B", "C"],
-        eval_scenarios=["A", "B", "C"],
-        suffix="_p1",
-    )
+    _log("PAPER 1 — E4: Cross-system generalisation (train A+B+C)")
+    e4_cross_system.main([
+        "--train-scenarios", "A", "B", "C",
+        "--eval-scenarios", "A", "B", "C", *tag, *fast])
 
     _log("PAPER 1 — E5: Direct vs inverse-problem baseline (scenario B)")
-    e5.main()
+    e5_inverse_baseline.main(fast)
 
-    elapsed = time.time() - t_start
-    print(f"\nPaper 1 experiments completed in {elapsed/60:.1f} min.")
-    print("Results in experiments/results/*_p1.csv (E5 → e5_inverse_baseline.csv)")
+    print(f"\nPaper 1 experiments completed in "
+          f"{(time.time() - start) / 60:.1f} min.")
+    print("Results in experiments/results/*_p1.csv "
+          "(E5 → e5_inverse_baseline.csv)")
 
 
 if __name__ == "__main__":
