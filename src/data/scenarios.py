@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
+import math
 
 import numpy as np
 
@@ -37,6 +38,8 @@ _GAMMA_SHAPES_1Q = (
 _GAMMA_SHAPES_2Q = (
     "random", "peak", "step_up", "step_down", "monotone_increasing",
 )
+# Shapes whose end values are drawn from [lo_edge, hi_edge].
+_EDGE_SHAPES = ("peak", "step_up", "step_down")
 _GAMMA_SHAPES_FIXED_J = _GAMMA_SHAPES_2Q + ("monotone_decreasing",)
 
 
@@ -60,10 +63,20 @@ def bernstein_coeffs(
         Five coefficients of the Bernstein polynomial.
 
     Raises:
-        ValueError: If `shape` is unknown.
+        ValueError: If `shape` is unknown, `gamma_max` is not finite or is
+            below 0.05, or (for "peak", "step_up", "step_down") is below
+            0.125, which leaves no room for the edge values.
     """
     lo_edge = 0.05
     hi_edge = min(0.25, gamma_max * 0.4)
+    if not (math.isfinite(gamma_max) and gamma_max >= lo_edge):
+        raise ValueError(
+            f"gamma_max must be finite and at least {lo_edge}, "
+            f"got {gamma_max!r}.")
+    if shape in _EDGE_SHAPES and hi_edge < lo_edge:
+        raise ValueError(
+            f"The shape {shape!r} needs gamma_max of at least "
+            f"{lo_edge / 0.4}, got {gamma_max!r}.")
     if shape == "constant":
         g = float(rng.uniform(lo_edge, gamma_max))
         return (g, g, g, g, g)
@@ -181,7 +194,13 @@ def build_configs(
     Returns:
         A dict from scenario label to its configurations. The keys are the
         labels of `SCENARIOS` and "all", the concatenation of A to E.
+
+    Raises:
+        ValueError: If `n_per_scenario` is less than 1.
     """
+    if n_per_scenario < 1:
+        raise ValueError(
+            f"n_per_scenario must be at least 1, got {n_per_scenario}.")
     rng = np.random.default_rng(seed)
     groups: dict[str, list[value_objects.SystemConfig]] = {
         "A": _make_1q_const_configs(n_per_scenario, rng),
@@ -220,7 +239,14 @@ def fixed_coupling_configs(
 
     Returns:
         `n` configurations, cycling through six gamma(t) shapes.
+
+    Raises:
+        ValueError: If `n` is less than 1, or `coupling` is not positive and
+            finite.
+        TypeError: If `criterion` or `interaction` is not an enum member.
     """
+    if n < 1:
+        raise ValueError(f"n must be at least 1, got {n}.")
     configs = []
     shape_cycle = itertools.cycle(_GAMMA_SHAPES_FIXED_J)
     for _ in range(n):
@@ -252,6 +278,11 @@ def with_criterion(
 
     Returns:
         Copies of the configurations with that criterion.
+
+    Raises:
+        TypeError: If `criterion` is not a `DecoherenceCriterion`.
+        ValueError: If a one-qubit configuration is given a two-qubit
+            criterion.
     """
     return [dataclasses.replace(c, decoherence_criterion=criterion)
             for c in configs]

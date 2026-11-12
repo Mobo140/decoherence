@@ -1,0 +1,17 @@
+figure,quantity,max_abs_deviation,n_points,note
+PRB Eqs. 42-44,"ED vs kernel sum, FM",5.684341886080802e-14,1,"N = 2..8, d = 1, 2, 3, kondo_rates between the two degenerate ground states"
+PRB Eqs. 42-44,"ED vs kernel sum, AFM",1.2434497875801753e-14,1,"N = 2..8, d = 1, 2, 3, kondo_rates between the two degenerate ground states"
+PRB Eq. C3,"Eq. C3 vs Eq. 16 sum, 1D FM",1.4551915228366852e-11,200,C3 is the Eq. 16 form
+PRB Eq. C5,"Eq. C5 vs Eq. 16 sum, 1D AFM even N",1.2181367026187218e-12,100,C5 is the Eq. 16 form
+PRB Eq. C6,"corrected C6 vs Eq. 16 sum, 1D AFM odd N",1.56052948341312e-12,100,C6 as printed differs; corrected form in README
+PRB Fig. 4(a),"Lambda^FM_1D/N^2, invariant vs Eq. 16",1.078580211441249,200,difference between the two conventions
+"PRB Fig. 4(b, c)","Lambda^AFM_1D, invariant vs Eq. 16",0.5319200711433609,200,difference between the two conventions
+PRB Fig. 4(a),"Lambda^FM_2D/N^2, invariant vs Eq. 16",1.0969475255255037,200,difference between the two conventions
+"PRB Fig. 4(b, c)","Lambda^AFM_2D, invariant vs Eq. 16",0.5212318108692031,200,difference between the two conventions
+PRB Fig. 4(a),"Lambda^FM_3D/N^2, invariant vs Eq. 16",1.1035782816569395,200,difference between the two conventions
+"PRB Fig. 4(b, c)","Lambda^AFM_3D, invariant vs Eq. 16",0.5165215988765084,200,difference between the two conventions
+PRB Eq. C4,Lambda^FM_2D vs C4 as printed,2.000888343900442e-11,40,N <= 40; printed C4 is the invariant sum
+PRB Eq. C4,Lambda^AFM_2D vs C-sums as printed,4.685141163918161e-13,40,N <= 40; printed sums are the invariant sum
+PRB Eq. C4,Lambda^FM_3D vs C4 as printed,5.9117155615240335e-12,40,N <= 40; printed C4 is the invariant sum
+PRB Eq. C4,Lambda^AFM_3D vs C-sums as printed,2.717825964282383e-13,40,N <= 40; printed sums are the invariant sum
+PRB Fig. 4(a),Lambda^FM/N^2 at N=1 vs 4,0.0,3,k_F d -> 0 limit is 4 N^2

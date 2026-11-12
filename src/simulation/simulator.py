@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+import math
+
 import numpy as np
 import qutip as qt
 
@@ -57,7 +59,15 @@ def interpolate_crossing(
 
     Returns:
         The crossing time; ``times[0]`` if the curve starts past the level.
+
+    Raises:
+        ValueError: If `index` is not a position in both `times` and
+            `values`.
     """
+    if not 0 <= index < min(len(times), len(values)):
+        raise ValueError(
+            f"index {index} is outside the {len(times)} times and "
+            f"{len(values)} values.")
     if index == 0:
         return float(times[0])
     prev_val = float(values[index - 1])
@@ -87,7 +97,18 @@ def first_crossing(
         ``(time, censored)``. ``time`` is the interpolated crossing time.
         If the level is never reached, ``time`` is ``times[-1]``, a lower
         bound, and ``censored`` is True.
+
+    Raises:
+        ValueError: If `times` or `values` is empty, they differ in
+            length, or `level` or a value is NaN.
     """
+    if len(times) == 0 or len(values) == 0:
+        raise ValueError("times and values must not be empty.")
+    if len(times) != len(values):
+        raise ValueError(
+            f"times has {len(times)} points but values has {len(values)}.")
+    if math.isnan(level) or np.isnan(np.asarray(values, dtype=float)).any():
+        raise ValueError("level and values must not contain NaN.")
     for i, value in enumerate(values):
         crossed = value <= level if inclusive else value < level
         if crossed:
@@ -147,27 +168,44 @@ def compute_t_decoh(
 
     Returns:
         ``(t_decoh, censored)``. If the level is never crossed in
-        [0, t_max] (or the criterion is not handled here), ``t_decoh`` is
-        ``times[-1]`` and ``censored`` is True.
+        [0, t_max], ``t_decoh`` is ``times[-1]`` and ``censored`` is True.
+
+    Raises:
+        ValueError: If the criterion is not COHERENCE or PURITY, or the
+            curve is empty or contains NaN.
+        KeyError: If `observables` lacks the curve the criterion needs.
     """
     criterion = config.decoherence_criterion
     threshold = config.decoherence_threshold
-    coherence = observables.get("coherence_l1")
-    purity = observables.get("purity")
 
-    if (criterion == value_objects.DecoherenceCriterion.COHERENCE
-            and coherence is not None):
+    if criterion == value_objects.DecoherenceCriterion.COHERENCE:
+        coherence = _curve(observables, "coherence_l1", criterion)
         return first_crossing(
             times, coherence, relative_level(coherence, threshold)
         )
-    if (criterion == value_objects.DecoherenceCriterion.PURITY
-            and purity is not None):
+    if criterion == value_objects.DecoherenceCriterion.PURITY:
+        purity = _curve(observables, "purity", criterion)
         initial = float(purity[0]) if len(purity) > 0 else 1.0
         p_min = 1.0 / (2 ** config.n_qubits.value)
         return first_crossing(
             times, purity, initial - threshold * (initial - p_min)
         )
-    return float(times[-1]), True
+    raise ValueError(
+        f"compute_t_decoh handles the criteria 'coherence' and 'purity', "
+        f"not {criterion.value!r}.")
+
+
+def _curve(
+    observables: dict,
+    name: str,
+    criterion: value_objects.DecoherenceCriterion,
+) -> Sequence[float]:
+    """Returns observables[name]; KeyError names the criterion if absent."""
+    if name not in observables:
+        raise KeyError(
+            f"The criterion {criterion.value!r} needs the observable "
+            f"{name!r}; got {sorted(observables)}.")
+    return observables[name]
 
 
 def energy_basis_t_decoh(
@@ -189,7 +227,15 @@ def energy_basis_t_decoh(
 
     Returns:
         ``(t_decoh, censored)`` as in ``first_crossing``.
+
+    Raises:
+        ValueError: If `hamiltonian` is not a Hermitian square matrix, or
+            as `first_crossing`.
     """
+    hamiltonian = np.asarray(hamiltonian)
+    if (hamiltonian.ndim != 2 or hamiltonian.shape[0] != hamiltonian.shape[1]
+            or not np.allclose(hamiltonian, hamiltonian.conj().T)):
+        raise ValueError("hamiltonian must be a Hermitian square matrix.")
     eigenvectors = np.linalg.eigh(hamiltonian)[1]
     values = [
         measures.energy_basis_coherence_l1(
@@ -280,7 +326,13 @@ class QuTipSimulator(ports.ISimulator):
         Returns:
             Observable trajectories (without density matrices) and the
             decoherence time.
+
+        Raises:
+            TypeError: If `config` is not a `SystemConfig`.
         """
+        if not isinstance(config, value_objects.SystemConfig):
+            raise TypeError(
+                f"config must be a SystemConfig, got {config!r}.")
         n_steps = int(round(config.t_max / config.dt)) + 1
         times = np.linspace(0.0, config.t_max, n_steps)
         initial_state = self._initial_state(config)

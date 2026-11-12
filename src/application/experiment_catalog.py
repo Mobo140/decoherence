@@ -284,6 +284,14 @@ CATALOG: list[ExperimentEntry] = [
         "experiments.r27_esd_permanence",
         "-", "-", "D",
         ("r27_esd_permanence.csv",), status="replication"),
+    ExperimentEntry(
+        "R28",
+        "Kondo bath dissipator reproduced from Delgado and "
+        "Fernandez-Rossier; T2 and T2^E of two qubits versus k_F d",
+        "experiments.r28_kondo_reproduction",
+        "-", "-", "D/E",
+        ("r28/r28_dimer.csv", "r28/r28_demo_t2.csv"),
+        status="replication"),
 ]
 
 

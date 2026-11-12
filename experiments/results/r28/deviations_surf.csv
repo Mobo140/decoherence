@@ -1,0 +1,13 @@
+figure,quantity,max_abs_deviation,n_points,note
+SurfSci Eq. 15,G(Delta) vs quadrature of f(1-f),2.5779378631796135e-13,37,"Delta/kT in [-6, 12]"
+SurfSci Eq. 14 / PRB Eq. 22,Gamma(Delta) vs Gamma0,0.0,41,relaxation of a spin 1/2
+SurfSci Eq. 14,Delta >> kT: Gamma / (pi (rJ)^2 Delta/8),0.0,1,linear in Delta
+SurfSci Eq. 14,Delta -> 0: Gamma / (pi (rJ)^2 kT/8),0.005008333319444391,1,"Korringa limit, Gamma proportional to kT"
+SurfSci Eq. 23,"S=3/2, D=-3.5, E=2 meV: generic vs Eq. 23",0.395149564631007,31,"Lambda = 1.9898, paper"
+SurfSci Eq. 23,"S=3/2, D=-3.5, E=2 meV: generic vs Eq. 23 with Lambda from ED",0.44341210687601545,31,Lambda = 1.5000
+SurfSci Eq. 21,"S=3/2, D=-3.5, E=2 meV: generic vs hand sum",2.220446049250313e-16,31,"same formula, independent code"
+SurfSci Eq. 23,"S=3/2, D=-3.5, E=0 meV: generic vs Eq. 23",0.4434121068760155,31,"Lambda = 1.5000, paper"
+SurfSci Eq. 23,"S=3/2, D=-3.5, E=0 meV: generic vs Eq. 23 with Lambda from ED",0.4434121068760155,31,Lambda = 1.5000
+SurfSci Eq. 21,"S=3/2, D=-3.5, E=0 meV: generic vs hand sum",1.1102230246251565e-16,31,"same formula, independent code"
+SurfSci Eq. 24,"S=1, D=-3.5, E=1.5 meV: generic vs Eq. 24",0.5912161425013545,31,closed form as printed
+SurfSci Eq. 24,"S=1, D=-3.5, E=1.5 meV: generic vs Eq. 24 with 3/4",3.3306690738754696e-16,31,coefficient 3/4 instead of the printed 3/2

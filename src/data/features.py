@@ -34,6 +34,11 @@ def select(dataset: dataset_lib.Dataset, name: str) -> dataset_lib.Dataset:
         A new dataset without the columns the set removes.
 
     Raises:
-        KeyError: If `name` is not an alias in `FEATURE_SETS`.
+        KeyError: If `name` is not an alias in `FEATURE_SETS`; the message
+            lists the valid aliases.
     """
+    if name not in FEATURE_SETS:
+        raise KeyError(
+            f"Unknown feature set {name!r}. "
+            f"Valid aliases: {sorted(FEATURE_SETS)}.")
     return dataset.drop_features(FEATURE_SETS[name])

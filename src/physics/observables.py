@@ -13,6 +13,14 @@ _SIGMA_Y2 = np.kron(paulis.IDENTITY, paulis.SIGMA_Y)
 _SIGMA_Z2 = np.kron(paulis.IDENTITY, paulis.SIGMA_Z)
 
 
+def _check_shape(rho: np.ndarray, size: int) -> None:
+    """Raises ValueError unless `rho` has shape (size, size)."""
+    if np.shape(rho) != (size, size):
+        raise ValueError(
+            f"Expected a density matrix of shape ({size}, {size}), "
+            f"got {np.shape(rho)}.")
+
+
 def _expectation(rho: np.ndarray, operator: np.ndarray) -> float:
     """Returns Re Tr(rho operator)."""
     return np.real(np.trace(rho @ operator))
@@ -27,7 +35,11 @@ def compute_observables_single_qubit(rho: np.ndarray) -> dict[str, float]:
     Returns:
         Dictionary with the Pauli expectations ``sigma_x``, ``sigma_y``,
         ``sigma_z``, the ``purity`` and the ``coherence_l1``.
+
+    Raises:
+        ValueError: If `rho` does not have shape (2, 2).
     """
+    _check_shape(rho, 2)
     return {
         "sigma_x": _expectation(rho, paulis.SIGMA_X),
         "sigma_y": _expectation(rho, paulis.SIGMA_Y),
@@ -47,7 +59,11 @@ def compute_observables_two_qubit(rho: np.ndarray) -> dict[str, float]:
         Dictionary with the Pauli expectations ``sigma_{x,y,z}1`` and
         ``sigma_{x,y,z}2`` of each qubit, the ``purity`` and the
         ``coherence_l1``.
+
+    Raises:
+        ValueError: If `rho` does not have shape (4, 4).
     """
+    _check_shape(rho, 4)
     return {
         "sigma_x1": _expectation(rho, _SIGMA_X1),
         "sigma_y1": _expectation(rho, _SIGMA_Y1),

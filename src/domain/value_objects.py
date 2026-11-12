@@ -52,6 +52,15 @@ class DecoherenceCriterion(str, Enum):
     ENTANGLEMENT_DEATH = "entanglement_death"
 
 
+# Criteria that need a two-qubit state; a one-qubit system cannot define T2
+# by them.
+TWO_QUBIT_CRITERIA = frozenset({
+    DecoherenceCriterion.COHERENCE_ENERGY,
+    DecoherenceCriterion.CONCURRENCE,
+    DecoherenceCriterion.ENTANGLEMENT_DEATH,
+})
+
+
 # ---------------------------------------------------------------------------
 # Value objects
 # ---------------------------------------------------------------------------
@@ -63,6 +72,12 @@ class DissipatorConfig:
     Either ``gamma_const`` (constant rate) or ``gamma_coeffs`` (Bernstein
     polynomial coefficients for a time-dependent rate) must be supplied,
     but not both.
+
+    Raises:
+        TypeError: If `operator_type` is not a `DissipatorType`.
+        ValueError: If neither or both rates are given, the constant rate
+            is negative or not finite, or the coefficients are empty,
+            negative or not finite.
     """
 
     operator_type: DissipatorType = DissipatorType.SIGMA_MINUS
@@ -70,16 +85,31 @@ class DissipatorConfig:
     gamma_coeffs: tuple[float, ...] | None = None  # frozen → tuple, not list
 
     def __post_init__(self) -> None:
+        if not isinstance(self.operator_type, DissipatorType):
+            raise TypeError(
+                "operator_type must be a DissipatorType, "
+                f"got {self.operator_type!r}.")
         if self.gamma_const is None and self.gamma_coeffs is None:
             raise ValueError(
                 "DissipatorConfig requires either gamma_const or gamma_coeffs."
             )
-        if self.gamma_const is not None and self.gamma_const < 0:
-            raise ValueError("gamma_const must be non-negative.")
-        if self.gamma_coeffs is not None and any(
-                c < 0 for c in self.gamma_coeffs):
+        if self.gamma_const is not None and self.gamma_coeffs is not None:
             raise ValueError(
-                "All Bernstein coefficients must be non-negative.")
+                "DissipatorConfig takes gamma_const or gamma_coeffs, "
+                "not both.")
+        if self.gamma_const is not None and not (
+                math.isfinite(self.gamma_const) and self.gamma_const >= 0):
+            raise ValueError(
+                "gamma_const must be finite and non-negative, "
+                f"got {self.gamma_const!r}.")
+        if self.gamma_coeffs is not None:
+            if len(self.gamma_coeffs) == 0:
+                raise ValueError("gamma_coeffs must not be empty.")
+            if not all(math.isfinite(c) and c >= 0
+                       for c in self.gamma_coeffs):
+                raise ValueError(
+                    "All Bernstein coefficients must be finite and "
+                    f"non-negative, got {self.gamma_coeffs!r}.")
 
     # convenience constructors ------------------------------------------------
 
@@ -124,6 +154,15 @@ class SystemConfig:
 
     Single-qubit: H = ω·σ_z, one dissipator.
     Two-qubit:    H = J·(interaction), one dissipator per qubit (same γ).
+
+    Raises:
+        TypeError: If `n_qubits`, `dissipator`, `interaction_type` or
+            `decoherence_criterion` is not an instance of its class.
+        ValueError: If `omega`, `t_max`, `dt` or `J` is not finite;
+            `omega`, `t_max` or `J` is not positive; `dt` is not in
+            (0, t_max); the threshold is not in (0, 1); or a one-qubit
+            system asks for a two-qubit criterion (`COHERENCE_ENERGY`,
+            `CONCURRENCE`, `ENTANGLEMENT_DEATH`).
     """
 
     n_qubits: QubitCount
@@ -139,6 +178,11 @@ class SystemConfig:
     decoherence_threshold: float = ONE_OVER_E
 
     def __post_init__(self) -> None:
+        self._check_types()
+        for name in ("omega", "t_max", "dt", "J"):
+            value = getattr(self, name)
+            if not math.isfinite(value):
+                raise ValueError(f"{name} must be finite, got {value!r}.")
         if self.omega <= 0:
             raise ValueError("omega must be positive.")
         if self.t_max <= 0:
@@ -147,6 +191,29 @@ class SystemConfig:
             raise ValueError("dt must satisfy 0 < dt < t_max.")
         if self.J <= 0:
             raise ValueError("J must be positive.")
+        if not (0 < self.decoherence_threshold < 1):
+            raise ValueError(
+                "decoherence_threshold must be in (0, 1), "
+                f"got {self.decoherence_threshold!r}.")
+        if (self.n_qubits == QubitCount.ONE
+                and self.decoherence_criterion in TWO_QUBIT_CRITERIA):
+            raise ValueError(
+                f"The criterion {self.decoherence_criterion.value!r} is "
+                "defined for two qubits only.")
+
+    def _check_types(self) -> None:
+        """Raises TypeError if a field is not of its declared type."""
+        expected = (
+            ("n_qubits", QubitCount),
+            ("dissipator", DissipatorConfig),
+            ("interaction_type", InteractionType),
+            ("decoherence_criterion", DecoherenceCriterion),
+        )
+        for name, kind in expected:
+            value = getattr(self, name)
+            if not isinstance(value, kind):
+                raise TypeError(
+                    f"{name} must be a {kind.__name__}, got {value!r}.")
 
 
 @dataclass
@@ -156,6 +223,10 @@ class TrajectoryResult:
     ``observables`` maps observable name → 1-D array of length
     ``len(times)``.  The ``density_matrices`` key (if present) is excluded
     from ``feature_matrix`` because it contains raw complex arrays.
+
+    Raises:
+        ValueError: If an observable (other than ``density_matrices``) does
+            not have one value per time point.
     """
 
     times: np.ndarray
@@ -164,6 +235,13 @@ class TrajectoryResult:
     system_config: SystemConfig
     # True: 1/e threshold was not crossed by t_max; t_decoh is a lower bound.
     censored: bool = False
+
+    def __post_init__(self) -> None:
+        for name, values in self.observables.items():
+            if name != "density_matrices" and len(values) != len(self.times):
+                raise ValueError(
+                    f"Observable {name!r} has {len(values)} values for "
+                    f"{len(self.times)} time points.")
 
     # ------------------------------------------------------------------
     # Derived views
@@ -211,8 +289,10 @@ class NoiseConfig:
     seed: int | None = None
 
     def __post_init__(self) -> None:
-        if self.sigma < 0:
-            raise ValueError("NoiseConfig.sigma must be non-negative.")
+        if not (math.isfinite(self.sigma) and self.sigma >= 0):
+            raise ValueError(
+                "NoiseConfig.sigma must be finite and non-negative, "
+                f"got {self.sigma!r}.")
 
 
 class PredictorVariant(str, Enum):

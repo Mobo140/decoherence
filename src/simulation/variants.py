@@ -5,10 +5,12 @@ physics and the decoherence-time logic untouched.
 """
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import qutip as qt
 
-from src.physics import measures, paulis
+from src.physics import kondo_bath, lindblad_systems, measures, paulis
 from src.simulation import simulator
 
 # Two-body Pauli correlators <sigma_a x sigma_b>, keyed by feature name.
@@ -19,6 +21,9 @@ CORR = {
 
 # Step of the Ornstein-Uhlenbeck grid that modulates gamma(t).
 OU_GRID_DT = 0.01
+
+# Bohr frequencies closer than this are one frequency in the Kondo bath.
+_KONDO_TOLERANCE = 1e-9
 
 # Parity of the two-qubit Hamiltonian the code builds,
 # H = J sx1 sx2 + h (sz1 + sz2).
@@ -72,9 +77,19 @@ class StochasticGammaSimulator(simulator.QuTipSimulator):
 
         Args:
             s: Fixed strength, or None to draw it for each trajectory.
-            tau: Fixed correlation time; ignored when ``s`` is None.
+            tau: Fixed correlation time; ignored when ``s`` is None or 0.
             seed: Seed of the generator of the OU paths.
+
+        Raises:
+            ValueError: If `s` is negative or not finite, or `s` is positive
+                and `tau` is not a finite positive number.
         """
+        if s is not None and not (math.isfinite(s) and s >= 0):
+            raise ValueError(
+                f"s must be finite and non-negative, got {s!r}.")
+        if s and not (tau is not None and math.isfinite(tau) and tau > 0):
+            raise ValueError(
+                f"tau must be finite and positive, got {tau!r}.")
         self.s, self.tau = s, tau
         self.rng = np.random.default_rng(seed)
 
@@ -147,3 +162,56 @@ class ParitySectorSimulator(simulator.QuTipSimulator):
             psi = super()._initial_state(config)
         raise RuntimeError(
             "could not draw a state inside the requested sector")
+
+
+class KondoSimulator(simulator.QuTipSimulator):
+    """Replaces the phenomenological jump operators by a Kondo bath (R28).
+
+    The Hamiltonian of the system is the published one. The sigma_minus or
+    sigma_z jump operators and the rate gamma(t) are replaced by the
+    collapse operators of `kondo_bath.kondo_collapse_operators` for spin-1/2
+    qubits (S = sigma / 2) coupled to a d-dimensional electron gas. Two
+    qubits sit at distance d, so that k_F d = `kF_d`. The dissipator thus
+    depends on H, on rho_J, on kT and on the geometry, and a time-dependent
+    gamma(t) of the configuration is not used.
+
+    Attributes:
+        rho_J: Dimensionless Kondo coupling.
+        kT: Temperature in the units of the Hamiltonian.
+        kF_d: Product of the Fermi wave number and the qubit distance.
+        dim: Dimension of the electron gas, 1, 2 or 3.
+    """
+
+    def __init__(self, rho_J: float, kT: float, kF_d: float, dim: int):
+        """Initialises the simulator.
+
+        Args:
+            rho_J: Dimensionless coupling, in [0, 1).
+            kT: Temperature in the units of the Hamiltonian, positive.
+            kF_d: k_F times the distance of the two qubits, non-negative;
+                a single qubit does not depend on it.
+            dim: Dimension of the electron gas, 1, 2 or 3.
+
+        Raises:
+            ValueError: If a parameter is out of range.
+        """
+        if not (math.isfinite(kF_d) and kF_d >= 0):
+            raise ValueError(
+                f"kF_d must be finite and non-negative, got {kF_d!r}.")
+        kondo_bath.validate_bath_parameters(
+            rho_J, kT, 1.0, dim, tol=_KONDO_TOLERANCE)
+        self.rho_J, self.kT, self.kF_d, self.dim = rho_J, kT, kF_d, dim
+
+    def _prepare_system(self, system, config):
+        n_qubits = 1 if isinstance(
+            system, lindblad_systems.SingleQubitSystem) else 2
+        spin_ops = kondo_bath.chain_spin_operators(n_qubits)
+        positions = [0.0, self.kF_d][:n_qubits]
+        system.L_list = kondo_bath.kondo_collapse_operators(
+            system.H, spin_ops, positions, rho_J=self.rho_J, kT=self.kT,
+            k_F=1.0, dim=self.dim, tol=_KONDO_TOLERANCE)
+        # The operators carry their rates: a unit constant rate leaves them
+        # as they are.
+        system.gamma_const = 1.0
+        system.gamma_coeffs = None
+        return system

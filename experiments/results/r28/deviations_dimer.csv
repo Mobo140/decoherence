@@ -1,0 +1,10 @@
+figure,quantity,max_abs_deviation,n_points,note
+PRB Fig. 2(b),"Gamma_T->S/Gamma0, d=1",4.440892098500626e-16,201,"closed form 1 - K_d, Eqs. 28, 31-32"
+PRB Fig. 2(c),"Gamma_10->1-1/Gamma0, d=1",6.661338147750939e-16,201,"closed form 1 + K_d, Eqs. 30, 33-34"
+PRB Sec. IV C 3,"Gamma_00->1-1/Gamma0, d=1",4.440892098500626e-16,201,"closed form (1 - K_d), Gamma0 at B - J_H, Eq. 28"
+PRB Fig. 2(b),"Gamma_T->S/Gamma0, d=2",5.551115123125783e-16,201,"closed form 1 - K_d, Eqs. 28, 31-32"
+PRB Fig. 2(c),"Gamma_10->1-1/Gamma0, d=2",6.661338147750939e-16,201,"closed form 1 + K_d, Eqs. 30, 33-34"
+PRB Sec. IV C 3,"Gamma_00->1-1/Gamma0, d=2",4.440892098500626e-16,201,"closed form (1 - K_d), Gamma0 at B - J_H, Eq. 28"
+PRB Fig. 2(b),"Gamma_T->S/Gamma0, d=3",5.551115123125783e-16,201,"closed form 1 - K_d, Eqs. 28, 31-32"
+PRB Fig. 2(c),"Gamma_10->1-1/Gamma0, d=3",6.661338147750939e-16,201,"closed form 1 + K_d, Eqs. 30, 33-34"
+PRB Sec. IV C 3,"Gamma_00->1-1/Gamma0, d=3",4.440892098500626e-16,201,"closed form (1 - K_d), Gamma0 at B - J_H, Eq. 28"
