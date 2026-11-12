@@ -6,6 +6,8 @@ the draw is private to the caller.
 """
 from __future__ import annotations
 
+from typing import Literal
+
 import numpy as np
 import qutip as qt
 
@@ -43,7 +45,7 @@ def random_pure(
 
 def parity_sector(
     system: System,
-    sector: int,
+    sector: Literal[1, -1],
     rng: np.random.Generator | None = None,
     *,
     min_norm: float = MIN_SECTOR_NORM,

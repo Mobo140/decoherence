@@ -14,6 +14,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
+from typing import Literal
 
 import numpy as np
 
@@ -223,7 +224,7 @@ def _draw_counts(
 def finite_shots(
     states: States,
     n_shots: int,
-    settings: str,
+    settings: Literal["local", "tomography"],
     rng: np.random.Generator,
 ) -> Observations:
     """Observes the Pauli means from a finite number of projective shots.

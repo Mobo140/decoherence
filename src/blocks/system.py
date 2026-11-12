@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 import qutip as qt
@@ -94,7 +95,9 @@ def single_qubit(omega: float) -> System:
     )
 
 
-def two_qubit(J: float, interaction: str) -> System:
+def two_qubit(
+    J: float, interaction: Literal["XXZ", "TFIM"]
+) -> System:
     """Builds two coupled qubits.
 
     Args:

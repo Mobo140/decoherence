@@ -180,10 +180,15 @@ def block(fn: str, **params: Any) -> Block:
     return Block(fn, frozen)
 
 
+def first_parameter_of(function: Callable) -> str:
+    """Returns the name of the first parameter of a function, or ''."""
+    parameters = list(inspect.signature(function).parameters)
+    return parameters[0] if parameters else ""
+
+
 def _first_parameter(b: Block) -> str:
     """Returns the name of the first parameter of the block's function."""
-    parameters = list(inspect.signature(b.function()).parameters)
-    return parameters[0] if parameters else ""
+    return first_parameter_of(b.function())
 
 
 def check_block(b: Block, available: set[str], stage: str) -> None:

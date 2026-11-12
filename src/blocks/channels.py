@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 import qutip as qt
@@ -85,7 +86,11 @@ def _scaled(
         for c in channels]
 
 
-def jump(system: System, op_type: str, gamma: float) -> list[Channel]:
+def jump(
+    system: System,
+    op_type: Literal["sigma_minus", "sigma_z"],
+    gamma: float,
+) -> list[Channel]:
     """Builds the jump channel of each qubit with a constant rate.
 
     Args:
@@ -210,7 +215,7 @@ def kondo_bath(
     rho_J: float,
     kT: float,
     k_F: float,
-    dim: int,
+    dim: Literal[1, 2, 3],
     spacing: float = 1.0,
 ) -> list[Channel]:
     """Builds the Davies channels of a Kondo bath (R28).
