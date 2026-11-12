@@ -232,7 +232,6 @@ def test_model_layout_of_only_the_tail_orders_it():
 
 
 def test_model_tail_is_the_layout_of_the_padding():
-
     assert windows.PHYSICS_COLUMNS == len(observe.MODEL_TAIL)
     assert observe.MODEL_TAIL == ("purity", "coherence_l1")
 
