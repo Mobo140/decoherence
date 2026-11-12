@@ -395,3 +395,172 @@ class Recipe:
             if isinstance(value, Param):
                 names.add(value.name)
         return names
+
+
+# --- JSON round trip ---
+
+_REQUIRED_FIELDS = (
+    "system", "channels", "initial", "observe", "target")
+_RECIPE_FIELDS = _REQUIRED_FIELDS + (
+    "evolve", "t_max", "dt", "sampler", "seeds",
+    "legacy_rng_offset")
+
+
+def _encode(value: Any) -> Any:
+    """Turns a block parameter value into JSON data."""
+    if isinstance(value, Param):
+        return {"param": value.name}
+    if isinstance(value, tuple):
+        return [_encode(v) for v in value]
+    return value
+
+
+def _decode(value: Any, where: str) -> Any:
+    """Turns JSON data into a block parameter value.
+
+    Raises:
+        ValueError: If the data holds a dict that is not ``{"param": name}``.
+    """
+    if isinstance(value, dict):
+        if set(value) != {"param"} or not isinstance(value["param"], str):
+            raise ValueError(
+                f"{where}: an object must be {{\"param\": \"name\"}}, "
+                f"got {value!r}.")
+        return Param(value["param"])
+    if isinstance(value, list):
+        return tuple(_decode(v, where) for v in value)
+    return value
+
+
+def block_to_dict(b: Block) -> dict[str, Any]:
+    """Encodes a block as ``{"fn": ..., "params": {...}}`` (JSON-safe)."""
+    return {"fn": b.fn, "params": {k: _encode(v) for k, v in b.params}}
+
+
+def block_from_dict(d: Any, where: str) -> Block:
+    """Decodes and validates a block.
+
+    Args:
+        d: ``{"fn": "module.function", "params": {...}}``; `params` may be
+            left out. A value ``{"param": name}`` is a `Param`; lists
+            become tuples.
+        where: Location in the recipe, e.g. ``"channels[1]"``, put in
+            front of every error message.
+
+    Returns:
+        The block.
+
+    Raises:
+        ValueError: If `d` is not of that form or `block` rejects it.
+    """
+    if not isinstance(d, dict):
+        raise ValueError(
+            f"{where}: a block must be an object with 'fn' and 'params', "
+            f"got {d!r}.")
+    unknown = set(d) - {"fn", "params"}
+    if unknown:
+        raise ValueError(
+            f"{where}: unknown fields {sorted(unknown)}; a block has "
+            "'fn' and 'params'.")
+    if "fn" not in d:
+        raise ValueError(f"{where}: the field 'fn' is missing.")
+    params = d.get("params", {})
+    if not isinstance(params, dict):
+        raise ValueError(
+            f"{where}.params: must be an object, got {params!r}.")
+    decoded = {
+        k: _decode(v, f"{where}.params.{k}") for k, v in params.items()}
+    try:
+        return block(d["fn"], **decoded)
+    except ValueError as error:
+        raise ValueError(f"{where}: {error}") from error
+
+
+def recipe_to_dict(r: Recipe) -> dict[str, Any]:
+    """Encodes a recipe as JSON-safe data.
+
+    Blocks become ``{"fn", "params"}``, a `Param` becomes
+    ``{"param": name}`` and tuples become lists.
+
+    Args:
+        r: The recipe.
+
+    Returns:
+        A dict that `recipe_from_dict` turns back into an equal recipe.
+    """
+    return {
+        "system": block_to_dict(r.system),
+        "channels": [block_to_dict(b) for b in r.channels],
+        "initial": block_to_dict(r.initial),
+        "evolve": block_to_dict(r.evolve),
+        "observe": [block_to_dict(b) for b in r.observe],
+        "target": None if r.target is None else block_to_dict(r.target),
+        "t_max": _encode(r.t_max),
+        "dt": _encode(r.dt),
+        "sampler": None if r.sampler is None else block_to_dict(r.sampler),
+        "seeds": r.seeds,
+        "legacy_rng_offset": r.legacy_rng_offset,
+    }
+
+
+def _block_list(d: dict, field: str) -> tuple[Block, ...]:
+    """Decodes a field that holds a list of blocks."""
+    items = d[field]
+    if not isinstance(items, list):
+        raise ValueError(
+            f"{field}: must be a list of blocks, got {items!r}.")
+    return tuple(
+        block_from_dict(item, f"{field}[{i}]")
+        for i, item in enumerate(items))
+
+
+def recipe_from_dict(d: Any) -> Recipe:
+    """Decodes and validates a recipe.
+
+    Args:
+        d: Data as `recipe_to_dict` writes it. `system`, `channels`,
+            `initial`, `observe` and `target` (which may be null) are
+            required; the other fields take the defaults of `Recipe` when
+            left out.
+
+    Returns:
+        The recipe.
+
+    Raises:
+        ValueError: If `d` is not an object, a field is missing, unknown or
+            of the wrong shape, or a block or the recipe does not validate.
+            The message begins with the stage and field at fault.
+    """
+    if not isinstance(d, dict):
+        raise ValueError(f"A recipe must be an object, got {d!r}.")
+    for field in _REQUIRED_FIELDS:
+        if field not in d:
+            raise ValueError(f"{field}: the field is missing.")
+    unknown = set(d) - set(_RECIPE_FIELDS)
+    if unknown:
+        raise ValueError(
+            f"Unknown recipe fields {sorted(unknown)}; "
+            f"known: {list(_RECIPE_FIELDS)}.")
+    fields: dict[str, Any] = {
+        "system": block_from_dict(d["system"], "system"),
+        "channels": _block_list(d, "channels"),
+        "initial": block_from_dict(d["initial"], "initial"),
+        "observe": _block_list(d, "observe"),
+    }
+    if "evolve" in d:
+        fields["evolve"] = block_from_dict(d["evolve"], "evolve")
+    for field in ("target", "sampler"):
+        if d.get(field) is not None:
+            fields[field] = block_from_dict(d[field], field)
+        elif field == "target":
+            fields[field] = None
+    for field in ("t_max", "dt"):
+        if field in d:
+            fields[field] = _decode(d[field], field)
+    for field in ("seeds", "legacy_rng_offset"):
+        if field in d:
+            fields[field] = d[field]
+    try:
+        return Recipe(**fields)
+    except (ValueError, TypeError) as error:
+        raise ValueError(f"recipe: {error}") from error
