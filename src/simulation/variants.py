@@ -5,12 +5,14 @@ physics and the decoherence-time logic untouched.
 """
 from __future__ import annotations
 
+import dataclasses
 import math
 
 import numpy as np
 import qutip as qt
 
-from src.physics import kondo_bath, lindblad_systems, measures, paulis
+from src.blocks import channels, initial
+from src.physics import kondo_bath, measures, paulis
 from src.simulation import simulator
 
 # Two-body Pauli correlators <sigma_a x sigma_b>, keyed by feature name.
@@ -20,18 +22,15 @@ CORR = {
 }
 
 # Step of the Ornstein-Uhlenbeck grid that modulates gamma(t).
-OU_GRID_DT = 0.01
-
-# Bohr frequencies closer than this are one frequency in the Kondo bath.
-_KONDO_TOLERANCE = 1e-9
+OU_GRID_DT = channels.OU_GRID_DT
 
 # Parity of the two-qubit Hamiltonian the code builds,
 # H = J sx1 sx2 + h (sz1 + sz2).
-PARITY = qt.tensor(qt.sigmaz(), qt.sigmaz())
+PARITY = initial.PARITY
 # Smallest norm of a projected initial state that is kept.
-MIN_SECTOR_NORM = 1e-3
+MIN_SECTOR_NORM = initial.MIN_SECTOR_NORM
 # Redraws of an initial state with a vanishing weight in the sector.
-MAX_SECTOR_DRAWS = 100
+MAX_SECTOR_DRAWS = initial.MAX_SECTOR_DRAWS
 
 
 class CorrelatorSimulator(simulator.QuTipSimulator):
@@ -93,27 +92,15 @@ class StochasticGammaSimulator(simulator.QuTipSimulator):
         self.s, self.tau = s, tau
         self.rng = np.random.default_rng(seed)
 
-    def _prepare_system(self, system, config):
-        n = int(round(config.t_max / OU_GRID_DT)) + 1
-        eta = self.rng.standard_normal(n)
-        s, tau = self.s, self.tau
-        if s is None:
-            s = float(self.rng.uniform(0.0, 0.6))
-            tau = float(self.rng.choice([0.5, 2.0]))
-        # A constant rate has no time dependence to modulate.
-        if s == 0.0 or system.gamma_const is not None:
-            return system
-        a = np.exp(-OU_GRID_DT / tau)
-        x = np.empty(n)
-        x[0] = eta[0]
-        for k in range(1, n):
-            x[k] = a * x[k - 1] + np.sqrt(1.0 - a * a) * eta[k]
-        grid = np.linspace(0.0, config.t_max, n)
-        # Mean one, so the average rate is the unmodulated one.
-        factor = np.exp(s * x - 0.5 * s * s)
-        base = system.get_gamma
-        system.get_gamma = lambda t: base(t) * float(np.interp(t, grid, factor))
-        return system
+    def _channels(self, system, config):
+        base = super()._channels(system, config)
+        # The path is drawn for every trajectory, so the stream does not
+        # depend on the configuration; a constant rate has no time
+        # dependence to modulate and keeps its channels.
+        modulated = channels.ou_modulation(
+            base, self.s, self.tau, config.t_max, self.rng)
+        return base if config.dissipator.gamma_const is not None \
+            else modulated
 
 
 class ParitySectorSimulator(simulator.QuTipSimulator):
@@ -149,19 +136,12 @@ class ParitySectorSimulator(simulator.QuTipSimulator):
         self._projector = (qt.qeye([2, 2]) + sector * PARITY) / 2
 
     def _initial_state(self, config):
-        psi = super()._initial_state(config)
-        if config.n_qubits.value != 2:
-            return psi
-        # Redraw rather than renormalise a vanishing component: amplifying
-        # a near-zero projection would make the state an artefact of the
-        # noise in the discarded sector.
-        for _ in range(MAX_SECTOR_DRAWS):
-            projected = self._projector * psi
-            if projected.norm() > MIN_SECTOR_NORM:
-                return projected.unit()
-            psi = super()._initial_state(config)
-        raise RuntimeError(
-            "could not draw a state inside the requested sector")
+        system = simulator.build_system(config)
+        if system.n_qubits != 2:
+            return super()._initial_state(config)
+        return initial.parity_sector(
+            system, self.sector, min_norm=MIN_SECTOR_NORM,
+            max_draws=MAX_SECTOR_DRAWS)
 
 
 class KondoSimulator(simulator.QuTipSimulator):
@@ -199,19 +179,12 @@ class KondoSimulator(simulator.QuTipSimulator):
             raise ValueError(
                 f"kF_d must be finite and non-negative, got {kF_d!r}.")
         kondo_bath.validate_bath_parameters(
-            rho_J, kT, 1.0, dim, tol=_KONDO_TOLERANCE)
+            rho_J, kT, 1.0, dim, tol=channels.KONDO_TOLERANCE)
         self.rho_J, self.kT, self.kF_d, self.dim = rho_J, kT, kF_d, dim
 
-    def _prepare_system(self, system, config):
-        n_qubits = 1 if isinstance(
-            system, lindblad_systems.SingleQubitSystem) else 2
-        spin_ops = kondo_bath.chain_spin_operators(n_qubits)
-        positions = [0.0, self.kF_d][:n_qubits]
-        system.L_list = kondo_bath.kondo_collapse_operators(
-            system.H, spin_ops, positions, rho_J=self.rho_J, kT=self.kT,
-            k_F=1.0, dim=self.dim, tol=_KONDO_TOLERANCE)
-        # The operators carry their rates: a unit constant rate leaves them
-        # as they are.
-        system.gamma_const = 1.0
-        system.gamma_coeffs = None
-        return system
+    def _channels(self, system, config):
+        # The sites sit at 0 and kF_d, in the unit of 1 / k_F.
+        spaced = dataclasses.replace(
+            system, positions=system.positions * self.kF_d)
+        return channels.kondo_bath(
+            spaced, self.rho_J, self.kT, 1.0, self.dim)

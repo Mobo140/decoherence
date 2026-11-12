@@ -1,8 +1,11 @@
 """Simulator variants: stochastic gamma(t), correlators, parity sectors."""
+import dataclasses
+
 import numpy as np
 import pytest
 import qutip as qt
 
+from src.blocks import channels, initial
 from src.data.scenarios import build_configs
 from src.domain import value_objects
 from src.simulation import simulator
@@ -25,29 +28,18 @@ def _two_qubit_configs():
     return g["D"] + g["E"]
 
 
-class _TimeDependentSystem:
-    """Stand-in for a Lindblad system with gamma(t) = 1."""
-
-    gamma_const = None
-
-    def get_gamma(self, t):
-        return 1.0
-
-
-class _ConstantSystem:
-    """Stand-in for a Lindblad system with a constant rate."""
-
-    gamma_const = 0.3
-
-    def get_gamma(self, t):
-        return 0.3
+def _unit_rate_config(config):
+    """The config with the time-dependent rate gamma(t) = 1."""
+    return dataclasses.replace(
+        config, dissipator=value_objects.DissipatorConfig(
+            gamma_coeffs=(1.0,)))
 
 
 def _factor_path(sim, config, n=50):
-    """gamma(t) / gamma at n points, after the hook modulated the system."""
-    system = sim._prepare_system(_TimeDependentSystem(), config)
-    return np.array([system.get_gamma(t)
-                     for t in np.linspace(0.0, config.t_max, n)])
+    """gamma(t) / gamma at n points, after the hook modulated the rate."""
+    config = _unit_rate_config(config)
+    rate = sim._channels(simulator.build_system(config), config)[0].rate
+    return np.array([rate(t) for t in np.linspace(0.0, config.t_max, n)])
 
 
 # --- stochastic gamma ------------------------------------------------------
@@ -77,16 +69,14 @@ def test_stochastic_gamma_keeps_its_mean_and_changes_the_trajectory(
                            plain.observables["coherence_l1"])
 
     # The log-normal factor exp(s x - s^2/2) applied by the hook has mean one.
-    class Unit:
-        gamma_const = None
-
-        def get_gamma(self, t):
-            return 1.0
-
     sim = StochasticGammaSimulator(0.6, 0.5, seed=3)
+    unit = _unit_rate_config(cfg)
+    system = simulator.build_system(unit)
     ts = np.linspace(0.0, cfg.t_max, 201)
-    vals = [[sim._prepare_system(Unit(), cfg).get_gamma(t) for t in ts]
-            for _ in range(100)]
+    vals = []
+    for _ in range(100):
+        rate = sim._channels(system, unit)[0].rate
+        vals.append([rate(t) for t in ts])
     assert abs(np.mean(vals) - 1.0) < 0.05
 
 
@@ -120,10 +110,10 @@ def test_stochastic_gamma_without_a_fixed_strength_draws_it_per_trajectory(
 
 
 def test_stochastic_gamma_leaves_a_constant_rate_alone(scenario_configs):
-    system = _ConstantSystem()
-    result = StochasticGammaSimulator(0.6, 0.5, seed=1)._prepare_system(
-        system, scenario_configs["A"])
-    assert result is system and result.get_gamma(1.0) == 0.3
+    config = scenario_configs["A"]
+    result = StochasticGammaSimulator(0.6, 0.5, seed=1)._channels(
+        simulator.build_system(config), config)
+    assert all(c.rate == config.dissipator.gamma_const for c in result)
 
 
 def test_stochastic_gamma_zero_strength_ignores_tau(scenario_configs):
@@ -225,24 +215,23 @@ def _kondo_config(n_qubits, **overrides):
 
 def test_kondo_simulator_replaces_the_phenomenological_jump_operators():
     config = _kondo_config(value_objects.QubitCount.TWO)
-    system = _kondo()._prepare_system(
-        simulator._two_qubit_system(config), config)
-    assert system.gamma_const == 1.0
-    assert system.gamma_coeffs is None
-    plain = simulator._two_qubit_system(config)
-    assert len(system.L_list) > 0
-    assert all(np.linalg.norm(L.full()) > 0 for L in system.L_list)
-    assert len(system.L_list) != len(plain.L_list)
+    system = simulator.build_system(config)
+    kondo = _kondo()._channels(system, config)
+    plain = simulator.build_channels(system, config)
+    assert all(c.rate == 1.0 for c in kondo)
+    assert len(kondo) > 0
+    assert all(np.linalg.norm(c.operator.full()) > 0 for c in kondo)
+    assert len(kondo) != len(plain)
 
 
 def test_kondo_simulator_single_qubit_relaxes_to_the_thermal_state():
     config = _kondo_config(value_objects.QubitCount.ONE, t_max=2000.0, dt=50.0)
     sim = _kondo(rho_J=0.3, kT=0.5)
     np.random.seed(1)
-    system = sim._prepare_system(simulator._single_qubit_system(config), config)
+    system = simulator.build_system(config)
     result = qt.mesolve(
         system.H, qt.fock_dm(2, 0), np.array([0.0, 2000.0]),
-        [np.sqrt(system.gamma_const) * L for L in system.L_list]).states[-1]
+        channels.to_mesolve(sim._channels(system, config))).states[-1]
     gibbs = (-system.H / 0.5).expm()
     assert (result - gibbs / gibbs.tr()).norm() < 1e-3
 
@@ -332,8 +321,7 @@ def test_parity_sector_redraws_a_state_with_a_vanishing_weight(
         qt.ket2dm(qt.basis([2, 2], [0, 0])),    # parity +1
     ])
     monkeypatch.setattr(
-        variants.simulator.QuTipSimulator, "_initial_state",
-        lambda self, config: next(states))
+        initial, "random_pure", lambda system, rng=None: next(states))
     prepared = ParitySectorSimulator(+1)._initial_state(
         scenario_configs["D"])
     assert prepared.norm() == pytest.approx(1.0)

@@ -1,11 +1,11 @@
 """QuTiP adapter for the domain ISimulator port.
 
-The physics itself (systems, master equation, measures) lives in
-``src.physics``. This module draws the initial state, runs a system and
-turns the resulting density matrices into a ``TrajectoryResult`` with a
-decoherence time. The time is the first crossing of a threshold by the
-chosen criterion, linearly interpolated, or the end of the window with
-``censored=True`` if it is never crossed.
+The physics lives in ``src.blocks`` (system, channels, initial state,
+evolution) and ``src.physics`` (measures). This module draws the initial
+state, runs a system and turns the resulting density matrices into a
+``TrajectoryResult`` with a decoherence time. The time is the first
+crossing of a threshold by the chosen criterion, linearly interpolated, or
+the end of the window with ``censored=True`` if it is never crossed.
 """
 from __future__ import annotations
 
@@ -16,8 +16,10 @@ import math
 import numpy as np
 import qutip as qt
 
+from src.blocks import channels, evolve, initial
+from src.blocks import system as blocks_system
 from src.domain import ports, value_objects
-from src.physics import lindblad_systems, measures, simulate_qutip
+from src.physics import measures, simulate_qutip
 
 # Below this the initial value is treated as zero and the threshold is
 # absolute instead of relative to it.
@@ -38,9 +40,7 @@ def sample_initial_state(config: value_objects.SystemConfig) -> qt.Qobj:
     Returns:
         Density matrix of a Haar-random pure state.
     """
-    return lindblad_systems.sample_random_pure_state(
-        n_qubits=config.n_qubits.value
-    )
+    return initial.random_pure(build_system(config))
 
 
 def interpolate_crossing(
@@ -271,45 +271,50 @@ def _two_qubit_t_decoh(
     return compute_t_decoh(config, times, observables)
 
 
-def _gamma_coeffs(config: value_objects.SystemConfig) -> np.ndarray | None:
-    """Returns the Bernstein coefficients of the config as an array."""
-    coeffs = config.dissipator.gamma_coeffs
-    return np.array(coeffs) if coeffs is not None else None
-
-
-def _single_qubit_system(
+def build_system(
     config: value_objects.SystemConfig,
-) -> lindblad_systems.SingleQubitSystem:
-    """Builds the single-qubit Lindblad system of a config."""
-    return lindblad_systems.SingleQubitSystem(
-        omega=config.omega,
-        gamma_const=config.dissipator.gamma_const,
-        gamma_coeffs=_gamma_coeffs(config),
-        jump_operators=[config.dissipator.operator_type.value],
-        gamma_t_max=config.t_max,
-    )
+) -> blocks_system.System:
+    """Builds the Hamiltonian block of a config.
+
+    Args:
+        config: System specification.
+
+    Returns:
+        The one- or two-qubit system.
+    """
+    if config.n_qubits == value_objects.QubitCount.ONE:
+        return blocks_system.single_qubit(config.omega)
+    return blocks_system.two_qubit(config.J, config.interaction_type.value)
 
 
-def _two_qubit_system(
-    config: value_objects.SystemConfig,
-) -> lindblad_systems.TwoQubitSystem:
-    """Builds the two-qubit Lindblad system of a config."""
-    return lindblad_systems.TwoQubitSystem(
-        J=config.J,
-        interaction_type=config.interaction_type.value,
-        gamma_const=config.dissipator.gamma_const,
-        gamma_coeffs=_gamma_coeffs(config),
-        gamma_t_max=config.t_max,
-        jump_operators=[config.dissipator.operator_type.value],
-    )
+def build_channels(
+    system: blocks_system.System, config: value_objects.SystemConfig
+) -> list[channels.Channel]:
+    """Builds the phenomenological jump channels of a config.
+
+    Args:
+        system: The system built from `config`.
+        config: System specification with the dissipator.
+
+    Returns:
+        One jump channel per qubit, with the constant rate or the Bernstein
+        rate gamma(t) of the dissipator.
+    """
+    dissipator = config.dissipator
+    op_type = dissipator.operator_type.value
+    if dissipator.gamma_const is not None:
+        return channels.jump(system, op_type, dissipator.gamma_const)
+    return channels.bernstein_profile(
+        channels.jump(system, op_type, 1.0),
+        np.array(dissipator.gamma_coeffs), config.t_max)
 
 
 class QuTipSimulator(ports.ISimulator):
     """Simulates the Lindblad master equation with QuTiP.
 
-    Subclasses can change a run through three hooks, each a no-op or the
-    published behaviour by default: ``_initial_state``, ``_prepare_system``
-    and ``_extra_observables``.
+    Subclasses can change a run through three hooks, each the published
+    behaviour by default: ``_initial_state``, ``_channels`` and
+    ``_extra_observables``. The run itself is built from ``src.blocks``.
     """
 
     def simulate(
@@ -336,18 +341,15 @@ class QuTipSimulator(ports.ISimulator):
         n_steps = int(round(config.t_max / config.dt)) + 1
         times = np.linspace(0.0, config.t_max, n_steps)
         initial_state = self._initial_state(config)
+        system = build_system(config)
+        states = evolve.master_equation(
+            system, self._channels(system, config), initial_state, times)
 
         if config.n_qubits == value_objects.QubitCount.ONE:
-            system = self._prepare_system(_single_qubit_system(config), config)
-            observables = simulate_qutip.simulate_single_qubit(
-                system, initial_state, times
-            )
+            observables = simulate_qutip.observe_single_qubit(states.rho)
             t_decoh, censored = compute_t_decoh(config, times, observables)
         else:
-            system = self._prepare_system(_two_qubit_system(config), config)
-            observables = simulate_qutip.simulate_two_qubit(
-                system, initial_state, times
-            )
+            observables = simulate_qutip.observe_two_qubit(states.rho)
             observables = self._with_extra_observables(observables)
             t_decoh, censored = _two_qubit_t_decoh(
                 config, times, system.H.full(), observables
@@ -382,13 +384,17 @@ class QuTipSimulator(ports.ISimulator):
         """
         return sample_initial_state(config)
 
-    def _prepare_system(self, system, config: value_objects.SystemConfig):
-        """Adjusts the Lindblad system before integration.
+    def _channels(
+        self,
+        system: blocks_system.System,
+        config: value_objects.SystemConfig,
+    ) -> list[channels.Channel]:
+        """Builds the dissipation channels of the run.
 
-        Override to modify it (the stochastic-rate variant does); the
-        default returns the system unchanged.
+        Override to change them (the stochastic-rate and Kondo variants do);
+        the default is the jump operators and rate of the config.
         """
-        return system
+        return build_channels(system, config)
 
     def _extra_observables(self, density_matrices) -> dict:
         """Computes additional two-qubit observables from rho(t).

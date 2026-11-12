@@ -362,8 +362,10 @@ def test_simulate_esd_criterion_changes_only_the_target():
 def test_simulate_hooks_default_to_the_published_behaviour():
     sim = QuTipSimulator()
     config = _two_qubit_config()
-    system = object()
-    assert sim._prepare_system(system, config) is system
+    system = simulator.build_system(config)
+    default = simulator.build_channels(system, config)
+    assert [c.rate for c in sim._channels(system, config)] == [
+        c.rate for c in default]
     assert sim._extra_observables([np.eye(4)]) == {}
     assert sim._initial_state(config).shape == (4, 4)
 
