@@ -33,7 +33,9 @@ function ctorBlock(fn) {
 }
 
 function ctorOutput() {
-  return ctorCatalog.evolve_output[ctorState.evolve.fn];
+  // Before the state exists (ctorSkeleton), the default evolve block applies.
+  const fn = ctorState ? ctorState.evolve.fn : "evolve.master_equation";
+  return ctorCatalog.evolve_output[fn];
 }
 
 function ctorCandidates(stage, role) {
