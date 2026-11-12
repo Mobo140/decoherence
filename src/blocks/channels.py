@@ -61,16 +61,28 @@ def _rate_at(rate: Rate, t: float) -> float:
     return rate(t) if callable(rate) else rate
 
 
-def _scaled(channels: Sequence[Channel], factor: Callable[[float], float]
-            ) -> list[Channel]:
-    """Multiplies every rate by ``factor(t)``, making it time dependent."""
+def _scaled(
+    channels: Sequence[Channel],
+    factor: Callable[[float], float],
+    modulate_constant: bool = True,
+) -> list[Channel]:
+    """Multiplies every rate by ``factor(t)``, making it time dependent.
+
+    With ``modulate_constant`` False, channels with a constant rate are
+    returned unchanged.
+    """
     # Channels that shared a rate keep sharing one function, see to_mesolve.
     scaled = {}
     for c in channels:
+        if not modulate_constant and not callable(c.rate):
+            continue
         if id(c.rate) not in scaled:
             scaled[id(c.rate)] = (
                 lambda t, base=c.rate: _rate_at(base, t) * factor(t))
-    return [Channel(c.operator, scaled[id(c.rate)]) for c in channels]
+    return [
+        Channel(c.operator, scaled[id(c.rate)]) if id(c.rate) in scaled
+        else c
+        for c in channels]
 
 
 def jump(system: System, op_type: str, gamma: float) -> list[Channel]:
@@ -136,6 +148,7 @@ def ou_modulation(
     tau: float | None,
     t_max: float,
     rng: np.random.Generator,
+    modulate_constant: bool = True,
 ) -> list[Channel]:
     """Multiplies the rates by a log-normal Ornstein-Uhlenbeck factor (R21).
 
@@ -153,6 +166,9 @@ def ou_modulation(
             with ``s``; ignored when ``s`` is zero.
         t_max: End of the time grid of the path.
         rng: Generator that drives the path.
+        modulate_constant: If False, channels with a constant rate are left
+            alone (the path is still drawn); the published runs of R21 do
+            this.
 
     Returns:
         The channels with the modulated rates; the channels themselves if
@@ -184,18 +200,25 @@ def ou_modulation(
     grid = np.linspace(0.0, t_max, n)
     # Mean one, so the average rate is the unmodulated one.
     factor = np.exp(s * x - 0.5 * s * s)
-    return _scaled(channels, lambda t: float(np.interp(t, grid, factor)))
+    return _scaled(
+        channels, lambda t: float(np.interp(t, grid, factor)),
+        modulate_constant)
 
 
 def kondo_bath(
-    system: System, rho_J: float, kT: float, k_F: float, dim: int
+    system: System,
+    rho_J: float,
+    kT: float,
+    k_F: float,
+    dim: int,
+    spacing: float = 1.0,
 ) -> list[Channel]:
     """Builds the Davies channels of a Kondo bath (R28).
 
     The rates are part of the operators (see
     `bath.kondo_collapse_operators`), so each channel has rate one.
-    The kernel depends on k_F times the distance of the sites; scale
-    ``system.positions`` to change the distance at fixed ``k_F``.
+    The kernel depends on k_F times the distance of the sites, which is
+    ``spacing`` times the distance in ``system.positions``.
 
     Args:
         system: The spins and their positions.
@@ -203,6 +226,8 @@ def kondo_bath(
         kT: Temperature in the units of the Hamiltonian, positive.
         k_F: Fermi wave number, positive.
         dim: Dimension of the electron gas, 1, 2 or 3.
+        spacing: Factor on the site positions, non-negative; 0 puts all
+            sites at one point.
 
     Returns:
         One channel per collapse operator.
@@ -210,11 +235,14 @@ def kondo_bath(
     Raises:
         ValueError: If a parameter is out of range.
     """
+    if not (math.isfinite(spacing) and spacing >= 0):
+        raise ValueError(
+            f"spacing must be finite and non-negative, got {spacing!r}.")
     bath.validate_bath_parameters(
         rho_J, kT, k_F, dim, tol=KONDO_TOLERANCE)
     operators = bath.kondo_collapse_operators(
-        system.H, system.spin_ops, system.positions, rho_J=rho_J, kT=kT,
-        k_F=k_F, dim=dim, tol=KONDO_TOLERANCE)
+        system.H, system.spin_ops, system.positions * spacing,
+        rho_J=rho_J, kT=kT, k_F=k_F, dim=dim, tol=KONDO_TOLERANCE)
     return [Channel(op, 1.0) for op in operators]
 
 

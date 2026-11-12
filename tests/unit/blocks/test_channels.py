@@ -1,15 +1,10 @@
 """blocks.channels: jump channels, rate modifiers, Kondo bath, mesolve."""
-import dataclasses
-
 import numpy as np
 import pytest
 import qutip as qt
 
-from src.blocks import channels, system
-from src.data.scenarios import build_configs
-from src.domain.value_objects import DissipatorConfig
+from src.blocks import channels, evolve, system
 from src.physics import kondo_bath, lindblad_systems, simulate_qutip
-from src.simulation import simulator, variants
 
 NAN = float("nan")
 INF = float("inf")
@@ -142,26 +137,59 @@ def test_modifiers_do_not_change_their_input():
     assert [c.rate for c in base] == [1.0, 1.0]
 
 
-def _variant_setup(s, tau, seed, config):
-    """The variant, the config with gamma(t) = 1 and its system."""
-    cfg = dataclasses.replace(
-        config, dissipator=DissipatorConfig(gamma_coeffs=(1.0,)))
-    sim = variants.StochasticGammaSimulator(s, tau, seed=seed)
-    system_ = simulator.build_system(cfg)
-    return sim, cfg, system_
+def _reference_factor(s, tau, t_max, rng):
+    """The OU factor, written out independently of the block."""
+    step = channels.OU_GRID_DT
+    n = int(round(t_max / step)) + 1
+    eta = rng.standard_normal(n)
+    a = np.exp(-step / tau)
+    x = np.empty(n)
+    x[0] = eta[0]
+    for k in range(1, n):
+        x[k] = a * x[k - 1] + np.sqrt(1.0 - a * a) * eta[k]
+    grid = np.linspace(0.0, t_max, n)
+    factor = np.exp(s * x - 0.5 * s * s)
+    return lambda t: float(np.interp(t, grid, factor))
 
 
-@pytest.mark.parametrize("s, tau", [(0.4, 1.0), (0.6, 0.5), (None, None)])
-def test_ou_modulation_with_the_same_seed_equals_the_variant(s, tau):
-    cfg = build_configs(2, 0)["B"][0]
-    sim, unit_cfg, sys_ = _variant_setup(s, tau, 8, cfg)
-    variant_rate = sim._channels(sys_, unit_cfg)[0].rate
+@pytest.mark.parametrize("s, tau", [(0.4, 1.0), (0.6, 0.5)])
+def test_ou_modulation_follows_the_documented_arithmetic(s, tau):
+    t_max = 6.0
+    expected = _reference_factor(s, tau, t_max, np.random.default_rng(8))
     base = channels.bernstein_profile(
-        channels.jump(sys_, "sigma_minus", 1.0), (1.0,), unit_cfg.t_max)
+        _unit_channels(), (1.0,), t_max)
     block_rate = channels.ou_modulation(
-        base, s, tau, unit_cfg.t_max, np.random.default_rng(8))[0].rate
-    for t in np.linspace(0.0, unit_cfg.t_max, 37):
-        assert block_rate(t) == variant_rate(t)
+        base, s, tau, t_max, np.random.default_rng(8))[0].rate
+    for t in np.linspace(0.0, t_max, 37):
+        assert block_rate(t) == 1.0 * expected(t)
+
+
+def test_ou_modulation_without_a_fixed_strength_draws_it_after_the_path():
+    rng = np.random.default_rng(8)
+    out = channels.ou_modulation(
+        channels.bernstein_profile(_unit_channels(), (1.0,), 3.0),
+        None, None, 3.0, rng)
+    ref = np.random.default_rng(8)
+    n = int(round(3.0 / channels.OU_GRID_DT)) + 1
+    ref.standard_normal(n)
+    s = float(ref.uniform(0.0, 0.6))
+    tau = float(ref.choice([0.5, 2.0]))
+    expected = _reference_factor(s, tau, 3.0, np.random.default_rng(8))
+    assert out[0].rate(1.7) == expected(1.7)
+
+
+def test_ou_modulation_can_leave_constant_rates_alone():
+    mixed = channels.jump(ONE, "sigma_z", 2.0) + channels.bernstein_profile(
+        channels.jump(ONE, "sigma_minus", 1.0), (1.0,), 3.0)
+    rng = np.random.default_rng(1)
+    out = channels.ou_modulation(
+        mixed, 0.5, 1.0, 3.0, rng, modulate_constant=False)
+    assert out[0] is mixed[0] and out[0].rate == 2.0
+    assert callable(out[1].rate)
+    n = int(round(3.0 / channels.OU_GRID_DT)) + 1
+    ref = np.random.default_rng(1)
+    ref.standard_normal(n)
+    assert rng.standard_normal() == ref.standard_normal()
 
 
 def test_ou_modulation_consumes_the_generator_in_a_fixed_order():
@@ -220,20 +248,33 @@ def test_kondo_channels_equal_the_collapse_operators(dim):
         assert channel.rate == 1.0
 
 
-def test_kondo_channels_equal_the_legacy_variant_with_scaled_positions():
-    config = build_configs(1, 0)["D"][0]
-    sim = variants.KondoSimulator(rho_J=0.1, kT=0.2, kF_d=1.7, dim=2)
-    sys_ = simulator.build_system(config)
-    from_variant = sim._channels(sys_, config)
-    legacy = lindblad_systems.TwoQubitSystem(
-        J=config.J, interaction_type=config.interaction_type.value,
-        gamma_const=0.0)
+@pytest.mark.parametrize("spacing", [0.0, 1.7])
+def test_kondo_spacing_scales_the_site_positions(spacing):
+    chans = channels.kondo_bath(
+        TWO, rho_J=0.1, kT=0.2, k_F=1.0, dim=2, spacing=spacing)
     ops = kondo_bath.kondo_collapse_operators(
-        legacy.H, kondo_bath.chain_spin_operators(2), [0.0, 1.7],
+        TWO.H, kondo_bath.chain_spin_operators(2), [0.0, spacing],
         rho_J=0.1, kT=0.2, k_F=1.0, dim=2, tol=1e-9)
-    assert len(from_variant) == len(ops)
-    for channel, op in zip(from_variant, ops):
+    assert len(chans) == len(ops)
+    for channel, op in zip(chans, ops):
         np.testing.assert_array_equal(channel.operator.full(), op.full())
+
+
+@pytest.mark.parametrize("spacing", [-1.0, NAN, INF])
+def test_kondo_invalid_spacing_raises_value_error(spacing):
+    with pytest.raises(ValueError, match="spacing must be"):
+        channels.kondo_bath(
+            TWO, rho_J=0.1, kT=0.2, k_F=1.0, dim=2, spacing=spacing)
+
+
+def test_single_qubit_kondo_bath_relaxes_to_the_thermal_state():
+    sys_ = system.single_qubit(1.0)
+    chans = channels.kondo_bath(sys_, rho_J=0.3, kT=0.5, k_F=1.0, dim=3)
+    final = evolve.master_equation(
+        sys_, chans, qt.fock_dm(2, 0), np.array([0.0, 2000.0])).rho[-1]
+    gibbs = (-sys_.H / 0.5).expm().full()
+    gibbs = gibbs / np.trace(gibbs)
+    assert np.linalg.norm(final - gibbs) < 1e-3
 
 
 # --- Positive cases: to_mesolve ---

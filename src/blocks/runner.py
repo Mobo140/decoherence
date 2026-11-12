@@ -207,6 +207,45 @@ def _execute(
     )
 
 
+def run_with_generator(
+    recipe: Recipe,
+    rng: np.random.Generator,
+    index: int = 0,
+    seed: int = 0,
+    params: dict[str, Any] | None = None,
+    cache_dir: str | Path | None = None,
+    keep_states: bool = False,
+) -> Run:
+    """Runs one trajectory of a legacy-seeds recipe with a caller's stream.
+
+    The global NumPy generator is used as it stands (the caller seeds it)
+    and ``rng`` is the generator that the random blocks share across calls.
+    This is how a simulator object that persists between trajectories, such
+    as the one of the published R21 runs, is reproduced.
+
+    Args:
+        recipe: A recipe with ``seeds="legacy"``.
+        rng: The shared generator of the random blocks; it advances.
+        index: Position of the trajectory, part of the cache key.
+        seed: Seed identity recorded in the cache key.
+        params: Values of the recipe's `Param` placeholders.
+        cache_dir: Directory of the states cache, or None.
+        keep_states: Keep the states in the result.
+
+    Returns:
+        The run.
+
+    Raises:
+        ValueError: If the recipe does not use legacy seeds, or as `run`.
+    """
+    if recipe.seeds != "legacy":
+        raise ValueError("run_with_generator needs a legacy-seeds recipe.")
+    streams = {"channels": rng, "initial": None, "observe": rng}
+    return _execute(
+        recipe, index, params or {}, seed, streams,
+        None if cache_dir is None else Path(cache_dir), keep_states)
+
+
 def run(
     recipe: Recipe,
     n_trajectories: int,
