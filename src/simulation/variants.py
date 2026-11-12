@@ -11,15 +11,12 @@ import math
 import numpy as np
 import qutip as qt
 
-from src.blocks import channels, initial
-from src.physics import kondo_bath, measures, paulis
+from src.blocks import channels, initial, observe
+from src.physics import kondo_bath
 from src.simulation import simulator
 
 # Two-body Pauli correlators <sigma_a x sigma_b>, keyed by feature name.
-CORR = {
-    f"corr_{a}{b}": np.kron(paulis.PAULI[a], paulis.PAULI[b])
-    for a in "xyz" for b in "xyz"
-}
+CORR = observe.CORR
 
 # Step of the Ornstein-Uhlenbeck grid that modulates gamma(t).
 OU_GRID_DT = channels.OU_GRID_DT
@@ -36,23 +33,16 @@ MAX_SECTOR_DRAWS = initial.MAX_SECTOR_DRAWS
 class CorrelatorSimulator(simulator.QuTipSimulator):
     """Also records <sigma_a x sigma_b> for all a, b (R23)."""
 
-    def _extra_observables(self, density_matrices) -> dict:
-        rhos = np.asarray(density_matrices)
-        return {
-            name: np.real(np.einsum("tij,ji->t", rhos, op))
-            for name, op in CORR.items()
-        }
+    def _extra_observables(self, states):
+        return [observe.correlators(states)]
 
 
 class EntanglementSimulator(CorrelatorSimulator):
     """Also records the Wootters concurrence next to the correlators (R24)."""
 
-    def _extra_observables(self, density_matrices) -> dict:
-        out = super()._extra_observables(density_matrices)
-        out["concurrence"] = np.array(
-            [measures.concurrence(r) for r in density_matrices]
-        )
-        return out
+    def _extra_observables(self, states):
+        return super()._extra_observables(states) + [
+            observe.concurrence(states)]
 
 
 class StochasticGammaSimulator(simulator.QuTipSimulator):

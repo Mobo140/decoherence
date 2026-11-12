@@ -106,54 +106,6 @@ def trajectories(
     return result
 
 
-def observe_single_qubit(
-    density_matrices: list[np.ndarray],
-    observables: list[str] | None = None,
-) -> dict:
-    """Evaluates the single-qubit observables along density matrices.
-
-    Args:
-        density_matrices: Density matrix at each time point.
-        observables: Names of the Pauli expectations to record; defaults to
-            ['sigma_x', 'sigma_y', 'sigma_z'].
-
-    Returns:
-        As `trajectories`.
-
-    Raises:
-        ValueError: As `trajectories`.
-    """
-    if observables is None:
-        observables = list(_SINGLE_QUBIT_OBSERVABLES)
-    return trajectories(
-        density_matrices, observables,
-        state_observables.compute_observables_single_qubit)
-
-
-def observe_two_qubit(
-    density_matrices: list[np.ndarray],
-    observables: list[str] | None = None,
-) -> dict:
-    """Evaluates the two-qubit observables along density matrices.
-
-    Args:
-        density_matrices: Density matrix at each time point.
-        observables: Names of the Pauli expectations to record; defaults to
-            sigma_{x,y,z}1 and sigma_{x,y,z}2.
-
-    Returns:
-        As `trajectories`.
-
-    Raises:
-        ValueError: As `trajectories`.
-    """
-    if observables is None:
-        observables = list(_TWO_QUBIT_OBSERVABLES)
-    return trajectories(
-        density_matrices, observables,
-        state_observables.compute_observables_two_qubit)
-
-
 def _simulate(
     system: _System,
     initial_state: qt.Qobj,

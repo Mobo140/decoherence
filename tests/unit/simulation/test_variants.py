@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 import qutip as qt
 
-from src.blocks import channels, initial
+from src.blocks import channels, evolve, initial, observe
 from src.data.scenarios import build_configs
 from src.domain import value_objects
 from src.simulation import simulator
@@ -152,11 +152,20 @@ def test_correlator_table_has_the_nine_two_body_products():
     assert all(op.shape == (4, 4) for op in CORR.values())
 
 
+def _states(*rhos):
+    return evolve.States(np.arange(len(rhos), dtype=float), list(rhos))
+
+
+def _extra(sim, *rhos):
+    """The series of the hook's observations by name."""
+    return observe.combine(*sim._extra_observables(_states(*rhos))).series
+
+
 def test_correlator_extra_observables_of_known_states():
     up_down = qt.ket2dm(qt.basis([2, 2], [0, 1])).full()
     bell = qt.ket2dm(
         (qt.basis([2, 2], [0, 0]) + qt.basis([2, 2], [1, 1])).unit()).full()
-    extra = CorrelatorSimulator()._extra_observables([up_down, bell])
+    extra = _extra(CorrelatorSimulator(), up_down, bell)
     assert extra["corr_zz"] == pytest.approx([-1.0, 1.0])
     assert extra["corr_xx"] == pytest.approx([0.0, 1.0])
     assert extra["corr_yy"] == pytest.approx([0.0, -1.0])
@@ -167,7 +176,7 @@ def test_entanglement_simulator_adds_the_concurrence_to_the_correlators():
     bell = qt.ket2dm(
         (qt.basis([2, 2], [0, 0]) + qt.basis([2, 2], [1, 1])).unit()).full()
     product = qt.ket2dm(qt.basis([2, 2], [0, 0])).full()
-    extra = EntanglementSimulator()._extra_observables([bell, product])
+    extra = _extra(EntanglementSimulator(), bell, product)
     assert set(extra) == set(CORR) | {"concurrence"}
     assert extra["concurrence"] == pytest.approx([1.0, 0.0], abs=1e-9)
 
@@ -343,7 +352,7 @@ def test_correlators_on_a_one_qubit_system_add_no_observables(
 
 def test_correlator_extra_observables_of_one_qubit_states_raise():
     with pytest.raises(ValueError):
-        CorrelatorSimulator()._extra_observables([np.eye(2) / 2])
+        CorrelatorSimulator()._extra_observables(_states(np.eye(2) / 2))
 
 
 def test_kondo_simulator_invalid_parameters_raise_value_error():

@@ -11,21 +11,19 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-import math
-
 import numpy as np
 import qutip as qt
 
-from src.blocks import channels, evolve, initial
+from src.blocks import channels, evolve, initial, observe, target
 from src.blocks import system as blocks_system
+# The crossing helpers moved to blocks.target; they stay importable here.
+from src.blocks.target import (  # noqa: F401
+    first_crossing,
+    interpolate_crossing,
+    relative_level,
+    sudden_death_time,
+)
 from src.domain import ports, value_objects
-from src.physics import measures, simulate_qutip
-
-# Below this the initial value is treated as zero and the threshold is
-# absolute instead of relative to it.
-_MIN_INITIAL_VALUE = 1e-10
-# Regularises the interpolation when two neighbouring values coincide.
-_INTERPOLATION_EPS = 1e-12
 
 
 def sample_initial_state(config: value_objects.SystemConfig) -> qt.Qobj:
@@ -41,112 +39,6 @@ def sample_initial_state(config: value_objects.SystemConfig) -> qt.Qobj:
         Density matrix of a Haar-random pure state.
     """
     return initial.random_pure(build_system(config))
-
-
-def interpolate_crossing(
-    times: np.ndarray,
-    values: Sequence[float],
-    index: int,
-    level: float,
-) -> float:
-    """Interpolates linearly where a curve crosses a level.
-
-    Args:
-        times: Time points.
-        values: Curve values at ``times``.
-        index: Index of the first value that is past the level.
-        level: The level that is crossed between ``index - 1`` and ``index``.
-
-    Returns:
-        The crossing time; ``times[0]`` if the curve starts past the level.
-
-    Raises:
-        ValueError: If `index` is not a position in both `times` and
-            `values`.
-    """
-    if not 0 <= index < min(len(times), len(values)):
-        raise ValueError(
-            f"index {index} is outside the {len(times)} times and "
-            f"{len(values)} values.")
-    if index == 0:
-        return float(times[0])
-    prev_val = float(values[index - 1])
-    val = float(values[index])
-    frac = (prev_val - level) / (prev_val - val + _INTERPOLATION_EPS)
-    frac = float(np.clip(frac, 0.0, 1.0))
-    return float(times[index - 1] + frac * (times[index] - times[index - 1]))
-
-
-def first_crossing(
-    times: np.ndarray,
-    values: Sequence[float],
-    level: float,
-    inclusive: bool = False,
-) -> tuple[float, bool]:
-    """Finds the first time a decaying curve falls below a level.
-
-    Every decoherence criterion reduces to this function.
-
-    Args:
-        times: Time points.
-        values: Curve values at ``times``.
-        level: The level to fall below.
-        inclusive: If True, a value equal to ``level`` already counts.
-
-    Returns:
-        ``(time, censored)``. ``time`` is the interpolated crossing time.
-        If the level is never reached, ``time`` is ``times[-1]``, a lower
-        bound, and ``censored`` is True.
-
-    Raises:
-        ValueError: If `times` or `values` is empty, they differ in
-            length, or `level` or a value is NaN.
-    """
-    if len(times) == 0 or len(values) == 0:
-        raise ValueError("times and values must not be empty.")
-    if len(times) != len(values):
-        raise ValueError(
-            f"times has {len(times)} points but values has {len(values)}.")
-    if math.isnan(level) or np.isnan(np.asarray(values, dtype=float)).any():
-        raise ValueError("level and values must not contain NaN.")
-    for i, value in enumerate(values):
-        crossed = value <= level if inclusive else value < level
-        if crossed:
-            return interpolate_crossing(times, values, i, level), False
-    return float(times[-1]), True
-
-
-def relative_level(values: Sequence[float], threshold: float) -> float:
-    """Returns ``threshold`` times the initial value of a curve.
-
-    Args:
-        values: Curve values; the first one is the initial value.
-        threshold: Fraction of the initial value, e.g. 1/e.
-
-    Returns:
-        The level, or ``threshold`` itself if the curve starts at zero.
-    """
-    initial = float(values[0]) if len(values) > 0 else 1.0
-    return threshold * initial if initial > _MIN_INITIAL_VALUE else threshold
-
-
-def sudden_death_time(
-    times: np.ndarray, lam: Sequence[float]
-) -> tuple[float, bool]:
-    """Finds the time of entanglement sudden death.
-
-    The first zero of the concurrence, interpolated on the unclipped
-    Wootters lambda. A state that starts separable gives 0 (no usable
-    windows); one that is still entangled at the end is censored.
-
-    Args:
-        times: Time points.
-        lam: Unclipped Wootters lambda at ``times``.
-
-    Returns:
-        ``(time, censored)`` as in ``first_crossing``.
-    """
-    return first_crossing(times, lam, 0.0, inclusive=True)
 
 
 def compute_t_decoh(
@@ -232,43 +124,39 @@ def energy_basis_t_decoh(
         ValueError: If `hamiltonian` is not a Hermitian square matrix, or
             as `first_crossing`.
     """
-    hamiltonian = np.asarray(hamiltonian)
-    if (hamiltonian.ndim != 2 or hamiltonian.shape[0] != hamiltonian.shape[1]
-            or not np.allclose(hamiltonian, hamiltonian.conj().T)):
-        raise ValueError("hamiltonian must be a Hermitian square matrix.")
-    eigenvectors = np.linalg.eigh(hamiltonian)[1]
-    values = [
-        measures.energy_basis_coherence_l1(
-            r.full() if hasattr(r, "full") else np.asarray(r), eigenvectors
-        )
-        for r in density_matrices
-    ]
+    values = target.energy_basis_coherence(hamiltonian, density_matrices)
     return first_crossing(
         times, values, relative_level(values, config.decoherence_threshold)
     )
 
 
-def _two_qubit_t_decoh(
+def compute_target(
     config: value_objects.SystemConfig,
-    times: np.ndarray,
-    hamiltonian: np.ndarray,
-    observables: dict,
-) -> tuple[float, bool]:
-    """Dispatches the decoherence criterion of a two-qubit trajectory."""
+    states: evolve.States,
+    system: blocks_system.System,
+) -> target.Target:
+    """Computes the decoherence time of a config from the states.
+
+    Args:
+        config: System specification with criterion and threshold.
+        states: The states of the trajectory.
+        system: The system the states live on.
+
+    Returns:
+        The target block that the criterion of the config selects.
+
+    Raises:
+        ValueError: As the target blocks.
+    """
     criterion = config.decoherence_criterion
-    rhos = observables["density_matrices"]
-    if criterion == value_objects.DecoherenceCriterion.COHERENCE_ENERGY:
-        return energy_basis_t_decoh(config, times, hamiltonian, rhos)
-    if criterion == value_objects.DecoherenceCriterion.CONCURRENCE:
-        values = [measures.concurrence(r) for r in rhos]
-        return first_crossing(
-            times, values, relative_level(values, config.decoherence_threshold)
-        )
-    if criterion == value_objects.DecoherenceCriterion.ENTANGLEMENT_DEATH:
-        return sudden_death_time(
-            times, [measures.wootters_lambda(r) for r in rhos]
-        )
-    return compute_t_decoh(config, times, observables)
+    threshold = config.decoherence_threshold
+    kinds = value_objects.DecoherenceCriterion
+    if criterion == kinds.COHERENCE_ENERGY:
+        return target.energy_basis_crossing(states, system, threshold)
+    if criterion == kinds.ENTANGLEMENT_DEATH:
+        return target.sudden_death(states, system)
+    return target.coherence_crossing(
+        states, system, threshold, criterion.value)
 
 
 def build_system(
@@ -345,18 +233,14 @@ class QuTipSimulator(ports.ISimulator):
         states = evolve.master_equation(
             system, self._channels(system, config), initial_state, times)
 
-        if config.n_qubits == value_objects.QubitCount.ONE:
-            observables = simulate_qutip.observe_single_qubit(states.rho)
-            t_decoh, censored = compute_t_decoh(config, times, observables)
-        else:
-            observables = simulate_qutip.observe_two_qubit(states.rho)
-            observables = self._with_extra_observables(observables)
-            t_decoh, censored = _two_qubit_t_decoh(
-                config, times, system.H.full(), observables
-            )
+        parts = [observe.pauli_means(states)]
+        if config.n_qubits == value_objects.QubitCount.TWO:
+            parts += self._extra_observables(states)
+        parts += [observe.purity(states), observe.coherence_l1(states)]
+        observables = observe.combine(*parts).series
+        result_target = compute_target(config, states, system)
+        t_decoh, censored = result_target.time, result_target.censored
 
-        # The raw density matrices are large and are not model features.
-        observables.pop("density_matrices", None)
         return value_objects.TrajectoryResult(
             times=times,
             observables=observables,
@@ -364,17 +248,6 @@ class QuTipSimulator(ports.ISimulator):
             system_config=config,
             censored=censored,
         )
-
-    def _with_extra_observables(self, observables: dict) -> dict:
-        """Inserts the hook's observables before purity and coherence_l1."""
-        extra = self._extra_observables(observables["density_matrices"])
-        if not extra:
-            return observables
-        tail = {
-            key: observables.pop(key)
-            for key in ("purity", "coherence_l1", "density_matrices")
-        }
-        return {**observables, **extra, **tail}
 
     def _initial_state(self, config: value_objects.SystemConfig) -> qt.Qobj:
         """Draws the initial pure state.
@@ -396,10 +269,12 @@ class QuTipSimulator(ports.ISimulator):
         """
         return build_channels(system, config)
 
-    def _extra_observables(self, density_matrices) -> dict:
-        """Computes additional two-qubit observables from rho(t).
+    def _extra_observables(
+        self, states: evolve.States
+    ) -> list[observe.Observations]:
+        """Computes additional two-qubit observations from rho(t).
 
-        They are inserted before purity and coherence_l1, which must stay
-        the last two feature columns. By default nothing is added.
+        They are inserted before purity and coherence_l1. By default
+        nothing is added.
         """
-        return {}
+        return []
