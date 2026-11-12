@@ -425,3 +425,23 @@ for observation in (exact, shots):
 A new dissipation term is a function `(System, ...) -> list[Channel]` in
 `channels.py`, a test, and a paragraph above; a new observation is a
 function `(States, ...) -> Observations` in `observe.py`.
+
+## Catalog, JSON and the workbench
+
+`catalog.catalog()` lists every block with its stage, role, docstring line
+and parameters (kind, default, `choices` from `typing.Literal`); the
+workbench screen «Конструктор» is built from it. `recipe.recipe_to_dict` and
+`recipe.recipe_from_dict` turn a recipe into JSON-safe data and back (a
+`Param` is `{"param": "J"}`, tuples are lists). The screen is at
+`http://localhost:7860/#constructor` after `python app.py`; saved recipes
+are in `data/recipes/`, examples in `static/recipes/`.
+
+A recipe file makes a dataset from the command line (progress as `i/N`):
+
+```bash
+python -m src.blocks.cli generate data/recipes/NAME.json --n 100 --seed 0 \
+    --out data/datasets/NAME.npz --window-length 20
+```
+
+The `.npz` holds the arrays of `Dataset` by name, `feature_names`,
+`metadata` (JSON, with the recipe) and `context__<name>` arrays.

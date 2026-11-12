@@ -23,6 +23,7 @@
       <button class="nav-item" data-screen="train"><span class="num">5</span>Обучение</button>
       <button class="nav-item" data-screen="predict"><span class="num">6</span>Прогноз</button>
       <button class="nav-item" data-screen="backtest"><span class="num">7</span>Бэктест</button>
+      <button class="nav-item" data-screen="constructor"><span class="num">8</span>Конструктор</button>
       <div class="sidebar-foot" id="side-foot">
         <p>csv · —</p>
         <p>кэш · —</p>
@@ -216,8 +217,70 @@
           </div>
         </div>
       </section>
+
+      <section class="screen" id="screen-constructor">
+        <h1>Конструктор</h1>
+        <p class="lede">Рецепт симуляции из блоков: слева конвейер, справа предпросмотр. Параметр с «варьировать» берётся из равномерного сэмплера на каждую траекторию.</p>
+        <div class="error-box hidden" id="ctor-error" role="alert"></div>
+        <div class="grid-ctor">
+          <div id="ctor-pipeline"></div>
+          <div class="ctor-side">
+            <div class="card">
+              <p class="card-kicker">Предпросмотр</p>
+              <div class="row">
+                <div class="field"><label>n (1–5)</label><input class="input" id="ctor-n" type="number" min="1" max="5" value="3" style="width:72px"></div>
+                <div class="field"><label>seed</label><input class="input" id="ctor-seed" type="number" min="0" value="0" style="width:88px"></div>
+                <button class="btn btn-secondary" id="btn-ctor-validate">Проверить</button>
+                <button class="btn btn-primary" id="btn-ctor-preview">Предпросмотр</button>
+              </div>
+              <p class="muted mono" id="ctor-status"></p>
+              <div class="field"><label>Ряд</label><select class="input" id="ctor-series"></select></div>
+              <svg class="plot" id="ctor-svg" viewBox="0 0 640 260"></svg>
+              <div class="table-wrap">
+                <table class="table" id="ctor-table">
+                  <thead><tr><th>траектория</th><th>параметры</th><th>время цели</th><th>цензурирована</th></tr></thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+              <p class="foot" id="ctor-elapsed">Предпросмотр ещё не запускали.</p>
+            </div>
+          </div>
+        </div>
+        <div class="grid-eq" style="margin-top:var(--space-4)">
+          <div class="card">
+            <p class="card-kicker">Рецепт (JSON)</p>
+            <pre class="log mono" id="ctor-json"></pre>
+            <div class="btn-row"><button class="btn btn-secondary" id="btn-ctor-copy">Скопировать</button></div>
+          </div>
+          <div class="card">
+            <p class="card-kicker">Сохранение</p>
+            <div class="row">
+              <div class="field"><label>имя (A–Z, a–z, 0–9, _ -)</label><input class="input" id="ctor-name" type="text" maxlength="64" placeholder="my_recipe"></div>
+              <button class="btn btn-primary" id="btn-ctor-save">Сохранить</button>
+            </div>
+            <div class="row" style="margin-top:var(--space-4)">
+              <div class="field"><label>Загрузить</label><select class="input" id="ctor-load-name"></select></div>
+              <button class="btn btn-secondary" id="btn-ctor-load">Загрузить</button>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:var(--space-4)">
+          <p class="card-kicker">Датасет (фоновая задача, под именем рецепта)</p>
+          <div class="row">
+            <div class="field"><label>n траекторий</label><input class="input" id="ctor-ds-n" type="number" min="1" value="100" style="width:100px"></div>
+            <div class="field"><label>seed</label><input class="input" id="ctor-ds-seed" type="number" min="0" value="0" style="width:88px"></div>
+            <div class="field"><label>window_length</label><input class="input" id="ctor-ds-window" type="number" min="1" value="20" style="width:100px"></div>
+            <div class="field"><label>samples_per_trajectory</label><input class="input" id="ctor-ds-samples" type="number" min="1" value="5" style="width:100px"></div>
+            <div class="field"><label>horizon</label><input class="input" id="ctor-ds-horizon" type="number" step="any" min="0" value="1" style="width:88px"></div>
+            <button class="btn btn-primary" id="btn-ctor-gen">Сгенерировать датасет</button>
+            <button class="btn btn-ghost" id="btn-ctor-job">Обновить лог</button>
+          </div>
+          <pre class="log" id="ctor-job-log">(нет задач)</pre>
+        </div>
+      </section>
     </main>
   </div>
   <script src="/static/workbench.js"></script>
+  <script src="/static/constructor.js"></script>
 </body>
 </html>

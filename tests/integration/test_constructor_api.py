@@ -299,3 +299,12 @@ def test_the_environment_variable_sets_the_recipes_dir(
         "name": "e", "recipe": copy.deepcopy(_example("kondo_xxz"))})
     assert (tmp_path / "env" / "e.json").is_file()
 
+
+
+def test_index_has_the_constructor_screen_and_script(client):
+    html = client.get("/").text
+    assert 'data-screen="constructor"' in html
+    assert 'id="screen-constructor"' in html
+    assert "Конструктор" in html
+    assert "/static/constructor.js" in html
+    assert client.get("/static/constructor.js").status_code == 200
