@@ -20,6 +20,7 @@ from collections.abc import Callable, Mapping
 
 import numpy as np
 
+from src.blocks.observe import ar1_filter
 from src.data import dataset as dataset_lib
 
 # Per-window arrays that noise_augmented repeats for every noisy copy.
@@ -44,51 +45,6 @@ def _check_rng(rng: object) -> None:
     if not isinstance(rng, np.random.Generator):
         raise TypeError(
             f"rng must be a numpy.random.Generator, got {rng!r}.")
-
-
-def ar1_filter(eta: np.ndarray, phi: float | np.ndarray) -> np.ndarray:
-    """Turns white noise into stationary unit-variance AR(1) noise.
-
-    The filter runs along axis 1:
-
-        e_0 = eta_0,   e_t = phi e_{t-1} + sqrt(1 - phi^2) eta_t
-
-    Args:
-        eta: Unit-variance white noise, shape (n_windows, n_steps, ...).
-        phi: Lag-one correlation, a scalar or one value per window. With
-            phi = 0 `eta` is returned unchanged, so white and correlated
-            noise can share one realisation of `eta`.
-
-    Returns:
-        Noise of the same shape and dtype as `eta`.
-
-    Raises:
-        ValueError: If `eta` is not at least 2-D with one step or more,
-            `phi` is neither a scalar nor a 1-D array with one value per
-            window, or `phi` has an absolute value of 1 or more (or is
-            NaN), for which the noise is not stationary.
-    """
-    phi = np.asarray(phi, dtype=np.float64)
-    if eta.ndim < 2 or eta.shape[1] == 0:
-        raise ValueError(
-            "eta must have shape (n_windows, n_steps, ...) with at least "
-            f"one step, got {eta.shape}.")
-    if phi.ndim > 1 or (phi.ndim == 1 and phi.shape[0] != eta.shape[0]):
-        raise ValueError(
-            f"phi must be a scalar or have one value per window "
-            f"({eta.shape[0]}), got shape {phi.shape}.")
-    if not np.all(np.abs(phi) < 1.0):
-        raise ValueError("phi must satisfy |phi| < 1.")
-    if not phi.any():
-        return eta
-    if phi.ndim == 1:
-        phi = phi.reshape((-1,) + (1,) * (eta.ndim - 2))
-    c = np.sqrt(1.0 - phi * phi)
-    e = np.empty(eta.shape, dtype=np.float64)
-    e[:, 0] = eta[:, 0]
-    for t in range(1, eta.shape[1]):
-        e[:, t] = phi * e[:, t - 1] + c * eta[:, t]
-    return e.astype(eta.dtype)
 
 
 def exact(

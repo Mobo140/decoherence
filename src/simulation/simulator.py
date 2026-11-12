@@ -237,7 +237,7 @@ class QuTipSimulator(ports.ISimulator):
         if config.n_qubits == value_objects.QubitCount.TWO:
             parts += self._extra_observables(states)
         parts += [observe.purity(states), observe.coherence_l1(states)]
-        observables = observe.combine(*parts).series
+        observables = observe.model_layout(observe.combine(*parts)).series
         result_target = compute_target(config, states, system)
         t_decoh, censored = result_target.time, result_target.censored
 

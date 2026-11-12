@@ -11,12 +11,14 @@ from collections.abc import Sequence
 
 import numpy as np
 
+from src.blocks import observe
 from src.data import dataset as dataset_lib
 from src.domain import value_objects
 
-# Windows are padded with zeros before the last PHYSICS_COLUMNS columns
-# (coherence_l1 and purity) so that those stay at a fixed position.
-PHYSICS_COLUMNS = 2
+# Windows are padded with zeros before the last PHYSICS_COLUMNS columns,
+# the model tail (purity, coherence_l1), so that those stay at a fixed
+# position. The layout is defined once, in `observe.MODEL_TAIL`.
+PHYSICS_COLUMNS = len(observe.MODEL_TAIL)
 
 # Slack for ratios such as 0.9 + 0.1 whose float sum is not exactly 1.
 _RATIO_TOLERANCE = 1e-9

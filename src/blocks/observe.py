@@ -6,7 +6,8 @@ the noise functions act on a trajectory's series, so a model sees what a
 measurement of that one trajectory would give. ``combine`` and ``select``
 assemble the series a model receives, addressed by name, never by column
 position. The formulas live in ``src.physics``; this module only collects
-them into series.
+them into series. ``MODEL_TAIL`` and ``model_layout`` fix the one column
+order the models still rely on.
 """
 from __future__ import annotations
 
@@ -17,7 +18,6 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from src.blocks.evolve import States
-from src.data.observation import ar1_filter
 from src.physics import measures, observables, paulis
 
 # Two-body Pauli correlators <sigma_a x sigma_b>, keyed by series name.
@@ -25,6 +25,11 @@ CORR = {
     f"corr_{a}{b}": np.kron(paulis.PAULI[a], paulis.PAULI[b])
     for a in "xyz" for b in "xyz"
 }
+
+
+# The series every model expects as its last two input columns, in this
+# order: the models read them by position.
+MODEL_TAIL = ("purity", "coherence_l1")
 
 
 @dataclass(frozen=True, eq=False)
@@ -229,6 +234,75 @@ def select(obs: Observations, names: Iterable[str]) -> Observations:
     if not names:
         raise ValueError("select needs at least one name.")
     return Observations(obs.times, {n: obs.series[n] for n in names})
+
+
+def ar1_filter(eta: np.ndarray, phi: float | np.ndarray) -> np.ndarray:
+    """Turns white noise into stationary unit-variance AR(1) noise.
+
+    The filter runs along axis 1:
+
+        e_0 = eta_0,   e_t = phi e_{t-1} + sqrt(1 - phi^2) eta_t
+
+    Args:
+        eta: Unit-variance white noise, shape (n_windows, n_steps, ...).
+        phi: Lag-one correlation, a scalar or one value per window. With
+            phi = 0 `eta` is returned unchanged, so white and correlated
+            noise can share one realisation of `eta`.
+
+    Returns:
+        Noise of the same shape and dtype as `eta`.
+
+    Raises:
+        ValueError: If `eta` is not at least 2-D with one step or more,
+            `phi` is neither a scalar nor a 1-D array with one value per
+            window, or `phi` has an absolute value of 1 or more (or is
+            NaN), for which the noise is not stationary.
+    """
+    phi = np.asarray(phi, dtype=np.float64)
+    if eta.ndim < 2 or eta.shape[1] == 0:
+        raise ValueError(
+            "eta must have shape (n_windows, n_steps, ...) with at least "
+            f"one step, got {eta.shape}.")
+    if phi.ndim > 1 or (phi.ndim == 1 and phi.shape[0] != eta.shape[0]):
+        raise ValueError(
+            f"phi must be a scalar or have one value per window "
+            f"({eta.shape[0]}), got shape {phi.shape}.")
+    if not np.all(np.abs(phi) < 1.0):
+        raise ValueError("phi must satisfy |phi| < 1.")
+    if not phi.any():
+        return eta
+    if phi.ndim == 1:
+        phi = phi.reshape((-1,) + (1,) * (eta.ndim - 2))
+    c = np.sqrt(1.0 - phi * phi)
+    e = np.empty(eta.shape, dtype=np.float64)
+    e[:, 0] = eta[:, 0]
+    for t in range(1, eta.shape[1]):
+        e[:, t] = phi * e[:, t - 1] + c * eta[:, t]
+    return e.astype(eta.dtype)
+
+
+def model_layout(obs: Observations) -> Observations:
+    """Orders the series as the models read them.
+
+    The series of ``MODEL_TAIL`` move to the end, in that order; the others
+    keep their order.
+
+    Args:
+        obs: The observations.
+
+    Returns:
+        The reordered observations.
+
+    Raises:
+        ValueError: If a series of `MODEL_TAIL` is missing.
+    """
+    missing = [n for n in MODEL_TAIL if n not in obs.series]
+    if missing:
+        raise ValueError(
+            f"model_layout needs the series {missing}; "
+            f"available: {list(obs.series)}.")
+    head = [n for n in obs.series if n not in MODEL_TAIL]
+    return select(obs, head + list(MODEL_TAIL))
 
 
 def _noisy_names(

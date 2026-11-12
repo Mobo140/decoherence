@@ -5,7 +5,7 @@ import qutip as qt
 
 from src.blocks import channels, evolve, observe, system
 from src.data import dataset as dataset_lib
-from src.data import observation
+from src.data import observation, windows
 from src.physics import measures, simulate_qutip
 from src.physics import observables as state_observables
 from src.simulation import variants
@@ -117,6 +117,13 @@ def test_select_nothing_raises():
         observe.select(_obs(), [])
 
 
+@pytest.mark.parametrize("missing", observe.MODEL_TAIL)
+def test_model_layout_without_a_tail_series_raises(missing):
+    names = [n for n in ("a", *observe.MODEL_TAIL) if n != missing]
+    with pytest.raises(ValueError, match=f"needs the series.*{missing}"):
+        observe.model_layout(_obs(names))
+
+
 @pytest.mark.parametrize("sigma", [-0.1, NAN, INF])
 def test_noise_with_invalid_sigma_raises(sigma):
     rng = np.random.default_rng(0)
@@ -209,6 +216,29 @@ def test_select_keeps_the_order_of_the_names():
     obs = observe.select(_obs(), ["c", "a"])
     assert list(obs.series) == ["c", "a"]
     np.testing.assert_array_equal(obs.series["a"], _obs().series["a"])
+
+
+def test_model_layout_moves_the_tail_to_the_end_keeping_the_rest():
+    obs = _obs(["coherence_l1", "a", "purity", "b"])
+    out = observe.model_layout(obs)
+    assert list(out.series) == ["a", "b", "purity", "coherence_l1"]
+    np.testing.assert_array_equal(
+        out.series["a"], obs.series["a"])
+
+
+def test_model_layout_of_only_the_tail_orders_it():
+    out = observe.model_layout(_obs(["coherence_l1", "purity"]))
+    assert list(out.series) == list(observe.MODEL_TAIL)
+
+
+def test_model_tail_is_the_layout_of_the_padding():
+
+    assert windows.PHYSICS_COLUMNS == len(observe.MODEL_TAIL)
+    assert observe.MODEL_TAIL == ("purity", "coherence_l1")
+
+
+def test_the_ar1_filter_of_the_data_package_is_the_block_function():
+    assert observation.ar1_filter is observe.ar1_filter
 
 
 # --- Positive cases: noise ---
