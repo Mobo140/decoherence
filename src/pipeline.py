@@ -16,6 +16,7 @@ so a script that declares its arms gets the numbers it got before.
 from __future__ import annotations
 
 import dataclasses
+import pathlib
 from collections.abc import Callable, Hashable, Iterable, Iterator, Sequence
 
 import numpy as np
@@ -32,7 +33,7 @@ from src.evaluation import metrics
 from src.evaluation import stats
 from src.models import registry as model_registry
 from src.persistence import stores
-from src.simulation import registry as simulator_registry
+from src.simulation import simulator as simulator_lib
 from src.training import trainer
 
 # Constructor arguments or extra columns as (name, value) pairs; a tuple of
@@ -40,6 +41,8 @@ from src.training import trainer
 Params = tuple[tuple[str, object], ...]
 
 CACHES = ("none", "disk", "memory")
+# Directory of the content-addressed states cache of `cache="disk"`.
+STATES_CACHE = pathlib.Path("data") / "states"
 _MEMORY_STORE = "memory trajectory store"
 
 
@@ -48,7 +51,7 @@ class SimulatorSpec:
     """Which simulator produces the trajectories.
 
     Attributes:
-        alias: Key of `simulator_registry.SIMULATORS`.
+        alias: Key of `legacy.ALIAS_PARAMS`.
         params: Constructor arguments of the simulator.
         seed_offset: If not None, the simulator is also given
             `seed=run seed + seed_offset` (the stochastic-gamma simulator
@@ -90,8 +93,9 @@ class DataSpec:
             scenario's default, or None to keep it.
         simulator: The simulator.
         cache: Where trajectories are kept between datasets: "none",
-            "disk" (the shared content-addressed cache, plain simulator
-            only) or "memory" (for the seed's run only).
+            "disk" (the states cache under `STATES_CACHE`, keyed by the
+            whole physics, so every simulator may use it) or "memory"
+            (trajectories, for the seed's run only).
         window_length: Time steps per window.
         horizon: Risk horizon, also the horizon of the backtest.
         samples_per_trajectory: Windows drawn per trajectory.
@@ -142,10 +146,6 @@ class DataSpec:
             value_objects.InteractionType(self.interaction)
         if self.cache not in CACHES:
             raise ValueError(f"cache must be one of {CACHES}")
-        if self.cache == "disk" and self.simulator.alias != "plain":
-            raise ValueError(
-                "The disk cache key does not name the simulator variant, "
-                "so only the plain simulator may use it")
         if self.criterion is not None:
             value_objects.DecoherenceCriterion(self.criterion)
 
@@ -300,16 +300,19 @@ def _coupling_group(
     return configs
 
 
-def _simulator(spec: SimulatorSpec, seed: int):
-    params = dict(spec.params)
-    if spec.seed_offset is not None:
-        params["seed"] = seed + spec.seed_offset
-    return simulator_registry.build_simulator(spec.alias, **params)
+def _simulator(spec: DataSpec, seed: int) -> simulator_lib.QuTipSimulator:
+    """Builds the simulator of a data spec for a run seed."""
+    simulator = spec.simulator
+    params = dict(simulator.params)
+    if simulator.seed_offset is not None:
+        params["seed"] = seed + simulator.seed_offset
+    return simulator_lib.QuTipSimulator(
+        simulator.alias,
+        cache_dir=STATES_CACHE if spec.cache == "disk" else None,
+        **params)
 
 
 def _store(spec: DataSpec, cache: dict[Hashable, object]):
-    if spec.cache == "disk":
-        return scenarios.trajectory_store()
     if spec.cache == "memory":
         return _memoised(
             cache, _MEMORY_STORE, stores.MemoryTrajectoryStore)
@@ -335,7 +338,7 @@ def generate(
     def build() -> dataset_lib.Dataset:
         """Simulates the trajectories and returns the labelled windows."""
         use_case = generate_dataset.GenerateDatasetUseCase(
-            _simulator(spec.simulator, seed), store=_store(spec, cache))
+            _simulator(spec, seed), store=_store(spec, cache))
         return use_case.execute(generate_dataset.GenerateDatasetCommand(
             configs=system_configs(spec, seed),
             window_length=spec.window_length,

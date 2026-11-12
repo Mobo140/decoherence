@@ -54,7 +54,7 @@ from src import reproducibility
 from src.data import features
 from src.domain import value_objects
 from src.evaluation import metrics
-from src.simulation import variants
+from src.simulation import simulator as simulator_lib
 
 ESD = value_objects.DecoherenceCriterion.ENTANGLEMENT_DEATH.value
 WINDOW = 20
@@ -94,7 +94,7 @@ def simulate(configs, seed):
         before t_max and whether it then stayed dead.
     """
     reproducibility.seed_numpy_global(seed)
-    simulator = variants.EntanglementSimulator()
+    simulator = simulator_lib.QuTipSimulator("entanglement")
     trajectories, died, permanent = [], [], []
     for config in configs:
         trajectory = simulator.simulate(config)

@@ -8,7 +8,6 @@ from src.data import dataset as dataset_lib
 from src.data import observation, windows
 from src.physics import measures, simulate_qutip
 from src.physics import observables as state_observables
-from src.simulation import variants
 
 NAN = float("nan")
 INF = float("inf")
@@ -184,16 +183,17 @@ def test_two_qubit_series_equal_the_legacy_simulation_observables():
         np.testing.assert_array_equal(values, legacy[name])
 
 
-def test_correlators_and_concurrence_equal_the_variants():
+def test_correlators_and_concurrence_equal_their_definitions():
     states = _states(2)
-    sim = variants.EntanglementSimulator()
-    legacy = observe.combine(*sim._extra_observables(states)).series
-    assert list(legacy) == list(variants.CORR) + ["concurrence"]
+    series = observe.correlators(states).series
+    assert list(series) == list(observe.CORR)
     np.testing.assert_array_equal(
         observe.concurrence(states).series["concurrence"],
         [measures.concurrence(r) for r in states.rho])
-    for name, values in observe.correlators(states).series.items():
-        np.testing.assert_array_equal(values, legacy[name])
+    for name, op in observe.CORR.items():
+        np.testing.assert_allclose(
+            series[name], [np.real(np.trace(r @ op)) for r in states.rho],
+            atol=1e-12)
 
 
 def test_correlators_of_known_states():

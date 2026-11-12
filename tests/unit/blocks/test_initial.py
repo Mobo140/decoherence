@@ -4,9 +4,7 @@ import pytest
 import qutip as qt
 
 from src.blocks import initial, system
-from src.data.scenarios import build_configs
 from src.physics import lindblad_systems
-from src.simulation import variants
 
 ONE = system.single_qubit(1.0)
 TWO = system.two_qubit(0.5, "XXZ")
@@ -69,14 +67,14 @@ def test_random_pure_is_a_pure_density_matrix(n):
 
 
 @pytest.mark.parametrize("sector", [+1, -1])
-def test_parity_sector_equals_the_legacy_variant_under_the_global_seed(
-        sector):
-    config = build_configs(1, 3)["E"][0]
-    np.random.seed(5)
-    legacy = variants.ParitySectorSimulator(sector)._initial_state(config)
+def test_parity_sector_projects_the_first_acceptable_global_draw(sector):
     np.random.seed(5)
     block = initial.parity_sector(TWO, sector)
-    np.testing.assert_array_equal(block.full(), legacy.full())
+    np.random.seed(5)
+    projector = (qt.qeye([2, 2]) + sector * initial.PARITY) / 2
+    drawn = projector * lindblad_systems.sample_random_pure_state(n_qubits=2)
+    assert drawn.norm() > initial.MIN_SECTOR_NORM
+    np.testing.assert_array_equal(block.full(), drawn.unit().full())
 
 
 @pytest.mark.parametrize("sector", [+1, -1])

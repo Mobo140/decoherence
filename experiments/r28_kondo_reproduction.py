@@ -48,7 +48,7 @@ from scipy import special  # noqa: E402
 from experiments import common  # noqa: E402
 from src.domain import value_objects  # noqa: E402
 from src.physics import kondo_bath  # noqa: E402
-from src.simulation import variants  # noqa: E402
+from src.simulation import simulator  # noqa: E402
 
 OUT_DIR = common.RESULTS_DIR / "r28"
 PARTS = ("dimer", "swave", "ising", "surf", "demo")
@@ -727,8 +727,9 @@ def part_demo(fast: bool) -> list[dict]:
             for name, crit in criteria.items()}
         for dim in (1, 2, 3):
             for xi in x:
-                sim = variants.KondoSimulator(
-                    rho_J=RHO_J, kT=kT, kF_d=math.pi * float(xi), dim=dim)
+                sim = simulator.QuTipSimulator(
+                    "kondo", rho_J=RHO_J, kT=kT,
+                    kF_d=math.pi * float(xi), dim=dim)
                 for seed in seeds:
                     row = {"system": interaction.value, "dim": dim,
                            "kFd_over_pi": float(xi), "seed": seed}

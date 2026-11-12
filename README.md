@@ -153,7 +153,8 @@ scenario → simulation → observation → features → windows → model → l
 ```
 
 **Registries.** `models.registry.build_model("physics_lstm", **overrides)`,
-`simulation.registry.build_simulator("correlators")`, and the alias tables
+`simulation.simulator.QuTipSimulator("correlators")` (aliases of
+`blocks.legacy.ALIAS_PARAMS`), and the alias tables
 `OBSERVATIONS` (`exact`, `gaussian`, `ar1`), `FEATURE_SETS`, `LOSSES`,
 `evaluation.metrics.METRICS`. A new variant is a new entry, not an `if`.
 

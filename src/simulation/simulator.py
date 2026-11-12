@@ -10,11 +10,12 @@ the end of the window with ``censored=True`` if it is never crossed.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from pathlib import Path
 
 import numpy as np
 import qutip as qt
 
-from src.blocks import channels, evolve, initial, observe, target
+from src.blocks import initial, legacy, runner, target
 from src.blocks import system as blocks_system
 # The crossing helpers moved to blocks.target; they stay importable here.
 from src.blocks.target import (  # noqa: F401
@@ -130,35 +131,6 @@ def energy_basis_t_decoh(
     )
 
 
-def compute_target(
-    config: value_objects.SystemConfig,
-    states: evolve.States,
-    system: blocks_system.System,
-) -> target.Target:
-    """Computes the decoherence time of a config from the states.
-
-    Args:
-        config: System specification with criterion and threshold.
-        states: The states of the trajectory.
-        system: The system the states live on.
-
-    Returns:
-        The target block that the criterion of the config selects.
-
-    Raises:
-        ValueError: As the target blocks.
-    """
-    criterion = config.decoherence_criterion
-    threshold = config.decoherence_threshold
-    kinds = value_objects.DecoherenceCriterion
-    if criterion == kinds.COHERENCE_ENERGY:
-        return target.energy_basis_crossing(states, system, threshold)
-    if criterion == kinds.ENTANGLEMENT_DEATH:
-        return target.sudden_death(states, system)
-    return target.coherence_crossing(
-        states, system, threshold, criterion.value)
-
-
 def build_system(
     config: value_objects.SystemConfig,
 ) -> blocks_system.System:
@@ -175,35 +147,60 @@ def build_system(
     return blocks_system.two_qubit(config.J, config.interaction_type.value)
 
 
-def build_channels(
-    system: blocks_system.System, config: value_objects.SystemConfig
-) -> list[channels.Channel]:
-    """Builds the phenomenological jump channels of a config.
-
-    Args:
-        system: The system built from `config`.
-        config: System specification with the dissipator.
-
-    Returns:
-        One jump channel per qubit, with the constant rate or the Bernstein
-        rate gamma(t) of the dissipator.
-    """
-    dissipator = config.dissipator
-    op_type = dissipator.operator_type.value
-    if dissipator.gamma_const is not None:
-        return channels.jump(system, op_type, dissipator.gamma_const)
-    return channels.bernstein_profile(
-        channels.jump(system, op_type, 1.0),
-        np.array(dissipator.gamma_coeffs), config.t_max)
-
-
 class QuTipSimulator(ports.ISimulator):
-    """Simulates the Lindblad master equation with QuTiP.
+    """Simulates one trajectory per config by running its recipe.
 
-    Subclasses can change a run through three hooks, each the published
-    behaviour by default: ``_initial_state``, ``_channels`` and
-    ``_extra_observables``. The run itself is built from ``src.blocks``.
+    A thin facade over ``src.blocks``: `legacy.recipe_for` turns the config
+    and the simulator alias into a `Recipe` with legacy seeds, and
+    `runner.run_with_generator` runs it. The initial state is drawn from
+    NumPy's global generator, so ``np.random.seed`` fixes the trajectory;
+    the random blocks of one simulator object (the stochastic-gamma path)
+    share one generator that advances from call to call.
+
+    Attributes:
+        alias: Which published physics is simulated, a key of
+            `legacy.ALIAS_PARAMS`: ``plain`` (default), ``correlators``
+            (also the nine two-body Pauli correlators, R23),
+            ``entanglement`` (correlators and the Wootters concurrence,
+            R24), ``stochastic_gamma`` (``s``, ``tau``, ``seed``: gamma(t)
+            times a log-normal Ornstein-Uhlenbeck factor, R21),
+            ``parity_sector`` (``sector``: two-qubit initial states in one
+            parity sector, R6) and ``kondo`` (``rho_J``, ``kT``, ``kF_d``,
+            ``dim``: the Kondo bath of R28 replaces the jump operators).
+        params: The arguments of the alias.
+        cache_dir: Directory of the content-addressed states cache, or
+            None for no disk cache. The key covers the whole physics, so it
+            works for every alias.
     """
+
+    def __init__(
+        self,
+        alias: str = "plain",
+        cache_dir: str | Path | None = None,
+        **params: object,
+    ) -> None:
+        """Initialises the simulator.
+
+        Args:
+            alias: A key of `legacy.ALIAS_PARAMS`.
+            cache_dir: Directory of the states cache, or None.
+            **params: Arguments of the alias, e.g. ``s``, ``tau`` and
+                ``seed`` for ``stochastic_gamma``.
+
+        Raises:
+            KeyError: If `alias` is unknown; the message lists the valid
+                aliases.
+            TypeError: If an argument is missing or unexpected.
+            ValueError: If an argument is out of range.
+        """
+        legacy.validate_simulator(alias, params)
+        self.alias = alias
+        self.params = dict(params)
+        self.cache_dir = None if cache_dir is None else Path(cache_dir)
+        seed = self.params.get("seed")
+        self._rng = np.random.default_rng(seed)
+        self._seed = 0 if seed is None else seed
+        self._calls = 0
 
     def simulate(
         self, config: value_objects.SystemConfig
@@ -226,55 +223,15 @@ class QuTipSimulator(ports.ISimulator):
         if not isinstance(config, value_objects.SystemConfig):
             raise TypeError(
                 f"config must be a SystemConfig, got {config!r}.")
-        n_steps = int(round(config.t_max / config.dt)) + 1
-        times = np.linspace(0.0, config.t_max, n_steps)
-        initial_state = self._initial_state(config)
-        system = build_system(config)
-        states = evolve.master_equation(
-            system, self._channels(system, config), initial_state, times)
-
-        parts = [observe.pauli_means(states)]
-        if config.n_qubits == value_objects.QubitCount.TWO:
-            parts += self._extra_observables(states)
-        parts += [observe.purity(states), observe.coherence_l1(states)]
-        observables = observe.model_layout(observe.combine(*parts)).series
-        result_target = compute_target(config, states, system)
-        t_decoh, censored = result_target.time, result_target.censored
-
+        recipe = legacy.recipe_for(config, self.alias, **self.params)
+        result = runner.run_with_generator(
+            recipe, self._rng, index=self._calls, seed=self._seed,
+            cache_dir=self.cache_dir)
+        self._calls += 1
         return value_objects.TrajectoryResult(
-            times=times,
-            observables=observables,
-            t_decoh=t_decoh,
+            times=result.observations.times,
+            observables=result.observations.series,
+            t_decoh=result.target.time,
             system_config=config,
-            censored=censored,
+            censored=result.target.censored,
         )
-
-    def _initial_state(self, config: value_objects.SystemConfig) -> qt.Qobj:
-        """Draws the initial pure state.
-
-        Override to constrain the preparation (the parity-sector experiment
-        does); the default is what every other run used.
-        """
-        return sample_initial_state(config)
-
-    def _channels(
-        self,
-        system: blocks_system.System,
-        config: value_objects.SystemConfig,
-    ) -> list[channels.Channel]:
-        """Builds the dissipation channels of the run.
-
-        Override to change them (the stochastic-rate and Kondo variants do);
-        the default is the jump operators and rate of the config.
-        """
-        return build_channels(system, config)
-
-    def _extra_observables(
-        self, states: evolve.States
-    ) -> list[observe.Observations]:
-        """Computes additional two-qubit observations from rho(t).
-
-        They are inserted before purity and coherence_l1. By default
-        nothing is added.
-        """
-        return []

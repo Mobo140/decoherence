@@ -20,7 +20,6 @@ from src.domain.value_objects import (
     QubitCount,
     SystemConfig,
 )
-from src.blocks import evolve, observe
 from src.physics import lindblad_systems
 from src.simulation import simulator
 from src.simulation.simulator import QuTipSimulator, compute_t_decoh
@@ -358,44 +357,6 @@ def test_simulate_esd_criterion_changes_only_the_target():
     np.testing.assert_array_equal(
         traj.observables["coherence_l1"], plain.observables["coherence_l1"])
     assert traj.t_decoh != plain.t_decoh
-
-
-def test_simulate_hooks_default_to_the_published_behaviour():
-    sim = QuTipSimulator()
-    config = _two_qubit_config()
-    system = simulator.build_system(config)
-    default = simulator.build_channels(system, config)
-    assert [c.rate for c in sim._channels(system, config)] == [
-        c.rate for c in default]
-    assert sim._extra_observables(
-        evolve.States(np.zeros(1), [np.eye(4) / 4])) == []
-    assert sim._initial_state(config).shape == (4, 4)
-
-
-def test_simulate_extra_observables_come_before_purity_and_coherence(
-        monkeypatch):
-    class Extra(QuTipSimulator):
-        def _extra_observables(self, states):
-            return [observe.Observations(
-                states.times,
-                {"extra": np.arange(len(states.rho), dtype=float)})]
-
-    _fix_initial_state(monkeypatch, _bell_state())
-    traj = Extra().simulate(_two_qubit_config(t_max=0.5))
-    assert traj.feature_names[-3:] == ["extra", "purity", "coherence_l1"]
-    assert "density_matrices" not in traj.observables
-    np.testing.assert_array_equal(traj.observables["extra"], np.arange(6))
-
-
-def test_simulate_extra_observables_are_not_computed_for_one_qubit(
-        monkeypatch):
-    class Extra(QuTipSimulator):
-        def _extra_observables(self, states):
-            raise AssertionError("one-qubit runs have no extra observables")
-
-    _fix_initial_state(monkeypatch, _plus_state())
-    traj = Extra().simulate(_const_sigma_minus(0.4, t_max=0.5))
-    assert "extra" not in traj.observables
 
 
 # --- Negative cases ---

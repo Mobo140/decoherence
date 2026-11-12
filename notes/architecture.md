@@ -12,7 +12,8 @@
 |---|---|---|
 | `src/domain/` | Типы-значения (`SystemConfig`, `TrajectoryResult`, критерии) и порты | — |
 | `src/physics/` | Системы Линдблада, решение уравнения, меры, операторы Паули, ванна Кондо (скорости и операторы схлопывания для спинов в электронном газе) | `measures.coherence_l1`, `measures.concurrence`, `kondo_bath.kondo_collapse_operators`, … |
-| `src/simulation/` | Адаптер QuTiP и его варианты; реестр по псевдониму | `simulator.QuTipSimulator`, `variants.*`; `registry.build_simulator(alias, **params)`; `SIMULATORS`: `"plain"`, `"correlators"`, `"entanglement"`, `"stochastic_gamma"`, `"parity_sector"`, `"kondo"` |
+| `src/blocks/` | Блоки конструктора: система, каналы диссипации, начальное состояние, эволюция (единственный вызов `mesolve`), наблюдение, цель; рецепты, сиды, кэш состояний | `system.*`, `channels.*`, `initial.*`, `evolve.master_equation`, `observe.*`, `target.*`; `recipe.Recipe`/`block`/`Param`, `samplers.*`, `runner.run`, `legacy.recipe_for` (рецепты опубликованных симуляторов); `cache` — дисковый кэш `States` по содержимому |
+| `src/simulation/` | Фасад над рецептами: `QuTipSimulator(alias, cache_dir, **params)` реализует порт `ISimulator` | `simulator.QuTipSimulator`; псевдонимы `legacy.ALIAS_PARAMS`: `"plain"`, `"correlators"`, `"entanglement"`, `"stochastic_gamma"`, `"parity_sector"`, `"kondo"` |
 | `src/persistence/` | Файловые хранилища: кэш траекторий и чекпойнты | `NumpyTrajectoryStore`, `PickleModelStore`, `BestModelRegistry`, `HamiltonianModelRegistry` |
 | `src/data/scenarios.py` | Сценарии A–E и генераторы конфигураций (`experiments/_config.py` оставлен как псевдоним для `paper/`) | `build_configs(n_per_scenario, seed)`, `fixed_coupling_configs`, `SCENARIOS` |
 | `src/data/dataset.py` | `Dataset` и операции над ним | `Dataset.with_sequences`, `Dataset.select_features`, `Dataset.drop_features`, `Dataset.as_test_only` |

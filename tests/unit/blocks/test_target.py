@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import qutip as qt
 
-from src.blocks import channels, evolve, system, target
+from src.blocks import channels, evolve, initial, system, target
 from src.domain.value_objects import (
     DecoherenceCriterion,
     DissipatorConfig,
@@ -110,6 +110,18 @@ def test_target_is_frozen():
 # --- Positive cases: equal to the legacy functions ---
 
 
+def _block_target(config, states, system_):
+    """The target block that the criterion of a config selects."""
+    kinds = DecoherenceCriterion
+    threshold = config.decoherence_threshold
+    if config.decoherence_criterion == kinds.COHERENCE_ENERGY:
+        return target.energy_basis_crossing(states, system_, threshold)
+    if config.decoherence_criterion == kinds.ENTANGLEMENT_DEATH:
+        return target.sudden_death(states, system_)
+    return target.coherence_crossing(
+        states, system_, threshold, config.decoherence_criterion.value)
+
+
 @pytest.mark.parametrize("criterion", [
     DecoherenceCriterion.COHERENCE, DecoherenceCriterion.PURITY])
 def test_one_qubit_targets_equal_compute_t_decoh(criterion):
@@ -121,7 +133,7 @@ def test_one_qubit_targets_equal_compute_t_decoh(criterion):
         "purity": [np.real(np.trace(r @ r)) for r in states.rho],
     }
     expected = simulator.compute_t_decoh(config, TIMES, legacy_obs)
-    got = simulator.compute_target(config, states, ONE)
+    got = _block_target(config, states, ONE)
     assert (got.time, got.censored) == expected
 
 
@@ -133,10 +145,9 @@ def test_two_qubit_targets_equal_the_legacy_simulation(criterion, monkeypatch):
     config = _config(2, criterion)
     rho0 = _lopsided()
     monkeypatch.setattr(
-        simulator.initial, "random_pure", lambda s, rng=None: rho0)
+        initial, "random_pure", lambda system, rng=None: rho0)
     traj = simulator.QuTipSimulator().simulate(config)
-    got = simulator.compute_target(
-        config, _run(TWO, rho0), TWO)
+    got = _block_target(config, _run(TWO, rho0), TWO)
     assert (got.time, got.censored) == (traj.t_decoh, traj.censored)
 
 
