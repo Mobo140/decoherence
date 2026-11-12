@@ -1,0 +1,58 @@
+{
+  "system": {
+    "fn": "system.single_qubit",
+    "params": {
+      "omega": 1.0
+    }
+  },
+  "channels": [
+    {
+      "fn": "channels.jump",
+      "params": {
+        "gamma": 1.0,
+        "op_type": "sigma_minus"
+      }
+    },
+    {
+      "fn": "channels.bernstein_profile",
+      "params": {
+        "coeffs": [
+          0.2,
+          0.5,
+          0.8,
+          0.5,
+          0.2
+        ]
+      }
+    }
+  ],
+  "initial": {
+    "fn": "initial.random_pure",
+    "params": {}
+  },
+  "evolve": {
+    "fn": "evolve.master_equation",
+    "params": {}
+  },
+  "observe": [
+    {
+      "fn": "observe.finite_shots",
+      "params": {
+        "n_shots": 1000,
+        "settings": "tomography"
+      }
+    }
+  ],
+  "target": {
+    "fn": "target.coherence_crossing",
+    "params": {
+      "criterion": "coherence",
+      "threshold": 0.37
+    }
+  },
+  "t_max": 20.0,
+  "dt": 0.1,
+  "sampler": null,
+  "seeds": "spawn",
+  "legacy_rng_offset": 0
+}

@@ -307,3 +307,33 @@ def test_two_qubits_with_local_shots_have_no_model_tail():
         target=None, t_max=1.0, dt=0.5)
     with pytest.raises(ValueError, match="need tomography"):
         runner.run(recipe, 1, seed=0)
+
+
+# --- sample_params and n_time_steps ---
+
+
+def test_n_time_steps_of_an_unsampled_param_raises():
+    recipe = _recipe(t_max=Param("T"), sampler=block(
+        "samplers.uniform", omega=(0.5, 1.5), T=(1.0, 2.0)))
+    with pytest.raises(ValueError, match="'T' is not sampled"):
+        runner.n_time_steps(recipe, {"omega": 1.0})
+
+
+def test_n_time_steps_counts_intervals():
+    assert runner.n_time_steps(_recipe(t_max=2.0, dt=0.1), {}) == 20
+    recipe = _recipe(dt=Param("dt"), sampler=block(
+        "samplers.uniform", omega=(0.5, 1.5), dt=(0.5, 0.5)))
+    assert runner.n_time_steps(recipe, {"omega": 1.0, "dt": 0.5}) == 4
+
+
+def test_sample_params_equal_the_params_of_the_runs():
+    recipe = _recipe()
+    sampled = runner.sample_params(recipe, 3, 7)
+    runs = runner.run(recipe, 3, 7)
+    assert sampled == [r.params for r in runs]
+
+
+def test_sample_params_without_sampler_gives_empty_dicts():
+    recipe = _recipe(
+        system=block("system.single_qubit", omega=1.0), sampler=None)
+    assert runner.sample_params(recipe, 2, 0) == [{}, {}]

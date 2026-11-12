@@ -163,3 +163,34 @@ body {
 .plot { width: 100%; height: auto; margin-top: var(--space-3); }
 .muted { color: var(--color-neutral-600); }
 .btn-row { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-4); }
+
+/* Screen 8: constructor */
+.grid-ctor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+.ctor-side { position: sticky; top: var(--space-4); }
+.ctor-card { margin-bottom: var(--space-4); }
+.ctor-item { border: 1px solid var(--color-divider); border-radius: 6px; padding: var(--space-3); margin-bottom: var(--space-3); }
+.ctor-item-head { display: flex; gap: var(--space-2); align-items: center; margin-bottom: var(--space-2); }
+.ctor-item-head select { flex: 1; min-width: 0; }
+.ctor-doc, .ctor-note { font-size: 12px; margin: var(--space-2) 0; }
+.ctor-param { display: grid; grid-template-columns: 120px 1fr; gap: var(--space-2); align-items: center; margin-top: var(--space-2); }
+.ctor-param > label { margin: 0; overflow-wrap: anywhere; }
+.ctor-control { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
+.ctor-control .input { flex: 1; min-width: 80px; }
+.ctor-control input[type="checkbox"] { flex: none; }
+.ctor-range { display: flex; gap: var(--space-2); flex: 1; }
+.ctor-vary { font-size: 12px; display: inline-flex; gap: 4px; align-items: center; white-space: nowrap; margin: 0; }
+.error-box {
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  background: #f8e9e6;
+  border: 1px solid #d49a90;
+  border-radius: 6px;
+  color: #5a1f16;
+  white-space: pre-wrap;
+  font-size: 13px;
+}
+#ctor-json { max-height: 360px; }
+@media (max-width: 980px) {
+  .grid-ctor { grid-template-columns: 1fr; }
+  .ctor-side { position: static; }
+}

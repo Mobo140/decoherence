@@ -1,0 +1,70 @@
+{
+  "system": {
+    "fn": "system.two_qubit",
+    "params": {
+      "J": {
+        "param": "J"
+      },
+      "interaction": "XXZ"
+    }
+  },
+  "channels": [
+    {
+      "fn": "channels.kondo_bath",
+      "params": {
+        "dim": 2,
+        "kT": 0.5,
+        "k_F": 1.0,
+        "rho_J": 0.3
+      }
+    },
+    {
+      "fn": "channels.ou_modulation",
+      "params": {
+        "s": 0.3,
+        "tau": 2.0
+      }
+    }
+  ],
+  "initial": {
+    "fn": "initial.random_pure",
+    "params": {}
+  },
+  "evolve": {
+    "fn": "evolve.master_equation",
+    "params": {}
+  },
+  "observe": [
+    {
+      "fn": "observe.pauli_means",
+      "params": {}
+    },
+    {
+      "fn": "observe.purity",
+      "params": {}
+    },
+    {
+      "fn": "observe.coherence_l1",
+      "params": {}
+    }
+  ],
+  "target": {
+    "fn": "target.energy_basis_crossing",
+    "params": {
+      "threshold": 0.37
+    }
+  },
+  "t_max": 30.0,
+  "dt": 0.5,
+  "sampler": {
+    "fn": "samplers.uniform",
+    "params": {
+      "J": [
+        0.2,
+        1.0
+      ]
+    }
+  },
+  "seeds": "spawn",
+  "legacy_rng_offset": 0
+}

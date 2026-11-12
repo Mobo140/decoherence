@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 
@@ -24,6 +25,8 @@ _MIN_INITIAL_VALUE = 1e-10
 # Regularises the interpolation when two neighbouring values coincide.
 _INTERPOLATION_EPS = 1e-12
 
+# The same values as CRITERIA, as a type the block catalog can read.
+Criterion = Literal["coherence", "purity", "concurrence"]
 CRITERIA = ("coherence", "purity", "concurrence")
 
 
@@ -205,7 +208,7 @@ def coherence_crossing(
     states: States,
     system: System,
     threshold: float,
-    criterion: str = "coherence",
+    criterion: Criterion = "coherence",
 ) -> Target:
     """Finds the first crossing of a threshold by a decaying curve (T2).
 

@@ -15,13 +15,22 @@ function setScreen(id) {
   history.replaceState(null, "", `#${id}`);
 }
 
+// FastAPI sends a string for our own errors and a list of objects for
+// request validation errors.
+function apiErrorText(detail) {
+  if (Array.isArray(detail)) {
+    return detail.map((d) => `${(d.loc || []).slice(1).join(".")}: ${d.msg}`).join("; ");
+  }
+  return detail;
+}
+
 async function api(path, opts) {
   const res = await fetch(path, {
     headers: { "Content-Type": "application/json" },
     ...opts,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail || res.statusText);
+  if (!res.ok) throw new Error(apiErrorText(data.detail) || res.statusText);
   return data;
 }
 

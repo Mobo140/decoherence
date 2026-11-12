@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 import qutip as qt
@@ -117,7 +118,7 @@ def sequential_record(
     channels: Sequence[Channel],
     rho0: qt.Qobj,
     times: np.ndarray,
-    basis: str,
+    basis: Literal["z"],
     rng: np.random.Generator,
     keep_rho: bool = False,
 ) -> Record:
