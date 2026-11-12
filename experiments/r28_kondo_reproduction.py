@@ -333,23 +333,32 @@ def _ising_lambda(signs: np.ndarray, xi: float, dim: int) -> float:
 
 
 def _paper_lambda_1d(xi: float, n: int, kind: str) -> float:
-    """Closed forms (C3) and (C5) of PRB for one dimension.
+    """Closed forms (C3) and (C5) of PRB for one dimension, and (C6) fixed.
 
-    (C6), for odd N, is not used: as printed it does not tend to 4 for
-    k_F d -> 0, which the text states, so it is misprinted.
+    (C6), for odd N, does not equal the paper's own sum (Eq. C1) and does
+    not tend to 4 for k_F d -> 0. "afm_odd" returns the sum of Eq. C1 in
+    closed form, 1/2 [4 + (1 + cos((2N + 1) xi) / cos xi)^2].
     """
     if kind == "fm":
         return 2.0 * (n ** 2 + math.sin(n * xi) ** 2 / math.sin(xi) ** 2
                       * math.cos(xi * (n + 1)) ** 2)
-    if kind != "afm_even":
-        raise ValueError(f"unknown kind {kind!r}")
-    return 0.5 / math.sin(2 * xi) ** 2 * (
-        math.sin(2 * xi) + math.sin(2 * n * xi)
-        - math.sin(2 * (1 + n) * xi)) ** 2
+    if kind == "afm_even":
+        return 0.5 / math.sin(2 * xi) ** 2 * (
+            math.sin(2 * xi) + math.sin(2 * n * xi)
+            - math.sin(2 * (1 + n) * xi)) ** 2
+    if kind == "afm_odd":
+        return 0.5 * (4.0 + (1.0 + math.cos((2 * n + 1) * xi)
+                             / math.cos(xi)) ** 2)
+    raise ValueError(f"unknown kind {kind!r}")
 
 
 def _paper_lambda_sum(xi: float, n: int, dim: int, sign: str) -> float:
-    """Explicit sums (C4) and the AFM sums of PRB for d = 2, 3."""
+    """Explicit sums (C4) and the AFM sums of PRB for d = 2, 3, as printed.
+
+    As printed both terms have the argument xi |l - l'|, so the sum is
+    4 s^T K s, the translation-invariant form; the paper's Eq. 16 gives
+    xi (l + l') in the second term (see `_paper_lambda`).
+    """
     total = 0.0
     for a in range(1, n + 1):
         for b in range(1, n + 1):
@@ -360,16 +369,20 @@ def _paper_lambda_sum(xi: float, n: int, dim: int, sign: str) -> float:
     return 4.0 * total
 
 
-def _ising_cos_cos(xi: float, n: int, kind: str) -> float:
-    """1D Lambda with the phases cos(q r_l) cos(q r_l') of PRB Eq. C1.
+def _paper_lambda(signs: np.ndarray, xi: float, dim: int) -> float:
+    """Lambda from PRB Eq. 16 as printed, with sites at r_l = l d.
 
-    Pure arithmetic, used to show where the paper's 1D formulas come from.
+    Eq. 16 has e^{+i q r} on one state and e^{-i q r} on the other, so the
+    Fermi-surface average gives
+    2 sum_{ll'} s_l s_l' [K(xi |l - l'|) + K(xi (l + l'))], which depends
+    on where the origin is. PRB Fig. 4 and Eqs. C1, C3, C5 are this form.
     """
-    sites = np.arange(1, n + 1)
-    weight = np.ones(n) if kind == "fm" else (-1.0) ** sites
-    q0 = weight.sum() ** 2
-    qf = (weight * np.cos(2 * xi * sites)).sum() ** 2
-    return 2.0 * (q0 + qf)
+    sites = np.arange(1, signs.size + 1)
+    diff = xi * np.abs(sites[:, None] - sites[None, :])
+    total = xi * (sites[:, None] + sites[None, :])
+    kernel = (kondo_bath.pair_kernel(dim, diff)
+              + kondo_bath.pair_kernel(dim, total))
+    return float(2.0 * signs @ kernel @ signs)
 
 
 def part_ising(fast: bool) -> list[dict]:
@@ -417,59 +430,53 @@ def part_ising(fast: bool) -> list[dict]:
                    "degenerate ground states")
         for kind in ed_dev]
 
-    series, doubled = {}, {}
+    series, paper = {}, {}
     for dim in (1, 2, 3):
         fm = np.array([_ising_lambda(np.ones(n), xi, dim) for n in sizes])
         afm = np.array([_ising_lambda((-1.0) ** np.arange(1, n + 1), xi, dim)
                         for n in sizes])
         series[dim] = (fm, afm)
-        # The same sums with the kernel argument 2 k_F |r - r'|.
-        doubled[dim] = (
-            np.array([_ising_lambda(np.ones(n), 2 * xi, dim) for n in sizes]),
-            np.array([_ising_lambda((-1.0) ** np.arange(1, n + 1), 2 * xi,
-                                    dim) for n in sizes]))
+        # PRB Eq. 16 as printed, origin at r = 0, sites at l d.
+        paper[dim] = (
+            np.array([_paper_lambda(np.ones(n), xi, dim) for n in sizes]),
+            np.array([_paper_lambda((-1.0) ** np.arange(1, n + 1), xi, dim)
+                      for n in sizes]))
         rows += [{"dim": dim, "N": int(n), "N_kFd_over_pi": float(v),
                   "lambda_fm_over_n2": float(a / n ** 2),
                   "lambda_afm": float(b),
-                  "lambda_fm_over_n2_arg_2xi": float(c / n ** 2),
-                  "lambda_afm_arg_2xi": float(e)}
+                  "lambda_fm_over_n2_eq16": float(c / n ** 2),
+                  "lambda_afm_eq16": float(e)}
                  for n, v, a, b, c, e in zip(
-                     sizes, x, fm, afm, *doubled[dim])]
+                     sizes, x, fm, afm, *paper[dim])]
     odd, even = sizes % 2 == 1, sizes % 2 == 0
 
-    # Overlay: the paper's formulas as printed, and the cos-cos arithmetic.
-    paper_fm = np.array([_paper_lambda_1d(xi, int(n), "fm") for n in sizes])
-    paper_even = np.array([_paper_lambda_1d(xi, int(n), "afm_even")
-                           for n in sizes[even]])
-    paper_odd = np.array([_ising_cos_cos(xi, int(n), "afm")
-                          for n in sizes[odd]])
-    cc_fm = np.array([_ising_cos_cos(xi, int(n), "fm") for n in sizes])
-    cc_even = np.array([_ising_cos_cos(xi, int(n), "afm")
-                        for n in sizes[even]])
-    fm1, afm1 = series[1]
+    # The closed forms of Appendix C against the Eq. 16 sums.
+    c3 = np.array([_paper_lambda_1d(xi, int(n), "fm") for n in sizes])
+    c5 = np.array([_paper_lambda_1d(xi, int(n), "afm_even")
+                   for n in sizes[even]])
+    c6 = np.array([_paper_lambda_1d(xi, int(n), "afm_odd")
+                   for n in sizes[odd]])
     records += [
-        _deviation("PRB Fig. 4(a)", "Lambda^FM_1D/N^2 vs Eq. C3",
-                   fm1 / sizes ** 2, paper_fm / sizes ** 2,
-                   "closed form as printed; see README"),
-        _deviation("PRB Fig. 4(c)", "Lambda^AFM_1D even N vs Eq. C5",
-                   afm1[even], paper_even, "closed form as printed"),
-        _deviation("PRB Fig. 4(b)", "Lambda^AFM_1D odd N vs cos-cos form",
-                   afm1[odd], paper_odd,
-                   "Eq. C6 is misprinted; cos-cos arithmetic of Eq. C1"),
-        _deviation("PRB Eq. C3", "Eq. C3 vs cos(q r_l) cos(q r_l') sum",
-                   paper_fm, cc_fm,
-                   "the paper's 1D formula is the cos-cos part only"),
-        _deviation("PRB Eq. C5", "Eq. C5 vs cos-cos sum, even N",
-                   paper_even, cc_even, "as above"),
+        _deviation("PRB Eq. C3", "Eq. C3 vs Eq. 16 sum, 1D FM",
+                   c3, paper[1][0], "C3 is the Eq. 16 form"),
+        _deviation("PRB Eq. C5", "Eq. C5 vs Eq. 16 sum, 1D AFM even N",
+                   c5, paper[1][1][even], "C5 is the Eq. 16 form"),
+        _deviation("PRB Eq. C6", "corrected C6 vs Eq. 16 sum, 1D AFM odd N",
+                   c6, paper[1][1][odd],
+                   "C6 as printed differs; corrected form in README"),
     ]
-    records += [
-        _deviation("PRB Fig. 4(a)", "Lambda^FM_1D/N^2, arg 2xi, vs Eq. C3",
-                   doubled[1][0] / sizes ** 2, paper_fm / sizes ** 2,
-                   "same sums with kernel argument 2 k_F |r-r'|"),
-        _deviation("PRB Fig. 4(c)", "Lambda^AFM_1D even, arg 2xi, vs Eq. C5",
-                   doubled[1][1][even], paper_even,
-                   "same sums with kernel argument 2 k_F |r-r'|"),
-    ]
+    for dim in (1, 2, 3):
+        records += [
+            _deviation("PRB Fig. 4(a)",
+                       f"Lambda^FM_{dim}D/N^2, invariant vs Eq. 16",
+                       series[dim][0] / sizes ** 2,
+                       paper[dim][0] / sizes ** 2,
+                       "difference between the two conventions"),
+            _deviation("PRB Fig. 4(b, c)",
+                       f"Lambda^AFM_{dim}D, invariant vs Eq. 16",
+                       series[dim][1], paper[dim][1],
+                       "difference between the two conventions"),
+        ]
     for dim in (2, 3):
         sub = slice(0, min(n_max, 40))
         fm_sum = np.array([_paper_lambda_sum(xi, int(n), dim, "fm")
@@ -477,10 +484,12 @@ def part_ising(fast: bool) -> list[dict]:
         afm_sum = np.array([_paper_lambda_sum(xi, int(n), dim, "afm")
                             for n in sizes[sub]])
         records += [
-            _deviation("PRB Fig. 4(a)", f"Lambda^FM_{dim}D vs Eq. C4",
-                       series[dim][0][sub], fm_sum, "N <= 40"),
-            _deviation("PRB Fig. 4(b, c)", f"Lambda^AFM_{dim}D vs C-sums",
-                       series[dim][1][sub], afm_sum, "N <= 40"),
+            _deviation("PRB Eq. C4", f"Lambda^FM_{dim}D vs C4 as printed",
+                       series[dim][0][sub], fm_sum,
+                       "N <= 40; printed C4 is the invariant sum"),
+            _deviation("PRB Eq. C4", f"Lambda^AFM_{dim}D vs C-sums as printed",
+                       series[dim][1][sub], afm_sum,
+                       "N <= 40; printed sums are the invariant sum"),
         ]
     records.append(_deviation(
         "PRB Fig. 4(a)", "Lambda^FM/N^2 at N=1 vs 4",
@@ -490,31 +499,24 @@ def part_ising(fast: bool) -> list[dict]:
     fig, axes = plt.subplots(3, 1, figsize=(6.5, 9), sharex=True)
     for dim in (1, 2, 3):
         fm, afm = series[dim]
+        pfm, pafm = paper[dim]
         color = DIM_COLORS[dim]
         axes[0].plot(x, fm / sizes ** 2, color=color, label=f"{dim}D")
         axes[1].plot(x[odd], afm[odd], color=color)
         axes[2].plot(x[even], afm[even], color=color)
-    for dim in (1, 2, 3):
-        axes[0].plot(x, doubled[dim][0] / sizes ** 2, "--", lw=0.9,
-                     color=DIM_COLORS[dim])
-        axes[1].plot(x[odd], doubled[dim][1][odd], "--", lw=0.9,
-                     color=DIM_COLORS[dim])
-        axes[2].plot(x[even], doubled[dim][1][even], "--", lw=0.9,
-                     color=DIM_COLORS[dim])
-    axes[0].plot([], [], "k--", lw=0.9, label="kernel argument 2 k_F d")
-    axes[0].plot(x, paper_fm / sizes ** 2, "k:", lw=1.5,
-                 label="1D, Eq. C3 as printed")
-    axes[1].plot(x[odd], paper_odd, "k:", lw=1.5)  # cos-cos form (C1)
-    axes[2].plot(x[even], paper_even, "k:", lw=1.5)
+        axes[0].plot(x, pfm / sizes ** 2, "--", lw=0.9, color=color)
+        axes[1].plot(x[odd], pafm[odd], "--", lw=0.9, color=color)
+        axes[2].plot(x[even], pafm[even], "--", lw=0.9, color=color)
+    axes[0].plot([], [], "k--", lw=0.9,
+                 label="PRB Eq. 16 as printed (= printed figure)")
     axes[0].set_ylabel(r"$\Lambda^{FM}/N^2$")
     axes[1].set_ylabel(r"$\Lambda^{AFM}$, odd N")
     axes[2].set_ylabel(r"$\Lambda^{AFM}$, even N")
     axes[2].set_xlabel(r"$N k_F d/\pi$   ($k_F d/\pi = 0.01$)")
     axes[0].legend(fontsize=8)
-    fig.suptitle("PRB 95, 075413 Fig. 4: Ising-chain dephasing "
-                 "(solid: kondo_bath kernel, dashed: argument 2 k_F d,\n"
-                 "dotted: paper's 1D formula)",
-                 fontsize=9)
+    fig.suptitle("PRB 95, 075413 Fig. 4: Ising-chain dephasing\n"
+                 "(solid: kondo_bath, translation invariant; "
+                 "dashed: Eq. 16 with sites at l d)", fontsize=9)
     _save(fig, "fig4_ising_dephasing.png")
     _write(rows, "r28_ising.csv", "PRB Fig. 4 from the kernel sums")
     return records

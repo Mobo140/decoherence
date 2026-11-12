@@ -1,6 +1,6 @@
 {
   "csv": "r28_ising.csv",
-  "created_utc": "2026-11-07T15:29:49+00:00",
+  "created_utc": "2026-11-12T06:30:06+00:00",
   "command": [
     "r28_kondo_reproduction.py",
     "--part",
@@ -16,7 +16,7 @@
     "scipy": "1.17.1",
     "qutip": "5.2.3",
     "torch": "2.11.0",
-    "git_commit": "03fae0e545b11a1a571316f564bc8cf846310fea",
+    "git_commit": "a93b4ad567df58bb74c6b6dd14ad4ded50b4da89",
     "torch_threads": 4
   }
 }

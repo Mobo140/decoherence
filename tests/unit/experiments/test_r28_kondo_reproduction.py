@@ -27,10 +27,31 @@ def test_ising_lambda_of_a_single_site_is_four_and_of_a_pair_follows_the_kernel(
     assert pair == pytest.approx(8.0 + 8.0 * math.cos(0.7) ** 2)
 
 
-def test_paper_cos_cos_form_equals_closed_form_c3():
-    for n_sites in (2, 5, 9):
-        assert r28._ising_cos_cos(0.2, n_sites, "fm") == pytest.approx(
-            r28._paper_lambda_1d(0.2, n_sites, "fm"))
+def test_eq16_sum_equals_closed_forms_c3_c5_and_corrected_c6():
+    for xi in (0.2, 0.37, 1.1):
+        for n_sites in (2, 4, 6):
+            assert r28._paper_lambda(np.ones(n_sites), xi, 1) == pytest.approx(
+                r28._paper_lambda_1d(xi, n_sites, "fm"))
+            alternating = (-1.0) ** np.arange(1, n_sites + 1)
+            assert r28._paper_lambda(alternating, xi, 1) == pytest.approx(
+                r28._paper_lambda_1d(xi, n_sites, "afm_even"))
+        for n_sites in (3, 5, 7):
+            alternating = (-1.0) ** np.arange(1, n_sites + 1)
+            assert r28._paper_lambda(alternating, xi, 1) == pytest.approx(
+                r28._paper_lambda_1d(xi, n_sites, "afm_odd"))
+
+
+def test_eq16_sum_depends_on_the_origin_and_the_kernel_sum_does_not():
+    # Single spin: Eq. 16 gives 2 [1 + K(2 xi)], not the 4 of Eq. 38.
+    assert r28._paper_lambda(np.ones(1), 0.7, 1) == pytest.approx(
+        2.0 + 2.0 * math.cos(1.4) ** 2)
+    assert r28._ising_lambda(np.ones(1), 0.7, 1) == pytest.approx(4.0)
+
+
+def test_corrected_c6_tends_to_four_for_small_k_f_d():
+    for n_sites in (3, 7, 11):
+        assert r28._paper_lambda_1d(1e-6, n_sites, "afm_odd") == pytest.approx(
+            4.0)
 
 
 def test_sector_problem_has_n_plus_one_states_and_the_spin_wave_gap():
@@ -53,4 +74,4 @@ def test_dimer_part_agrees_with_the_closed_forms(tmp_path, monkeypatch):
 
 def test_paper_lambda_1d_unknown_kind_raises_value_error():
     with pytest.raises(ValueError, match="unknown kind"):
-        r28._paper_lambda_1d(0.1, 4, "afm_odd")
+        r28._paper_lambda_1d(0.1, 4, "afm_other")
