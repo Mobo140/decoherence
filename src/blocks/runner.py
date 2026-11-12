@@ -137,6 +137,42 @@ def _sample(recipe: Recipe, n: int, seed: int) -> list[dict[str, Any]]:
     return [{k: freeze(v) for k, v in row.items()} for row in sampled]
 
 
+def sample_params(recipe: Recipe, n: int, seed: int) -> list[dict[str, Any]]:
+    """Draws the per-trajectory parameters exactly as `run` does.
+
+    Args:
+        recipe: The recipe.
+        n: Number of trajectories.
+        seed: Run seed.
+
+    Returns:
+        One dict of sampled values per trajectory (empty dicts without a
+        sampler).
+
+    Raises:
+        ValueError: If the sampler rejects its arguments.
+    """
+    return _sample(recipe, n, seed)
+
+
+def n_time_steps(recipe: Recipe, params: dict[str, Any]) -> int:
+    """Returns the number of time steps of a trajectory, without running it.
+
+    Args:
+        recipe: The recipe.
+        params: The sampled values of the trajectory.
+
+    Returns:
+        ``round(t_max / dt)``, the number of intervals of the time grid.
+
+    Raises:
+        ValueError: If `t_max` or `dt` is a `Param` that is not sampled.
+    """
+    t_max = _resolve_value(recipe.t_max, params)
+    dt = _resolve_value(recipe.dt, params)
+    return int(round(t_max / dt))
+
+
 def _integrate(
     recipe: Recipe,
     params: dict[str, Any],

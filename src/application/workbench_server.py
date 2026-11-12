@@ -5,7 +5,11 @@ experiments only through the existing `JobQueue`, with `--fast`.
 """
 from __future__ import annotations
 
+import json
+import os
 import pathlib
+import re
+import time
 from typing import Any
 
 import fastapi
@@ -13,10 +17,15 @@ from fastapi import responses
 from fastapi import staticfiles
 import pydantic
 
+import numpy as np
+
 from src.application import experiment_catalog
 from src.application import job_queue
 from src.application import predict_decoherence
 from src.application import simulate_trajectory
+from src.blocks import catalog as block_catalog
+from src.blocks import runner as block_runner
+from src.blocks.recipe import Recipe, recipe_from_dict, recipe_to_dict
 from src.data import scenarios
 from src.domain import ports
 from src.domain import value_objects
@@ -25,7 +34,16 @@ from src.models import physics_prior
 from src.persistence import stores
 from src.simulation import simulator as simulator_lib
 
-STATIC = pathlib.Path(__file__).resolve().parents[2] / "static"
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+STATIC = ROOT / "static"
+EXAMPLES = STATIC / "recipes"
+# Where saved recipes and generated datasets go; the environment variables
+# let a test or a deployment point somewhere else.
+RECIPES_ENV = "QEWS_RECIPES_DIR"
+DATASETS_ENV = "QEWS_DATASETS_DIR"
+NAME_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,64}")
+MAX_PREVIEW_STEPS = 5000
+MAX_PREVIEW_POINTS = 400
 
 _jobs = job_queue.JobQueue()
 _simulator = simulator_lib.QuTipSimulator()
@@ -65,6 +83,89 @@ class CompareIn(pydantic.BaseModel):
 
     a: str = "E8c"
     b: str = "E14"
+
+
+class RecipeIn(pydantic.BaseModel):
+    """Request of `/api/recipe/validate`."""
+
+    recipe: dict[str, Any]
+
+
+class PreviewIn(pydantic.BaseModel):
+    """Request of `/api/recipe/preview`."""
+
+    recipe: dict[str, Any]
+    n: int = pydantic.Field(3, ge=1, le=5)
+    seed: int = pydantic.Field(0, ge=0)
+
+
+class SaveRecipeIn(pydantic.BaseModel):
+    """Request of `POST /api/recipes`."""
+
+    name: str
+    recipe: dict[str, Any]
+
+
+class DatasetIn(pydantic.BaseModel):
+    """Request of `/api/recipe/dataset`."""
+
+    name: str
+    recipe: dict[str, Any]
+    n: int = pydantic.Field(100, ge=1)
+    seed: int = pydantic.Field(0, ge=0)
+    window_length: int = pydantic.Field(20, ge=1)
+    horizon: float = pydantic.Field(1.0, gt=0.0)
+    samples_per_trajectory: int = pydantic.Field(5, ge=1)
+    train_ratio: float = pydantic.Field(0.7, ge=0.0, lt=1.0)
+    val_ratio: float = pydantic.Field(0.15, ge=0.0, lt=1.0)
+    min_window_gap: int = pydantic.Field(0, ge=0)
+    include_censored: bool = True
+
+
+def _check_name(name: str) -> str:
+    """Returns `name` if it is a safe file stem, else raises a 422."""
+    if not NAME_PATTERN.fullmatch(name):
+        raise fastapi.HTTPException(
+            422, f"A name must match {NAME_PATTERN.pattern}, got {name!r}.")
+    return name
+
+
+def _parse_recipe(data: dict[str, Any]) -> Recipe:
+    """Builds a recipe from request data; a bad recipe is a 422."""
+    try:
+        return recipe_from_dict(data)
+    except (ValueError, TypeError) as error:
+        raise fastapi.HTTPException(422, str(error)) from error
+
+
+def _thin(values: np.ndarray, keep: np.ndarray | None) -> list[float]:
+    """Takes the samples at `keep` (all if None) as a list of floats."""
+    chosen = np.asarray(values, dtype=float)
+    if keep is not None:
+        chosen = chosen[keep]
+    return _json_safe(chosen.tolist())
+
+
+def _preview_row(run: block_runner.Run) -> dict[str, Any]:
+    """Describes one trajectory of a preview, at most 400 points."""
+    times = np.asarray(run.observations.times, dtype=float)
+    keep = None
+    if len(times) > MAX_PREVIEW_POINTS:
+        keep = np.unique(np.round(
+            np.linspace(0, len(times) - 1, MAX_PREVIEW_POINTS)
+        ).astype(int))
+    target = None
+    if run.target is not None:
+        target = {"time": run.target.time,
+                  "censored": bool(run.target.censored)}
+    return _json_safe({
+        "index": run.index,
+        "params": run.params,
+        "target": target,
+        "times": _thin(times, keep),
+        "series": {name: _thin(values, keep)
+                   for name, values in run.observations.series.items()},
+    })
 
 
 def _series(trajectory: value_objects.TrajectoryResult) -> dict[str, Any]:
@@ -123,7 +224,7 @@ def _json_safe(value: Any) -> Any:
     """Replaces nan and infinity by None, recursively."""
     if isinstance(value, dict):
         return {k: _json_safe(v) for k, v in value.items()}
-    if isinstance(value, list):
+    if isinstance(value, (list, tuple)):
         return [_json_safe(v) for v in value]
     if isinstance(value, float) and (
             value != value or value in (float("inf"), float("-inf"))):
@@ -175,12 +276,34 @@ def _set_inference_context(predictor, config) -> None:
         predictor.inference_J = float(config.J) if n_qubits == 2 else 0.0
 
 
-def create_app() -> fastapi.FastAPI:
+def _directory(
+    given: pathlib.Path | str | None, env: str, default: str
+) -> pathlib.Path:
+    """Picks a directory: the argument, else the environment, else default."""
+    if given is not None:
+        return pathlib.Path(given)
+    return pathlib.Path(os.environ.get(env) or ROOT / default)
+
+
+def create_app(
+    recipes_dir: pathlib.Path | str | None = None,
+    datasets_dir: pathlib.Path | str | None = None,
+) -> fastapi.FastAPI:
     """Builds the workbench application.
+
+    Args:
+        recipes_dir: Where saved recipes are kept as ``<name>.json``. If
+            None, the environment variable ``QEWS_RECIPES_DIR``, else
+            ``data/recipes``. Created on the first save.
+        datasets_dir: Where generated datasets are written. If None, the
+            environment variable ``QEWS_DATASETS_DIR``, else
+            ``data/datasets``.
 
     Returns:
         The FastAPI app with the JSON endpoints and the static pages.
     """
+    recipes_path = _directory(recipes_dir, RECIPES_ENV, "data/recipes")
+    datasets_path = _directory(datasets_dir, DATASETS_ENV, "data/datasets")
     app = fastapi.FastAPI(
         title="Q-EWS Workbench", docs_url=None, redoc_url=None)
 
@@ -337,6 +460,108 @@ def create_app() -> fastapi.FastAPI:
             "risk_uses_horizon": True,
         })
         return series
+
+    @app.get("/api/blocks")
+    def blocks():
+        """The blocks of every stage with their parameters."""
+        return block_catalog.catalog()
+
+    @app.post("/api/recipe/validate")
+    def validate_recipe(body: RecipeIn):
+        """Checks a recipe without running it."""
+        try:
+            recipe_from_dict(body.recipe)
+        except (ValueError, TypeError) as error:
+            return {"ok": False, "error": str(error)}
+        return {"ok": True, "error": None}
+
+    @app.post("/api/recipe/preview")
+    def preview_recipe(body: PreviewIn):
+        """Runs a few trajectories in-process, without the states cache."""
+        recipe = _parse_recipe(body.recipe)
+        try:
+            sampled = block_runner.sample_params(recipe, body.n, body.seed)
+            for params in sampled:
+                steps = block_runner.n_time_steps(recipe, params)
+                if steps > MAX_PREVIEW_STEPS:
+                    raise fastapi.HTTPException(
+                        422,
+                        f"The recipe has {steps} time steps (t_max / dt); "
+                        f"a preview takes at most {MAX_PREVIEW_STEPS}.")
+            started = time.perf_counter()
+            runs = block_runner.run(recipe, body.n, body.seed)
+            elapsed = time.perf_counter() - started
+        except (ValueError, TypeError) as error:
+            raise fastapi.HTTPException(422, str(error)) from error
+        rows = [_preview_row(run) for run in runs]
+        return {
+            "n": body.n,
+            "seed": body.seed,
+            "elapsed_s": elapsed,
+            "series_names": list(rows[0]["series"]),
+            "trajectories": rows,
+        }
+
+    @app.get("/api/recipes")
+    def list_recipes():
+        """The names of the saved recipes and of the shipped examples."""
+        saved = sorted(p.stem for p in recipes_path.glob("*.json")
+                       if NAME_PATTERN.fullmatch(p.stem))
+        examples = sorted(p.stem for p in EXAMPLES.glob("*.json"))
+        return {"saved": saved, "examples": examples}
+
+    @app.get("/api/recipes/{name}")
+    def load_recipe(name: str):
+        """A saved recipe, or the example of that name."""
+        _check_name(name)
+        for folder in (recipes_path, EXAMPLES):
+            path = folder / f"{name}.json"
+            if path.is_file():
+                return {"name": name,
+                        "recipe": json.loads(path.read_text("utf-8"))}
+        raise fastapi.HTTPException(404, f"no recipe named {name!r}")
+
+    def _store(name: str, recipe: Recipe) -> pathlib.Path:
+        recipes_path.mkdir(parents=True, exist_ok=True)
+        path = recipes_path / f"{name}.json"
+        path.write_text(
+            json.dumps(recipe_to_dict(recipe), indent=2) + "\n", "utf-8")
+        return path
+
+    @app.post("/api/recipes")
+    def save_recipe(body: SaveRecipeIn):
+        """Validates a recipe and saves it as ``<name>.json``."""
+        _check_name(body.name)
+        recipe = _parse_recipe(body.recipe)
+        _store(body.name, recipe)
+        return {"name": body.name, "saved": True}
+
+    @app.post("/api/recipe/dataset")
+    def generate_dataset(body: DatasetIn):
+        """Saves the recipe and starts ``src.blocks.cli generate``."""
+        _check_name(body.name)
+        recipe = _parse_recipe(body.recipe)
+        if recipe.target is None:
+            raise fastapi.HTTPException(
+                422, "A dataset needs a target block; the recipe has none.")
+        path = _store(body.name, recipe)
+        out = datasets_path / f"{body.name}.npz"
+        args = [
+            "generate", str(path), "--n", str(body.n),
+            "--seed", str(body.seed), "--out", str(out),
+            "--window-length", str(body.window_length),
+            "--horizon", str(body.horizon),
+            "--samples-per-trajectory", str(body.samples_per_trajectory),
+            "--train-ratio", str(body.train_ratio),
+            "--val-ratio", str(body.val_ratio),
+            "--min-window-gap", str(body.min_window_gap)]
+        if not body.include_censored:
+            args.append("--exclude-censored")
+        message = _jobs.start("src.blocks.cli", args)
+        payload = _jobs.as_dict()
+        payload["message"] = message
+        payload["output"] = str(out)
+        return payload
 
     @app.get("/")
     def index():
