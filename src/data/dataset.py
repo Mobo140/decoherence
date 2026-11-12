@@ -8,11 +8,10 @@ from typing import Any
 import numpy as np
 
 
-# Arrays with one entry per window; the codes and `censored` may be empty.
+# Arrays with one entry per window; `censored` may be empty.
 _REQUIRED_PER_WINDOW = (
     "t_obs", "t_decoh_abs", "remaining_time", "risk_labels")
-_OPTIONAL_PER_WINDOW = (
-    "interaction_type_codes", "dissipator_type_codes", "J_values", "censored")
+_OPTIONAL_PER_WINDOW = ("censored",)
 
 
 @dataclasses.dataclass
@@ -39,21 +38,21 @@ class Dataset:
         feature_names: Names of the observables in the last axis of
             `sequences`.
         metadata: Provenance of the dataset.
-        interaction_type_codes: System type per window (4 classes):
-            0.0 = 1-qubit sigma_-, 1.0 = 1-qubit sigma_z, 2.0 = 2-qubit
-            XXZ, 3.0 = 2-qubit TFIM. Empty if unknown.
-        dissipator_type_codes: 0.0 = sigma_- (amplitude damping), 1.0 =
-            sigma_z (dephasing) per window. Empty if unknown.
-        J_values: Coupling J per window; 0.0 for one qubit. Empty if
-            unknown.
+        context: Per-window scalars describing the system, by name, each
+            of length N. `windows.build_dataset` fills `interaction_type`
+            (4 classes: 0.0 = 1-qubit sigma_-, 1.0 = 1-qubit sigma_z,
+            2.0 = 2-qubit XXZ, 3.0 = 2-qubit TFIM), `dissipator_type`
+            (0.0 = sigma_- amplitude damping, 1.0 = sigma_z dephasing) and
+            `J` (coupling; 0.0 for one qubit), all float32. A missing key
+            means the value is unknown.
         censored: True where t_decoh_abs is only a lower bound (the
             threshold was not crossed by t_max). Empty if unknown.
 
     Raises:
         ValueError: If `sequences` is not 3-D, its last axis does not match
             `feature_names`, a per-window array does not have one entry per
-            window (the optional ones may be empty), or an index is not a
-            window.
+            window (`censored` may be empty), a `context` array does not
+            have one entry per window, or an index is not a window.
     """
 
     sequences: np.ndarray
@@ -66,12 +65,8 @@ class Dataset:
     test_idx: np.ndarray
     feature_names: list[str]
     metadata: dict[str, Any]
-    interaction_type_codes: np.ndarray = dataclasses.field(
-        default_factory=lambda: np.zeros(0, dtype=np.float32))
-    dissipator_type_codes: np.ndarray = dataclasses.field(
-        default_factory=lambda: np.zeros(0, dtype=np.float32))
-    J_values: np.ndarray = dataclasses.field(
-        default_factory=lambda: np.zeros(0, dtype=np.float32))
+    context: dict[str, np.ndarray] = dataclasses.field(
+        default_factory=dict)
     censored: np.ndarray = dataclasses.field(
         default_factory=lambda: np.zeros(0, dtype=bool))
 
@@ -95,6 +90,11 @@ class Dataset:
                 raise ValueError(
                     f"{name} has {len(getattr(self, name))} entries for "
                     f"{n_windows} windows; it must be empty or complete.")
+        for name, values in self.context.items():
+            if len(values) != n_windows:
+                raise ValueError(
+                    f"context[{name!r}] has {len(values)} entries for "
+                    f"{n_windows} windows.")
         for name in ("train_idx", "val_idx", "test_idx"):
             index = np.asarray(getattr(self, name))
             if index.size and (index.min() < 0 or index.max() >= n_windows):
@@ -110,7 +110,7 @@ class Dataset:
                 last axis must still match them.
 
         Returns:
-            A new Dataset; labels, indices and codes are unchanged.
+            A new Dataset; labels, indices and context are unchanged.
 
         Raises:
             ValueError: If `sequences` has a different number of windows,

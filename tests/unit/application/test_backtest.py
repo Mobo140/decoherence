@@ -68,8 +68,9 @@ def test_backtest_sets_hamiltonian_codes_from_dataset():
         test_idx=np.array([2], dtype=int),
         feature_names=["a", "coherence_l1"],
         metadata={"dt": 0.1, "horizon": 1.0},
-        interaction_type_codes=np.array([2.0, 2.0, 2.0], dtype=np.float32),
-        dissipator_type_codes=np.array([0.0, 0.0, 0.0], dtype=np.float32),
+        context={
+            "interaction_type": np.array([2.0, 2.0, 2.0], dtype=np.float32),
+            "dissipator_type": np.array([0.0, 0.0, 0.0], dtype=np.float32)},
     )
     spy = _CodeSpy()
     BacktestUseCase(spy).execute(BacktestCommand(dataset=ds, horizon=1.0))
@@ -101,7 +102,7 @@ def test_backtest_sets_inference_j_per_window():
         test_idx=np.arange(n),
         feature_names=["a", "b", "coherence_l1"],
         metadata={"dt": 0.1, "horizon": 1.0},
-        J_values=np.array([0.2, 0.4, 0.6, 0.8], dtype=np.float32),
+        context={"J": np.array([0.2, 0.4, 0.6, 0.8], dtype=np.float32)},
     )
     pred = _RecordJ()
     BacktestUseCase(pred).execute(BacktestCommand(dataset=ds, horizon=1.0))

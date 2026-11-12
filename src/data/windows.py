@@ -379,11 +379,13 @@ def _assemble(
         val_idx=val_idx,
         test_idx=test_idx,
         feature_names=feature_names,
-        interaction_type_codes=np.array(
-            rows.interaction_codes, dtype=np.float32),
-        dissipator_type_codes=np.array(
-            rows.dissipator_codes, dtype=np.float32),
-        J_values=np.array(rows.coupling, dtype=np.float32),
+        context={
+            "interaction_type": np.array(
+                rows.interaction_codes, dtype=np.float32),
+            "dissipator_type": np.array(
+                rows.dissipator_codes, dtype=np.float32),
+            "J": np.array(rows.coupling, dtype=np.float32),
+        },
         censored=censored,
         metadata={
             "n_trajectories": len(trajectories),

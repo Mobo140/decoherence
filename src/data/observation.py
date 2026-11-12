@@ -25,7 +25,6 @@ from src.data import dataset as dataset_lib
 # Per-window arrays that noise_augmented repeats for every noisy copy.
 _PER_WINDOW_FIELDS = (
     "sequences", "t_obs", "t_decoh_abs", "remaining_time", "risk_labels",
-    "interaction_type_codes", "dissipator_type_codes", "J_values",
     "censored",
 )
 
@@ -261,6 +260,11 @@ def noise_augmented(
         k: np.concatenate(v) if len(getattr(dataset, k)) == n
         else getattr(dataset, k)
         for k, v in parts.items()
+    }
+    # Every context array has one entry per window, so it is repeated too.
+    fields["context"] = {
+        key: np.concatenate([values] + [values[source]] * copies)
+        for key, values in dataset.context.items()
     }
     return dataclasses.replace(
         dataset, **fields,

@@ -19,9 +19,10 @@ def _with_codes(ds):
     """The dataset with every optional per-window array filled in."""
     n = len(ds.sequences)
     return dataclasses.replace(
-        ds, interaction_type_codes=np.arange(n, dtype=np.float32),
-        dissipator_type_codes=np.zeros(n, dtype=np.float32),
-        J_values=np.linspace(0, 1, n, dtype=np.float32),
+        ds, context={
+            "interaction_type": np.arange(n, dtype=np.float32),
+            "dissipator_type": np.zeros(n, dtype=np.float32),
+            "J": np.linspace(0, 1, n, dtype=np.float32)},
         censored=np.arange(n) % 2 == 0)
 
 
@@ -141,7 +142,9 @@ def test_noise_augmented_copies_keep_the_labels_of_their_source(
     np.testing.assert_array_equal(out.t_obs[6:], ds.t_obs[source])
     np.testing.assert_array_equal(out.remaining_time[6:],
                                   ds.remaining_time[source])
-    np.testing.assert_array_equal(out.J_values[6:], ds.J_values[source])
+    for key, values in ds.context.items():
+        np.testing.assert_array_equal(out.context[key][:6], values)
+        np.testing.assert_array_equal(out.context[key][6:], values[source])
     np.testing.assert_array_equal(out.censored[6:], ds.censored[source])
     assert list(out.train_idx) == [0, 1, 2, 6, 7, 8]
     assert list(out.val_idx) == [3, 9]
@@ -149,7 +152,7 @@ def test_noise_augmented_copies_keep_the_labels_of_their_source(
 
 def test_noise_augmented_leaves_empty_optional_arrays_empty(small_dataset):
     out = observation.noise_augmented(small_dataset, 2, _rng())
-    assert len(out.interaction_type_codes) == 0 and len(out.censored) == 0
+    assert out.context == {} and len(out.censored) == 0
 
 
 def test_noise_augmented_noise_is_within_the_sigma_range(small_dataset):

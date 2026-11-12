@@ -10,13 +10,13 @@ from src.domain import ports
 from src.domain import value_objects
 from src.evaluation import metrics as metrics_lib
 
-# Predictor attribute -> Dataset field that supplies its per-window value.
+# Predictor attribute -> `Dataset.context` key that supplies its per-window value.
 # Predictors take system context (coupling, Hamiltonian and dissipator
 # type) as attributes read inside `predict`, not as arguments.
 CONTEXT_ATTRIBUTES = (
-    ("inference_J", "J_values"),
-    ("inference_interaction_code", "interaction_type_codes"),
-    ("inference_dissipator_code", "dissipator_type_codes"),
+    ("inference_J", "J"),
+    ("inference_interaction_code", "interaction_type"),
+    ("inference_dissipator_code", "dissipator_type"),
 )
 
 
@@ -26,8 +26,8 @@ def context_fields(
     """Lists the context attributes the backtest sets on `model`.
 
     An attribute is listed when the model has it and the dataset holds one
-    value per window for it (fields that are empty, i.e. unknown, are
-    skipped).
+    value per window for it (context keys that the dataset lacks, i.e.
+    unknown values, are skipped).
 
     Args:
         model: Predictor to be evaluated.
@@ -36,11 +36,10 @@ def context_fields(
     Returns:
         Pairs of (attribute name, per-window values).
     """
-    n_windows = len(dataset.sequences)
     fields = []
-    for attribute, field in CONTEXT_ATTRIBUTES:
-        values = getattr(dataset, field)
-        if len(values) == n_windows and hasattr(model, attribute):
+    for attribute, key in CONTEXT_ATTRIBUTES:
+        values = dataset.context.get(key)
+        if values is not None and hasattr(model, attribute):
             fields.append((attribute, values))
     return fields
 

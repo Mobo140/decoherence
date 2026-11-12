@@ -132,7 +132,7 @@ class LSTMPredictor(ports.IPredictor):
         use_J_scalar: If True, the coupling J is an eighth physics scalar.
             False keeps the 7-scalar network so old checkpoints load.
         inference_J: Coupling at prediction time; `BacktestUseCase` sets it
-            per window from `Dataset.J_values`.
+            per window from `Dataset.context['J']`.
         risk_pos_weight: Positive-class weight of the risk BCE. 0 means
             automatic from the label ratio, clamped to [1, 10]. Values > 1
             help AUROC on imbalanced labels.

@@ -74,16 +74,16 @@ def _lstm(
 
 def _predict_all(predictor, dataset, horizon: float):
     """Predicts every test window, feeding J when the dataset has it."""
-    has_j = len(dataset.J_values) == len(dataset.sequences)
+    has_j = "J" in dataset.context
     predictions, actuals, couplings = [], [], []
     for i in backtest.test_indices(dataset):
         if has_j:
-            predictor.inference_J = float(dataset.J_values[i])
+            predictor.inference_J = float(dataset.context["J"][i])
         out = predictor.predict(
             dataset.sequences[i], float(dataset.t_obs[i]), horizon)
         predictions.append(out.t_decoh_predicted)
         actuals.append(float(dataset.t_decoh_abs[i]))
-        couplings.append(float(dataset.J_values[i]) if has_j else 0.0)
+        couplings.append(float(dataset.context["J"][i]) if has_j else 0.0)
     return (np.asarray(predictions), np.asarray(actuals),
             np.asarray(couplings))
 
