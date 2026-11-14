@@ -449,9 +449,9 @@ dataset = run(recipe, n_trajectories=2000, seed=42, cache="disk")
   блоков, сетки времени, личности сида и байтов входа `mesolve`, поэтому
   работает для любого псевдонима. `DataSpec(cache="disk")` теперь пишет в
   `data/states/`; ограничение «только plain» снято. Хранилище траекторий
-  `NumpyTrajectoryStore` оставлено для экспериментов, которые передают его
-  напрямую; файлы в `data/trajectories/` `pipeline.generate` больше не
-  читает.
+  `NumpyTrajectoryStore` остался классом (его читает `scripts/golden_outputs.py`
+  из `scripts/golden_cache/`); каталог `data/trajectories/` удалён, а
+  `scenarios.trajectory_store()` отдаёт кэш в памяти процесса.
 - **Новые блоки.** `observe.finite_shots(states, n_shots, settings, rng)`
   (план 5B): режимы `local` и `tomography`; из томографии восстанавливается
   ρ̂ линейной инверсией, и из неё считаются `purity` и `coherence_l1`; для двух

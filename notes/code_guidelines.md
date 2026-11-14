@@ -11,7 +11,7 @@
 1. **Поведение не меняется.** После каждого изменения `python -m scripts.golden_outputs` должен печатать `golden outputs identical`. Если правка неизбежно меняет арифметику с плавающей точкой (векторизация, другой порядок суммирования), её не делать, а записать в отчёт как предложение.
 2. `python -m pytest tests/ -q` — все тесты проходят.
 3. Форматы на диске совместимы:
-   - кэш траекторий `data/trajectories` (ключ `trajectory_cache_key`, сериализация `stores.py`);
+   - архивы траекторий (ключ `trajectory_cache_key`, сериализация `stores.py`; образцы в `scripts/golden_cache/`);
    - чекпойнты в `checkpoints/` (`from_bytes`);
    - CSV в `experiments/results/` не трогать.
 4. Скрипты экспериментов, на которые ссылаются статьи и каталог (`src/application/experiment_catalog.py`), не удалять. Их можно упрощать и переводить на общие функции, сохраняя запуск `python -m experiments.<имя>` и те же CSV на выходе.

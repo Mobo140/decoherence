@@ -125,18 +125,19 @@ scenario → simulation → observation → features → windows → model → l
 
 ```
 .
-├── app.py                          # FastAPI workbench, 7 screens
+├── app.py                          # FastAPI workbench, 8 screens
 ├── src/
 │   ├── domain/                     # value objects and ports; no torch/qutip
 │   ├── physics/                    # Lindblad systems, measures, Pauli operators
-│   ├── simulation/                 # QuTipSimulator; registry SIMULATORS
+│   ├── blocks/                     # constructor blocks, recipes, states cache
+│   ├── simulation/                 # QuTipSimulator(alias): facade over recipes
 │   ├── data/                       # scenarios A–E, Dataset, windows,
 │   │                               #   observation.py (OBSERVATIONS),
 │   │                               #   features.py (FEATURE_SETS)
 │   ├── models/                     # predictors; registry MODELS, build_model(alias)
 │   ├── training/                   # shared loop, standardisation, LOSSES
 │   ├── evaluation/                 # METRICS, backtest, paired statistics
-│   ├── persistence/                # trajectory cache, checkpoint stores
+│   ├── persistence/                # trajectory archives, checkpoint stores
 │   ├── pipeline.py                 # ExperimentConfig / run_experiment
 │   ├── reproducibility.py          # seeding, environment_info()
 │   └── application/                # use cases, experiment catalog, workbench
@@ -209,12 +210,13 @@ python app.py
 | Screen | What it does |
 | --- | --- |
 | **01 Dashboard** | Champion R² A–E (Paper 1 done, TFIM 0.575 / цель 0.70) |
-| **02 Runs** | Каталог E1–E14 и R1–R27, CSV, Compare, Replay `--fast` / full |
+| **02 Runs** | Каталог E1–E8, E11 и R1–R28, CSV, Compare, Replay `--fast` / full |
 | **03 Models** | `HamiltonianModelRegistry` (best_XXZ / best_TFIM / 1q) |
 | **04 Simulate** | Пресет сценария A–E (тот же `build_configs`) |
 | **05 Train** | Очередь eN в фоне, UI не блокируется |
 | **06 Predict** | Окно до T₂ + risk alarm (fallback: physics_only) |
 | **07 Backtest** | Таблица чемпионов из CSV статей |
+| **08 Constructor** | Рецепты из блоков `src/blocks`: проверка, предпросмотр, набор данных |
 
 ### 2. Programmatic API
 
@@ -276,8 +278,12 @@ if events:
 
 ## Running experiments
 
-Paper 1 = E1–E5. Paper 2 = E6–E14. Replay from the UI (**02 Runs**) or from
-the shell; every script is a module:
+The experiments are sorted by the paper that cites them (`experiments/paper1/`,
+`experiments/paper2/`), checks no paper cites (`experiments/checks/`) and new
+directions (`experiments/new/`). **`experiments/README.md` is the map**: one
+table per question, with what each experiment does, its main number and where
+it is cited. Replay from the UI (**02 Runs**) or from the shell; every script
+is a module:
 
 ```bash
 python -m experiments.run_paper1 --fast        # Paper 1 smoke (writes *_fast.csv)
@@ -290,20 +296,6 @@ Common flags: `--seeds`, `--fast`, `--tag` (suffix of the result name),
 `--out` (result file name); some scripts add their own (`--scenarios`,
 `--n-per`, …; see `--help`). CSV and provenance go to `experiments/results/`.
 Catalog and champions: `src/application/experiment_catalog.py`.
-
-- **E1** C1, C2 — physics_only / lstm_only / physics_lstm / transformer × A–E
-- **E2** C3 — window fraction sweep
-- **E3** C4 — measurement noise σ
-- **E4** C5 — train on mixture, eval per scenario
-- **E5** — direct T₂ vs inverse γ-reconstruction
-- **E6–E8** — 2-qubit scale-up; E8c is the TFIM R² champion (0.575)
-- **E9–E11** — context codes, Transformer AUROC, scaling (E11a XXZ R²=0.817)
-- **E12–E14** — stretched-exp baseline, survival loss, inject J
-- **R1–R27** — replications and follow-up probes that check the experiments
-  above across seeds rather than producing results of their own. Every
-  published table survived them; several conclusions built on top of those
-  tables did not. `paper/description_ru.tex` lists each probe and its
-  outcome.
 
 ### Reproducing a paper table
 
@@ -318,10 +310,12 @@ Catalog and champions: `src/application/experiment_catalog.py`.
 | Paper 2, cross-system champion | `python -m experiments.paper2.e11_scaling --e11a` | `e11a_cross_system.csv` |
 | Paper 2, champion across seeds | `python -m experiments.paper2.r3_multiseed_scaling` | `r3_multiseed_scaling.csv` |
 
-Trajectories are cached in `data/trajectories/`. The cache key does not
-contain the simulator variant, and a cache hit does not advance numpy's
-global generator, so numbers depend on the cache state; for a before/after
-comparison run each side from its own directory with a cold cache.
+Evolved states are cached on disk in `data/states/` (key: the whole physics;
+the initial state is drawn before the lookup, so a hit does not change the
+numbers). Scripts that still call `scenarios.trajectory_store()` keep a cache
+of trajectories in memory for the life of the process, so the result of a run
+does not depend on files left by earlier runs. For a before/after comparison
+run each side from its own directory with a cold `data/`.
 
 ### Scenario taxonomy
 
@@ -408,9 +402,9 @@ python -m pytest tests/ -q        # or: make test
 python -m scripts.golden_outputs  # or: make golden
 ```
 
-246 tests (`pytest.ini` puts the repository root on the path). They cover
+`pytest.ini` puts the repository root on the path. The tests cover
 physics (T₂, Lindblad, censoring), predictors, the registries, the Hamiltonian
-model registry, survival backtest, inject-J, the experiment harness and
+model registry, the experiment harness and
 catalog, the notebook, and the invariants that make the reported metrics
 meaningful:
 
@@ -419,7 +413,7 @@ meaningful:
   window reaches its own decoherence time, and normalisation statistics are
   fitted on training rows only.
 - **Cache robustness** — a run interrupted mid-write must not poison the
-  trajectory cache for every later run.
+  trajectory archive store.
 - **Seeding** — same seed gives identical data and identical weights, and no
   experiment script builds a training command without a seed.
 - **Catalog integrity** — ids unique and matching the labels the papers cite,
