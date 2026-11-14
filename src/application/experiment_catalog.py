@@ -46,38 +46,38 @@ class ExperimentEntry:
 
 CATALOG: list[ExperimentEntry] = [
     ExperimentEntry(
-        "E1", "Ablation", "experiments.e1_ablation",
+        "E1", "Ablation", "experiments.paper1.e1_ablation",
         "1", "C1, C2", "A–C",
         ("e1_ablation_p1.csv",), status="cited"),
     ExperimentEntry(
-        "E2", "Window sweep", "experiments.e2_window_sweep",
+        "E2", "Window sweep", "experiments.paper1.e2_window_sweep",
         "1", "C3", "B/C",
         ("e2_window_sweep_p1.csv",), status="cited"),
     ExperimentEntry(
-        "E3", "Noise sweep", "experiments.e3_noise_sweep",
+        "E3", "Noise sweep", "experiments.paper1.e3_noise_sweep",
         "1", "C4", "B/C",
         ("e3_noise_sweep_p1.csv",), status="cited"),
     ExperimentEntry(
-        "E4", "Cross-system", "experiments.e4_cross_system",
+        "E4", "Cross-system", "experiments.paper1.e4_cross_system",
         "1", "C5", "A–C",
         ("e4_cross_system_p1.csv",), status="cited"),
     ExperimentEntry(
-        "E5", "Inverse baseline", "experiments.e5_inverse_baseline",
+        "E5", "Inverse baseline", "experiments.paper1.e5_inverse_baseline",
         "1", "C3", "B",
         ("e5_inverse_baseline.csv",), status="cited"),
     ExperimentEntry(
-        "E6", "2q improved (E6a/b/c)", "experiments.e6_2qubit_improved",
+        "E6", "2q improved (E6a/b/c)", "experiments.paper2.e6_2qubit_improved",
         "2", "C2", "D, E",
         ("e6_ablation_improved.csv", "e6_noise_sweep_improved.csv",
          "e6_cross_system_improved.csv"),
         status="cited"),
     ExperimentEntry(
-        "E7", "Transformer / τ / J (E7a/b/c)", "experiments.e7_paper2_extended",
+        "E7", "Transformer / τ / J (E7a/b/c)", "experiments.paper2.e7_paper2_extended",
         "2", "C2, C5", "D, E",
         ("e7a_transformer_cross.csv", "e7b_tau_sweep.csv", "e7c_J_sweep.csv"),
         status="cited"),
     ExperimentEntry(
-        "E8c", "Improved 2q training", "experiments.e8_improved_2qubit",
+        "E8c", "Improved 2q training", "experiments.paper2.e8_improved_2qubit",
         "2", "C4, C5", "D, E",
         ("e8c_cross_system.csv",), status="superseded",
         note="E8b (noise sweep) raised NameError for an undefined seed "
@@ -106,7 +106,7 @@ CATALOG: list[ExperimentEntry] = [
         "-", "C2", "E",
         ("e10_tfim_c.csv",), status="negative"),
     ExperimentEntry(
-        "E11", "Scaling (E11a/E11b)", "experiments.e11_scaling",
+        "E11", "Scaling (E11a/E11b)", "experiments.paper2.e11_scaling",
         "2", "C5", "D, E",
         ("e11a_cross_system.csv", "e11b_cross_system.csv"), status="cited"),
     ExperimentEntry(
@@ -128,44 +128,44 @@ CATALOG: list[ExperimentEntry] = [
     # phantom gap at E15-E21.)
     ExperimentEntry(
         "R1", "Ablation across seeds (checks E6a)",
-        "experiments.r1_multiseed_ablation",
+        "experiments.paper2.r1_multiseed_ablation",
         "-", "-", "D, E",
         ("r1_multiseed_ablation_full.csv",
          "r1_multiseed_ablation_defaultarch.csv"),
         status="replication"),
     ExperimentEntry(
         "R2", "τ sweep across seeds (checks E7b)",
-        "experiments.r2_multiseed_tau",
+        "experiments.checks.r2_multiseed_tau",
         "-", "-", "D, E",
         ("r2_multiseed_tau_full_seeded.csv",), status="replication"),
     ExperimentEntry(
         "R3", "Scaling across seeds (checks E11a/E11b)",
-        "experiments.r3_multiseed_scaling",
+        "experiments.paper2.r3_multiseed_scaling",
         "-", "-", "D, E",
         ("r3_multiseed_scaling.csv",), status="replication"),
     ExperimentEntry(
         "R4", "Config overlap in E11a evaluation",
-        "experiments.r4_config_overlap",
+        "experiments.paper2.r4_config_overlap",
         "-", "-", "D, E",
         ("r4_config_overlap.csv",), status="replication"),
     ExperimentEntry(
         "R5", "J sweep across seeds (checks E7c)",
-        "experiments.r5_multiseed_J_sweep",
+        "experiments.paper2.r5_multiseed_J_sweep",
         "-", "-", "E",
         ("r5_multiseed_J_sweep.csv",), status="replication"),
     ExperimentEntry(
         "R6", "Parity-sector preparation (tests the ceiling mechanism)",
-        "experiments.r6_parity_sector",
+        "experiments.paper2.r6_parity_sector",
         "-", "-", "E",
         ("r6_parity_sector.csv",), status="replication"),
     ExperimentEntry(
         "R7", "Paper 1 ablation across seeds (checks E1)",
-        "experiments.r7_multiseed_1qubit",
+        "experiments.paper1.r7_multiseed_1qubit",
         "-", "-", "A-C",
         ("r7_multiseed_1qubit.csv",), status="replication"),
     ExperimentEntry(
         "R8", "Noise sweep and scaling across seeds (checks E6b/E8c)",
-        "experiments.r8_noise_and_scaling",
+        "experiments.paper2.r8_noise_and_scaling",
         "-", "-", "D, E",
         ("r8_noise_and_scaling.csv",), status="replication",
         note="The committed rows of the e8c arm were produced while "
@@ -175,120 +175,120 @@ CATALOG: list[ExperimentEntry] = [
              "replications."),
     ExperimentEntry(
         "R9", "Target modulation by H (simulation only)",
-        "experiments.r9_target_modulation",
+        "experiments.paper2.r9_target_modulation",
         "-", "-", "D, E",
         ("r9_target_modulation.csv",), status="replication"),
     ExperimentEntry(
         "R10", "J sweep with energy-basis T2 target (tests R9)",
-        "experiments.r10_energy_target_J_sweep",
+        "experiments.paper2.r10_energy_target_J_sweep",
         "-", "-", "E",
         ("r10_energy_target_J_sweep.csv",), status="replication"),
     ExperimentEntry(
         "R11",
         "Paper 1 ablation at 500 trajectories (checks lstm_only vs data size)",
-        "experiments.r7_multiseed_1qubit",
+        "experiments.paper1.r7_multiseed_1qubit",
         "-", "-", "A-C",
         ("r11_1qubit_500traj.csv",), supports_fast=False, status="replication"),
     ExperimentEntry(
         "R12", "Window sweep across seeds (checks E2)",
-        "experiments.r12_multiseed_window_sweep",
+        "experiments.paper1.r12_multiseed_window_sweep",
         "-", "-", "B/C",
         ("r12_multiseed_window_sweep.csv",), status="replication"),
     ExperimentEntry(
         "R13",
         "Paper 1 ablation on 400 independent test trajectories, bootstrap "
         "CIs; T_phys-as-feature variant",
-        "experiments.r13_independent_test",
+        "experiments.paper1.r13_independent_test",
         "-", "-", "A-C",
         ("r13_independent_test.csv",), status="replication"),
     ExperimentEntry(
         "R15",
         "Measurement-noise robustness of every model across seeds (replaces "
         "E3)",
-        "experiments.r15_noise_variants",
+        "experiments.paper1.r15_noise_variants",
         "-", "-", "B/C",
         ("r15_noise_variants.csv",), status="replication"),
     ExperimentEntry(
         "R16",
         "Noise-aware training (noisy copies of training windows, scalars "
         "recomputed)",
-        "experiments.r16_noise_aware_training",
+        "experiments.paper1.r16_noise_aware_training",
         "-", "-", "B/C",
         ("r16_noise_aware_training.csv",), status="replication"),
     ExperimentEntry(
         "R17", "Smoothing-based slope estimators under noise (no training)",
-        "experiments.r17_slope_estimators",
+        "experiments.paper1.r17_slope_estimators",
         "-", "-", "B/C",
         ("r17_slope_estimators.csv",), status="replication"),
     ExperimentEntry(
         "R18", "Accuracy and alarm timing along each trajectory (vs t_obs/T2)",
-        "experiments.r18_alarm_timing",
+        "experiments.paper1.r18_alarm_timing",
         "-", "-", "B/C",
         ("r18_alarm_timing_bins.csv", "r18_alarm_timing_alarm.csv"),
         status="replication"),
     ExperimentEntry(
-        "R19", "E4 and E5 across seeds", "experiments.r19_replicate_e4_e5",
+        "R19", "E4 and E5 across seeds", "experiments.paper1.r19_replicate_e4_e5",
         "-", "-", "A-C",
         ("r19_e4.csv", "r19_e5.csv"), status="replication"),
     ExperimentEntry(
         "R20",
         "Energy-basis T2 target: XXZ J sweep (control) and cross-system "
         "Transformer",
-        "experiments.r20_energy_target_xxz",
+        "experiments.paper2.r20_energy_target_xxz",
         "-", "-", "D/E",
         ("r20a_xxz_J_sweep.csv", "r20b_cross_energy.csv"),
         status="replication"),
     ExperimentEntry(
         "R21",
         "AR(1) measurement noise and stochastic (log-normal OU) gamma(t)",
-        "experiments.r21_stochastic_gamma_ar1",
+        "experiments.paper1.r21_stochastic_gamma_ar1",
         "-", "-", "B/C",
         ("r21_stochastic_gamma_ar1.csv",), status="replication"),
     ExperimentEntry(
         "R22", "Noise-aware training with AR(1)-correlated noise (five seeds)",
-        "experiments.r22_ar1_noise_training",
+        "experiments.paper1.r22_ar1_noise_training",
         "-", "-", "B/C",
         ("r22_ar1_noise_training.csv",), status="replication"),
     ExperimentEntry(
         "R23",
         "Two-body Pauli correlators as 2q inputs; target sensitivity to a "
         "2% rate change",
-        "experiments.r23_two_body_correlators",
+        "experiments.paper2.r23_two_body_correlators",
         "-", "-", "D/E",
         ("r23_two_body_correlators.csv", "r23c_target_sensitivity.csv"),
         status="replication"),
     ExperimentEntry(
         "R24",
         "Entanglement sudden death as the 2q target; ESD/revival statistics",
-        "experiments.r24_entanglement_target",
+        "experiments.paper2.r24_entanglement_target",
         "-", "-", "D/E",
         ("r24_entanglement_target.csv", "r24b_esd_statistics.csv"),
         status="replication"),
     ExperimentEntry(
         "R25",
         "Learning curve for the ESD target (250-4000 trajectories, nested)",
-        "experiments.r25_esd_data_scaling",
+        "experiments.paper2.r25_esd_data_scaling",
         "-", "-", "D/E",
         ("r25_esd_data_scaling.csv",), status="replication"),
     ExperimentEntry(
         "R26",
         "Will entanglement die, and will it stay dead? (classification at "
         "fixed t_obs)",
-        "experiments.r26_esd_occurrence",
+        "experiments.paper2.r26_esd_occurrence",
         "-", "-", "D/E",
         ("r26_esd_occurrence.csv",), status="replication"),
     ExperimentEntry(
         "R27",
         "ESD occurrence and permanence on XXZ, 8000/4000 trajectories, "
         "bootstrap CIs",
-        "experiments.r27_esd_permanence",
+        "experiments.paper2.r27_esd_permanence",
         "-", "-", "D",
         ("r27_esd_permanence.csv",), status="replication"),
     ExperimentEntry(
         "R28",
         "Kondo bath dissipator reproduced from Delgado and "
         "Fernandez-Rossier; T2 and T2^E of two qubits versus k_F d",
-        "experiments.r28_kondo_reproduction",
+        "experiments.new.r28_kondo_reproduction",
         "-", "-", "D/E",
         ("r28/r28_dimer.csv", "r28/r28_demo_t2.csv"),
         status="replication"),

@@ -18,7 +18,7 @@ import time
 from collections.abc import Sequence
 
 from experiments import common
-from experiments import e6_2qubit_improved
+from experiments.paper2 import e6_2qubit_improved
 
 
 def main(argv: Sequence[str] | None = None) -> None:

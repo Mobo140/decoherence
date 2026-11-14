@@ -142,7 +142,9 @@ scenario → simulation → observation → features → windows → model → l
 │   └── application/                # use cases, experiment catalog, workbench
 ├── experiments/
 │   ├── common.py                   # harness: CLI, results path, provenance
-│   ├── e1_…e14_*.py, r1_…r27_*.py  # one script per experiment
+│   ├── paper1/, paper2/            # experiments cited in paper 1 / paper 2
+│   ├── checks/, new/               # checks cited only in the description; new directions
+│   ├── j_sweep.py, _config.py      # helpers shared by experiments
 │   ├── run_paper1.py, run_all.py   # chains of experiments
 │   └── results/                    # CSV (+ .provenance.json) of finished runs
 ├── notebooks/                      # pipeline.ipynb (walkthrough), figures.ipynb
@@ -279,8 +281,8 @@ the shell; every script is a module:
 
 ```bash
 python -m experiments.run_paper1 --fast        # Paper 1 smoke (writes *_fast.csv)
-python -m experiments.e8_improved_2qubit --fast
-python -m experiments.r22_ar1_noise_training --seeds 42 43 44
+python -m experiments.paper2.e8_improved_2qubit --fast
+python -m experiments.paper1.r22_ar1_noise_training --seeds 42 43 44
 make help                                      # the same commands as make targets
 ```
 
@@ -312,9 +314,9 @@ Catalog and champions: `src/application/experiment_catalog.py`.
 | Table | Command | Result file |
 | --- | --- | --- |
 | Paper 1, ablation (single run) | `python -m experiments.run_paper1` | `e1_ablation_p1.csv` |
-| Paper 1, ablation with CIs | `python -m experiments.r13_independent_test` | `r13_independent_test.csv` |
-| Paper 2, cross-system champion | `python -m experiments.e11_scaling --e11a` | `e11a_cross_system.csv` |
-| Paper 2, champion across seeds | `python -m experiments.r3_multiseed_scaling` | `r3_multiseed_scaling.csv` |
+| Paper 1, ablation with CIs | `python -m experiments.paper1.r13_independent_test` | `r13_independent_test.csv` |
+| Paper 2, cross-system champion | `python -m experiments.paper2.e11_scaling --e11a` | `e11a_cross_system.csv` |
+| Paper 2, champion across seeds | `python -m experiments.paper2.r3_multiseed_scaling` | `r3_multiseed_scaling.csv` |
 
 Trajectories are cached in `data/trajectories/`. The cache key does not
 contain the simulator variant, and a cache hit does not advance numpy's

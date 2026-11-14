@@ -30,7 +30,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # --- Code under test (update these imports if the code moves) -------------
-from experiments.r26_esd_occurrence import windows as esd_windows
+from experiments.paper2.r26_esd_occurrence import windows as esd_windows
 from src import reproducibility
 from src.application.backtest import BacktestCommand, BacktestUseCase
 from src.application.generate_dataset import (

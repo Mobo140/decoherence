@@ -65,7 +65,7 @@ def _training_command_sites():
     names = ("TrainModelCommand", "AblationCommand", "CrossSystemCommand",
              "NoiseSweepCommand", "WindowSweepCommand")
     pattern = re.compile(r"\b(" + "|".join(names) + r")\s*\(")
-    for path in sorted(EXPERIMENTS.glob("*.py")):
+    for path in sorted(EXPERIMENTS.rglob("*.py")):
         text = path.read_text()
         for m in pattern.finditer(text):
             i = m.end() - 1

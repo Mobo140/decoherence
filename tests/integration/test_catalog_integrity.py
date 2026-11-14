@@ -85,7 +85,7 @@ def test_replications_live_outside_the_experiment_numbering():
 def test_experiment_scripts_have_no_numbering_gap():
     nums = sorted({
         int(re.match(r"e(\d+)", p.name).group(1))
-        for p in (REPO / "experiments").glob("e*.py")
+        for p in (REPO / "experiments").rglob("e*.py")
         if re.match(r"e\d+", p.name)
     })
     gaps = [n for n in range(1, max(nums) + 1) if n not in nums]
