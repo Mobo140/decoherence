@@ -52,8 +52,8 @@ INFERENCE_CODES = {"A": 0.0, "B": 0.0, "C": 1.0, "D": 2.0, "E": 3.0}
 BASELINES = (
     ("E8c physics_lstm", "D", 0.740, 0.789),
     ("E8c physics_lstm", "E", 0.575, 0.759),
-    ("E10b Transformer w=30", "D", 0.734, 0.890),
-    ("E10b Transformer w=30", "E", 0.567, 0.801),
+    ("Transformer w=30 (earlier run)", "D", 0.734, 0.890),
+    ("Transformer w=30 (earlier run)", "E", 0.567, 0.801),
 )
 
 

@@ -11,7 +11,7 @@ PYTEST := $(PYTHON) -m pytest tests/ -q
 .DEFAULT_GOAL := help
 .PHONY: help install app test golden \
 	paper1 paper1-full paper2-improved \
-	e1 e2 e3 e4 e5 e6 e7 e8 e9 e10a e10b e11 e12 e13 e14 \
+	e1 e2 e3 e4 e5 e6 e7 e8 e11 \
 	e6-full e8-full pdf pdf-1 pdf-2
 
 help: ## список команд
@@ -40,7 +40,7 @@ paper1-full: ## Paper 1 полный прогон
 paper2-improved: ## E6 suite smoke
 	$(PYTHON) -m experiments.run_paper2_improved --fast
 
-# --- eN: e1–e5 полный прогон (--fast даёт smoke); e6–e14 smoke; чемпионы: e6/e8-full
+# --- eN: e1–e5 полный прогон (--fast даёт smoke); e6–e11 smoke; чемпионы: e6/e8-full
 
 e1: ## ablation A–C
 	$(PYTHON) -m experiments.paper1.e1_ablation
@@ -66,26 +66,14 @@ e7: ## Transformer / τ / J smoke
 e8: ## improved 2q smoke — тоже пишет e8_*.csv
 	$(PYTHON) -m experiments.paper2.e8_improved_2qubit --fast
 
-e9: ## context codes smoke
-	$(PYTHON) -m experiments.e9_context_injection --fast
 
-e10a: ## fixed context smoke
-	$(PYTHON) -m experiments.e10_fixed_context --fast
 
-e10b: ## TFIM specialized smoke
-	$(PYTHON) -m experiments.e10_tfim_specialized --fast
 
 e11: ## scaling smoke
 	$(PYTHON) -m experiments.paper2.e11_scaling --fast
 
-e12: ## stretched-exp baseline smoke
-	$(PYTHON) -m experiments.e12_baseline_comparison --fast
 
-e13: ## survival TFIM smoke
-	$(PYTHON) -m experiments.e13_survival_tfim --fast
 
-e14: ## inject J smoke
-	$(PYTHON) -m experiments.e14_inject_J --fast
 
 e6-full: ## полный E6 — перезапишет e6_*.csv
 	$(PYTHON) -m experiments.paper2.e6_2qubit_improved

@@ -1,0 +1,36 @@
+{
+  "n": 1,
+  "configs": [
+    {
+      "n_qubits": 2,
+      "omega": 1.3321102650842094,
+      "dissipator": {
+        "operator_type": "sigma_minus",
+        "gamma_const": null,
+        "gamma_coeffs": [
+          0.19453781113322016,
+          0.4024062154152184,
+          0.6913946152854349,
+          0.2109221510393906,
+          0.6849497041666207
+        ]
+      },
+      "interaction_type": "XXZ",
+      "J": 0.2984034024484526,
+      "t_max": 20.0,
+      "dt": 0.1,
+      "decoherence_criterion": "coherence",
+      "decoherence_threshold": 0.36787944117144233
+    }
+  ],
+  "feature_names": [
+    "sigma_x1",
+    "sigma_y1",
+    "sigma_z1",
+    "sigma_x2",
+    "sigma_y2",
+    "sigma_z2",
+    "purity",
+    "coherence_l1"
+  ]
+}

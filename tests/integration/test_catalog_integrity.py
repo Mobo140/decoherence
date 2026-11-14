@@ -1,9 +1,7 @@
 """Catalog consistency.
 
 The catalog is what the workbench shows, so a label that disagrees with
-the papers or a CSV that no longer exists is a bug the user sees. "E10b"
-once named two different experiments: the papers' window-30 cross-system
-run, and a TFIM-specialised run no paper cites.
+the papers or a CSV that no longer exists is a bug the user sees.
 """
 from __future__ import annotations
 
@@ -82,14 +80,20 @@ def test_replications_live_outside_the_experiment_numbering():
             assert not entry.id.startswith("R"), entry.id
 
 
-def test_experiment_scripts_have_no_numbering_gap():
-    nums = sorted({
-        int(re.match(r"e(\d+)", p.name).group(1))
-        for p in (REPO / "experiments").rglob("e*.py")
-        if re.match(r"e\d+", p.name)
-    })
-    gaps = [n for n in range(1, max(nums) + 1) if n not in nums]
-    assert not gaps, f"gap in experiment numbering: {gaps}"
+def test_every_experiment_script_has_a_catalog_entry_in_its_own_folder():
+    """A script the catalog does not know is invisible in the workbench, and
+    a catalog module outside the folders is a stale path."""
+    folders = ("paper1", "paper2", "checks", "new")
+    scripts = {
+        ".".join(p.relative_to(REPO).with_suffix("").parts)
+        for folder in folders
+        for p in (REPO / "experiments" / folder).glob("[er][0-9]*.py")
+    }
+    modules = {e.module for e in CATALOG}
+    assert scripts - modules == set(), (
+        f"scripts without a catalog entry: {sorted(scripts - modules)}")
+    assert modules - scripts == set(), (
+        f"catalog modules that are not scripts: {sorted(modules - scripts)}")
 
 
 @pytest.mark.skipif(not PAPER2.exists(), reason="paper source not present")

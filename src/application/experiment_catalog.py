@@ -7,7 +7,7 @@ import pathlib
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 RESULTS_DIR = REPO_ROOT / "experiments" / "results"
-TRAJECTORY_CACHE = REPO_ROOT / "data" / "trajectories"
+STATES_CACHE = REPO_ROOT / "data" / "states"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -90,37 +90,9 @@ CATALOG: list[ExperimentEntry] = [
              "that baseline through the model registry and adds a "
              "stretched_exp row per scenario."),
     ExperimentEntry(
-        "E9", "Context codes", "experiments.e9_context_injection",
-        "-", "C5", "D, E",
-        ("e9a_cross_system.csv", "e9b_ablation.csv"), status="negative"),
-    # The papers' "E10b" is the window-30 cross-system run produced by
-    # e10_fixed_context.py, not by e10_tfim_specialized.py.
-    ExperimentEntry(
-        "E10a/E10b", "Fixed context (E10b cited)",
-        "experiments.e10_fixed_context",
-        "2", "C5", "D, E",
-        ("e10a_cross_system.csv", "e10b_cross_system.csv"),
-        status="superseded"),
-    ExperimentEntry(
-        "E10-TFIM", "TFIM specialized", "experiments.e10_tfim_specialized",
-        "-", "C2", "E",
-        ("e10_tfim_c.csv",), status="negative"),
-    ExperimentEntry(
         "E11", "Scaling (E11a/E11b)", "experiments.paper2.e11_scaling",
         "2", "C5", "D, E",
         ("e11a_cross_system.csv", "e11b_cross_system.csv"), status="cited"),
-    ExperimentEntry(
-        "E12", "Stretched-exp baseline", "experiments.e12_baseline_comparison",
-        "-", "C2", "B–E",
-        ("e12_baseline_comparison.csv",), status="negative"),
-    ExperimentEntry(
-        "E13", "Survival TFIM", "experiments.e13_survival_tfim",
-        "-", "C2", "E",
-        ("e13_survival_tfim.csv",), status="negative"),
-    ExperimentEntry(
-        "E14", "Inject J", "experiments.e14_inject_J",
-        "-", "C2, C5", "D, E",
-        ("e14_inject_J.csv",), status="negative"),
 
     # Replications: these check other experiments rather than producing
     # results of their own, so they sit outside the E-numbering the papers
@@ -388,16 +360,16 @@ def summarize_r2(path: pathlib.Path) -> str:
 
 
 def cache_stats(root: pathlib.Path | None = None) -> dict[str, float]:
-    """Counts the trajectory cache and the result files.
+    """Counts the states cache and the result files.
 
     Args:
-        root: Cache directory; defaults to `data/trajectories`.
+        root: Cache directory; defaults to `data/states`.
 
     Returns:
         File count, size in bytes and GB of the cache, and the number of
         result CSVs.
     """
-    cache_root = root or TRAJECTORY_CACHE
+    cache_root = root or STATES_CACHE
     files = list(cache_root.glob("*.npz")) if cache_root.exists() else []
     size = sum(p.stat().st_size for p in files)
     return {

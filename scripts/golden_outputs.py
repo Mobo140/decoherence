@@ -52,7 +52,8 @@ from src.simulation.simulator import QuTipSimulator
 # ---------------------------------------------------------------------------
 
 GOLDEN = Path(__file__).with_name("golden_outputs.json")
-# Content-addressed trajectory-cache entries checked for unchanged loading.
+GOLDEN_CACHE = Path(__file__).with_name("golden_cache")
+# Archives in `scripts/golden_cache/` checked for unchanged loading.
 _CACHE_KEYS = (
     "t_00011afa500936f7",
     "t_00025c1e6cdcbc45",
@@ -198,9 +199,10 @@ def compute() -> dict:
                 preds.append(type(exc).__name__)
         out[f"ckpt/{ckpt.stem}"] = [type(pred).__name__] + [
             repr(float(x)) if not isinstance(x, str) else x for x in preds]
-    # Content-addressed entries never change once written; the named
-    # dataset dumps are overwritten by every run, so they are not checked.
-    traj_store = NumpyTrajectoryStore()
+    # Three trajectories copied out of the old `data/trajectories` cache; they
+    # check that archives still load unchanged. The directory itself is
+    # regenerable and was deleted.
+    traj_store = NumpyTrajectoryStore(root=GOLDEN_CACHE)
     for name in _CACHE_KEYS:
         out[f"cache/{name}"] = [_traj(t) for t in traj_store.load(name)[:2]]
     return out
