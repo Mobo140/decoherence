@@ -194,10 +194,12 @@ def test_with_criterion_accepts_any_sequence_and_an_empty_one():
     assert len(out) == 5 and isinstance(out, list)
 
 
-def test_trajectory_store_is_the_shared_numpy_cache(isolated_cwd):
+def test_trajectory_store_is_one_in_memory_cache_that_writes_nothing(
+        isolated_cwd):
     store = scenarios.trajectory_store()
-    assert isinstance(store, stores.NumpyTrajectoryStore)
-    assert (isolated_cwd / "data" / "trajectories").is_dir()
+    assert isinstance(store, stores.MemoryTrajectoryStore)
+    assert scenarios.trajectory_store() is store
+    assert not (isolated_cwd / "data").exists()
 
 
 def test_scenario_labels_are_a_to_e():

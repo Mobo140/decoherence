@@ -35,6 +35,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from experiments import common
+from src import pipeline
 from src.application import run_window_sweep
 from src.data import scenarios as scenario_lib
 from src.simulation import simulator as simulator_lib
@@ -66,7 +67,7 @@ def run(
     groups = scenario_lib.build_configs(n_per_scenario=n_per, seed=seed)
     configs = [cfg for label in scenarios for cfg in groups[label]]
     results = run_window_sweep.WindowSweepUseCase(
-        simulator_lib.QuTipSimulator(), store=scenario_lib.trajectory_store()
+        simulator_lib.QuTipSimulator(cache_dir=pipeline.STATES_CACHE)
     ).execute(run_window_sweep.WindowSweepCommand(
         configs=configs,
         fractions=list(FRACTIONS),
