@@ -37,6 +37,7 @@ checkpoints/
 runs/
 /figures/
 *.npz
+!scripts/golden_cache/*.npz
 *.hdf5
 *.parquet
 

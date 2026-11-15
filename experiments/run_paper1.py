@@ -21,11 +21,11 @@ import time
 from collections.abc import Sequence
 
 from experiments import common
-from experiments import e1_ablation
-from experiments import e2_window_sweep
-from experiments import e3_noise_sweep
-from experiments import e4_cross_system
-from experiments import e5_inverse_baseline
+from experiments.paper1 import e1_ablation
+from experiments.paper1 import e2_window_sweep
+from experiments.paper1 import e3_noise_sweep
+from experiments.paper1 import e4_cross_system
+from experiments.paper1 import e5_inverse_baseline
 
 
 def _log(message: str) -> None:

@@ -288,6 +288,19 @@ def with_criterion(
             for c in configs]
 
 
+_SHARED_STORE = stores.MemoryTrajectoryStore()
+
+
 def trajectory_store() -> ports.ITrajectoryStore:
-    """Returns the shared content-addressed cache under data/trajectories/."""
-    return stores.NumpyTrajectoryStore()
+    """Returns the trajectory cache shared by the calls of one process.
+
+    The cache lives in memory and dies with the process; nothing is written
+    to disk. Calls of one script that simulate the same configuration, seed
+    and index get the earlier trajectory back, which is what the on-disk
+    store did on an empty `data/trajectories/`. A second run of the script
+    starts empty, so its result does not depend on earlier runs.
+
+    Returns:
+        The same store object on every call.
+    """
+    return _SHARED_STORE

@@ -29,9 +29,9 @@ def test_catalog_and_e8_csv():
     assert csv["rows"]
 
 
-def test_compare_e8_e14():
-    data = _client().post("/api/compare", json={"a": "E8c", "b": "E14"}).json()
-    assert "E8c" in data["text"] and "E14" in data["text"]
+def test_compare_e8_e11():
+    data = _client().post("/api/compare", json={"a": "E8c", "b": "E11"}).json()
+    assert "E8c" in data["text"] and "E11" in data["text"]
 
 
 def test_models_slots():

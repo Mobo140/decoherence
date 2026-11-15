@@ -159,7 +159,7 @@ async function loadCatalog() {
   catalog = data.experiments;
   fillSelects(["#run-exp", "#tr-exp", "#cmp-a", "#cmp-b"]);
   const b = $("#cmp-b");
-  if (b && [...b.options].some((o) => o.value === "E14")) b.value = "E14";
+  if (b && [...b.options].some((o) => o.value === "E11")) b.value = "E11";
   renderRunsTable(radioValue("paper") || "all");
   await loadCsv($("#run-exp").value);
 }

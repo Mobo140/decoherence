@@ -48,7 +48,7 @@ class JobQueue:
         """Starts `python -m module` unless a job is already running.
 
         Args:
-            module: Module to run, e.g. "experiments.e8_improved_2qubit".
+            module: Module to run, e.g. "experiments.paper2.e8_improved_2qubit".
             extra_args: Arguments after the module name.
 
         Returns:

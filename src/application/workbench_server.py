@@ -82,7 +82,7 @@ class CompareIn(pydantic.BaseModel):
     """Request of `/api/compare`."""
 
     a: str = "E8c"
-    b: str = "E14"
+    b: str = "E11"
 
 
 class RecipeIn(pydantic.BaseModel):

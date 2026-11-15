@@ -15,7 +15,7 @@ most one tiny QuTiP simulation or train for a few epochs on a toy dataset.
         data/          dataset, windows, scenarios, observation, features
         domain/        value objects
         evaluation/    metrics, statistics, backtest
-        experiments/   experiments.common and experiment helpers
+        experiments/   experiments.common; paper1/, paper2/, new/ mirror the experiment folders
         models/        predictors and the model registry
         persistence/   trajectory stores, model stores, champion registries
         physics/       Lindblad systems, measures, observables
