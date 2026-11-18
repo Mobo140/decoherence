@@ -13,7 +13,9 @@ Writes into paper/report_2026-11/:
   table_r28_dev.tex               maximum deviations from the R28 CSV files
   numbers.json                    every number the text quotes from here
 
-The R28 figures are not made here; they are copied from
+  figures/fig3_spin_waves_report.png   PRB Fig. 3 re-plotted from the R28 CSVs
+
+The other R28 figures are not made here; they are copied from
 experiments/results/r28/ (see the README of that folder).
 """
 from __future__ import annotations
@@ -414,8 +416,41 @@ def r28_part() -> None:
     NUMBERS["demo"] = out
 
 
+def fig3_part() -> None:
+    """PRB Fig. 3 from r28_swave.csv and r28_swave_coefficients_n8.csv."""
+    rates = pd.read_csv(R28 / "r28_swave.csv")
+    coeff = pd.read_csv(R28 / "r28_swave_coefficients_n8.csv")
+    fig, axes = plt.subplots(2, 2, figsize=(6.6, 5.0))
+    for ax, column, color, label in (
+            (axes[0, 0], "C_sw1", "black", "(a) SW1, $N=8$"),
+            (axes[0, 1], "C_sw2", "tab:red", "(b) SW2, $N=8$")):
+        ax.bar(coeff.site, coeff[column], color=color, width=0.7)
+        ax.axhline(0, color="k", lw=0.6)
+        ax.set_xlabel("узел $i$")
+        ax.set_ylabel("амплитуда $C(i)$")
+        ax.set_title(label)
+        ax.set_xticks(coeff.site)
+    peaks = {}
+    for ax, column, label in (
+            (axes[1, 0], "sw1", r"(c) $\Gamma_{SW1}$"),
+            (axes[1, 1], "sw2", r"(d) $\Gamma_{SW2}$")):
+        for n, part in rates.groupby("N"):
+            ax.plot(part.kFd_over_pi, part[column], label=f"$N={n}$")
+            if column == "sw2":
+                row = part.loc[part[column].idxmax()]
+                peaks[int(n)] = {"max": float(row[column]),
+                                 "kFd_over_pi": float(row.kFd_over_pi)}
+        ax.set_xlabel(r"$k_Fd/\pi$")
+        ax.set_ylabel("скорость / скорость одного спина")
+        ax.set_title(label)
+        ax.legend(loc="upper right")
+    save(fig, "fig3_spin_waves_report.png")
+    NUMBERS["fig3_sw2_peaks"] = peaks
+
+
 def main() -> None:
     FIG.mkdir(exist_ok=True)
+    fig3_part()
     finite_shots_part()
     print("finite shots", round(time.time() - T0, 1), "s", flush=True)
     records_part()
