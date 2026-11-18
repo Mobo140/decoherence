@@ -23,7 +23,8 @@
   "bootstrap": 2000,
   "bootstrap_seed": 7,
   "workers": 6,
-  "runtime_seconds": 19.800843954086304
+  "runtime_seconds": 61.79528498649597,
+  "cache_was_empty": true
  },
  "summary": {
   "XXZ": {
@@ -63,6 +64,10 @@
      "max": 473.5262066032131,
      "ratio": 4.570801486553147
     }
+   },
+   "t2e_ci_width_over_median": {
+    "min": 0.061995310168586296,
+    "max": 0.10679222473222286
    },
    "validity": {
     "ratio_transition": 0.003926991258911888,
@@ -117,6 +122,10 @@
      "max": 118.06164796305912,
      "ratio": 1.1424524628433768
     }
+   },
+   "t2e_ci_width_over_median": {
+    "min": 0.18986947441452268,
+    "max": 0.3197401112358349
    },
    "validity": {
     "ratio_transition": 0.09433905501255994,

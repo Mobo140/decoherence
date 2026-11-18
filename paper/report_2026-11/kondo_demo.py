@@ -21,7 +21,8 @@ Checks of the parameter choice, for every (system, d, k_F d):
 Check of `channels.bernstein_profile` on the Kondo channels.
 
 Writes into paper/report_2026-11/:
-  figures/kondo_demo.png, table_kondo_demo.tex, numbers_kondo_demo.json
+  figures/kondo_demo.png, table_kondo_demo.tex, table_kondo_validity.tex,
+  numbers_kondo_demo.json
 The states are cached in data/states (untracked).
 """
 from __future__ import annotations
@@ -117,10 +118,10 @@ def bootstrap_median(values: np.ndarray, n_boot: int = BOOT) -> tuple:
 
 def cell(task: tuple) -> dict:
     """Runs n trajectories for one (system, d, k_F d / pi)."""
-    interaction, dim, x, n = task
+    interaction, dim, x, n, cache = task
     recipe = recipe_for(interaction, dim, x)
     sys_ = system.two_qubit(J, interaction)
-    runs = run(recipe, n, seed=SEED, cache_dir=CACHE, keep_states=True)
+    runs = run(recipe, n, seed=SEED, cache_dir=cache, keep_states=True)
     t2e = np.array([r.target.time for r in runs])
     t2e_cens = np.array([r.target.censored for r in runs])
     t2 = [target.coherence_crossing(r.states, sys_, THRESHOLD) for r in runs]
@@ -261,6 +262,10 @@ def summary(cells: list[dict]) -> dict:
                                  "max": float(med.max()),
                                  "ratio": float(med.max() / med.min())}
         item["t2e_by_dim"] = per_dim
+        width = [(c["t2e"]["ci_high"] - c["t2e"]["ci_low"])
+                 / c["t2e"]["median"] for c in part]
+        item["t2e_ci_width_over_median"] = {"min": float(min(width)),
+                                            "max": float(max(width))}
         v = {k: max(c["validity"][k] for c in part)
              for k in ("ratio_transition", "ratio_decay",
                        "gamma_decay_over_kT", "gamma_transition_max",
@@ -280,6 +285,25 @@ def summary(cells: list[dict]) -> dict:
     return out
 
 
+def write_validity_table(summ: dict) -> None:
+    """Born--Markov and secular checks, the worst case over the grid."""
+    lines = [r"\begin{tabular}{lcccccc}", r"\toprule",
+             r"& $\Delta_{\min}$ & $\Gamma_{\rm tr}^{\max}$ & "
+             r"$\Gamma_{\rm dec}^{\max}$ & $\Gamma_{\rm dec}^{\max}/\Delta_{\min}$ & "
+             r"$\Gamma_{\rm dec}^{\max}/\kT$ & $\Gamma_{\rm dec}^{\max}T_2^E$ \\",
+             r"\midrule"]
+    for name in SYSTEMS:
+        v = summ[name]["validity"]
+        lines.append(
+            f"{name} & {v['bohr_gap_min']:.3f} & "
+            f"{v['gamma_transition_max']:.4f} & {v['gamma_decay_max']:.4f} & "
+            f"{v['ratio_decay']:.4f} & {v['gamma_decay_over_kT']:.3f} & "
+            f"{v['decay_rate_times_t2e_min']:.2f}--"
+            f"{v['decay_rate_times_t2e_max']:.2f} \\\\")
+    lines += [r"\bottomrule", r"\end{tabular}"]
+    (HERE / "table_kondo_validity.tex").write_text("\n".join(lines) + "\n")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--n", type=int, default=30)
@@ -288,11 +312,15 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=6)
     parser.add_argument("--limit", type=int, default=None,
                         help="only the first LIMIT cells (timing)")
+    parser.add_argument("--cache", type=pathlib.Path, default=CACHE,
+                        help="states cache (default data/states)")
     parser.add_argument("--no-write", action="store_true")
     args = parser.parse_args()
     FIG.mkdir(exist_ok=True)
     xs = [float(v) for v in np.linspace(0.0, 2.0, args.points)]
-    tasks = [(s, d, x, args.n) for s in SYSTEMS for d in DIMS for x in xs]
+    cache_was_empty = not any(args.cache.glob("*.npz"))
+    tasks = [(s, d, x, args.n, args.cache)
+             for s in SYSTEMS for d in DIMS for x in xs]
     if args.limit:
         tasks = tasks[:args.limit]
     start = time.time()
@@ -310,6 +338,7 @@ def main() -> None:
     cells.sort(key=lambda c: (c["system"], c["dim"], c["x_over_pi"]))
     plot(cells, xs)
     write_table(cells, xs)
+    write_validity_table(summary(cells))
     numbers = {
         "settings": {"rho_J": RHO_J, "kT": KT, "k_F": K_F, "J": J,
                      "t_max": T_MAX, "dt": DT, "threshold": THRESHOLD,
@@ -317,7 +346,8 @@ def main() -> None:
                      "seed": SEED, "bootstrap": BOOT,
                      "bootstrap_seed": BOOT_SEED,
                      "workers": args.workers,
-                     "runtime_seconds": runtime},
+                     "runtime_seconds": runtime,
+                     "cache_was_empty": cache_was_empty},
         "summary": summary(cells), "bernstein_check": check,
         "cells": cells}
     (HERE / "numbers_kondo_demo.json").write_text(
