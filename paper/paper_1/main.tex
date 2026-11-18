@@ -33,6 +33,9 @@ in Single-Qubit Systems Under Unknown Time-Dependent Dissipation}}
 We address the problem of predicting the remaining decoherence time $T_2$
 of a single qubit from a short window of Pauli expectation values,
 \emph{without} knowledge of the dissipation rate $\gamma(t)$.
+The window values are ensemble averages over repeated preparations, so
+the setting is characterisation and calibration (prediction for subsequent
+runs), not a warning during a single computation.
 For constant $\gamma$ and amplitude damping, the least-squares slope of
 $\log C(t)$ gives $T_2$ exactly and no learning is needed.
 For unknown, time-dependent $\gamma(t)$ we combine this slope-based
@@ -86,10 +89,27 @@ The \emph{decoherence time} $T_2$ is the time at which the
 $\ell_1$-coherence $C(t) = \sum_{i \neq j}|\rho_{ij}(t)|$ falls to
 $e^{-1}$ of its initial value.
 
-Knowing the remaining decoherence time from a partial trajectory is
-directly actionable: it enables error-correction protocols to
-preemptively reset or re-encode qubits before fidelity falls below a
-critical threshold~\cite{Lidar2013}.
+Knowing the remaining decoherence time from the beginning of a decay
+curve is useful for characterisation and calibration: it tells how long a
+given device configuration will stay coherent in subsequent runs, so that,
+for example, the recalibration interval or the circuit depth can be chosen
+accordingly. The same separation in time between probing and use underlies
+the prediction of qubit dephasing in the experiment of Mavadia et
+al.~\cite{Mavadia2017}.
+
+\paragraph{Setting.}
+Every input value is an \emph{ensemble average}: a Pauli expectation, and
+the coherence and purity computed from the expectations, are averages over
+repeated preparations of the same initial state, evolved to the window
+time and measured. A single run gives only outcomes $\pm1$, and the
+measurement changes the state, so such a window cannot be recorded along
+one running instance. The use case is therefore characterisation and
+calibration: the first part of the decay curve is measured on repeated
+preparations, and the remaining time is predicted for the following runs.
+It is not a warning issued during a single computation. Here the
+averages are computed exactly from the simulated $\rho(t)$, that is, for
+an infinite number of repetitions; the cost of acquiring them is
+discussed in Sec.~\ref{sec:cost}.
 
 \paragraph{When is ML needed?}
 For constant $\gamma$ and $\sigma_-$ (amplitude damping), the coherence
@@ -143,12 +163,44 @@ Photonic        & Cavity leakage rate drift \\
 The closest related work, arXiv:2505.06928~\cite{TransformerLindblad2025},
 uses a pure Transformer to \emph{reconstruct} $\gamma(t)$ from a
 \emph{complete} trajectory via Bernstein polynomial regression.
-That work solves an offline inverse problem; ours solves an online
-forward problem (Table~\ref{tab:comparison}).
+That work solves an inverse problem; ours solves a direct prediction
+problem (Table~\ref{tab:comparison}).
+Its inputs are noise-free ensemble averages from QuTiP: $\langle\sigma_z\rangle$
+or all three Pauli averages for one qubit, and for two qubits only
+single-qubit averages; the finite number of repetitions, tomography and
+the back-action of measurement are not discussed. Our inputs are of the
+same kind, so the question of their accessibility applies to both: each
+value requires repeated preparations at every window time
+(Sec.~\ref{sec:cost}).
 In Sec.~\ref{sec:e5} we directly compare the two approaches on the same
 partial-window setting and show that the inverse approach is
-ill-conditioned at short windows ($R^2 < -0.83$ for all $f \leq 0.50$),
-while direct prediction remains reliable ($R^2 = 0.92$--$0.96$).
+ill-conditioned at short windows (mean $R^2$ over three seeds from $-0.44$
+to $-2.18$ across window fractions $f \leq 0.50$), while direct prediction
+remains reliable (mean $R^2 = 0.95$--$0.97$).
+
+Other work differs in what is observed. Luchnikov et
+al.~\cite{Luchnikov2020} learn non-Markovian dynamics from a single long
+record of projective measurements in random bases on one instance of the
+system, with the back-action of each measurement included in the
+likelihood; this is the opposite of the repeated identical preparations
+that our inputs need. Teretenkov, Kuznetsov and Pechen~\cite{Teretenkov2026}
+fix the algebra of observables that can actually be measured and learn the
+probabilities of multi-time outcome sequences, from which a generator is
+fitted; for settings where only sequential measurements are available,
+this is the framework to which our problem should be transferred.
+Mavadia et al.~\cite{Mavadia2017} predict the future phase of a trapped-ion
+qubit from past Ramsey phase estimates, with probing and compensation
+separated in time, which is the closest experimental analogue of our
+scenario; they predict a phase correction, not the time at which coherence
+crosses a threshold. Maan et al.~\cite{Maan2026} predict the drift of the
+spectral line of a single-photon emitter from spectra that are measured
+continuously, that is, a classical signal that is actually available in time;
+what is predicted is a parameter of the environment, not the time to a
+threshold, and a closed-loop compensation was not realised. Abu-Nada,
+Banerjee and Wu~\cite{AbuNada2026} predict the next value of
+$\langle\sigma_x\rangle$ for a dephased qubit under telegraph noise to
+trigger decoupling pulses; their input is also an average over noise
+trajectories, and how it is measured is not discussed.
 
 \begin{table}[h]
 \centering
@@ -159,7 +211,7 @@ while direct prediction remains reliable ($R^2 = 0.92$--$0.96$).
  & arXiv:2505.06928 & \textbf{This work} \\
 \midrule
 Goal        & Reconstruct $\gamma(t)$ & Predict $T_2$ remaining \\
-Task        & Inverse (offline)       & Early warning (online) \\
+Task        & Inverse problem         & Direct prediction \\
 Input       & Full trajectory         & Partial window \\
 Output      & Bernstein coeffs        & $T_2 +$ risk score \\
 Physics     & None                    & OLS prior embedded \\
@@ -206,6 +258,22 @@ C & $\sigma_z$ (dephasing)         & Time-dependent \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\subsection{Cost of data acquisition}
+\label{sec:cost}
+
+Each window value is an average over $N$ repeated preparations, measured
+in $S$ settings at each of $L$ window time points, so a window costs
+$N\times S\times L$ shots. For one qubit $S=3$ ($\sigma_x,\sigma_y,\sigma_z$),
+which also gives coherence and purity; for full two-qubit tomography
+$S=9$, while three local settings give only the six single-qubit means.
+An estimated expectation value is the mean of $N$ outcomes $\pm1$ and
+has binomial standard deviation
+$\sigma \approx \sqrt{(1-\langle\sigma\rangle^2)/N}$.
+As an arithmetic illustration only, $N=1000$, $S=3$ and $L=50$ give
+$1.5\cdot10^{5}$ shots for one window. All results below use exact
+averages ($N\to\infty$); the dependence of the prediction on finite $N$ is
+not evaluated here.
 
 \subsection{Physics-informed residual architecture}
 
@@ -814,11 +882,12 @@ The alarm score is a monotone function of the predicted remaining time,
 and AUROC $\approx 0.98$ means that the predicted remaining time ranks
 windows well with respect to imminent decoherence even where $R^2$ is
 moderate.
-This decoupling matters for deployment: a quantum error-correction
-scheduler only needs a calibrated probability estimate to decide whether
-to reset a qubit, not a precise $T_2$ value.
+This decoupling matters in use: a calibration routine only needs a
+probability estimate of whether a configuration will lose coherence within
+the horizon, not a precise $T_2$ value.
 The alarm needs only a short window (AUROC $0.979$ with five steps),
-which suits real-time integration.
+which keeps the number of window time points, and with it the acquisition
+cost (Sec.~\ref{sec:cost}), small.
 
 \paragraph{Limitations.}
 The experiments were conducted on simulated data with 100 trajectories
@@ -923,7 +992,7 @@ grant from any funding agency.''}
 
 % --------------------------------------------------------------------------
 \bibliographystyle{unsrt}
-\begin{thebibliography}{12}
+\begin{thebibliography}{99}
 
 \bibitem{Zurek2003}
 W.~H.~Zurek,
@@ -941,10 +1010,11 @@ H.-P.~Breuer and F.~Petruccione,
 \textit{The Theory of Open Quantum Systems},
 Oxford University Press, 2002.
 
-\bibitem{Lidar2013}
-D.~A.~Lidar and T.~A.~Brun (eds.),
-\textit{Quantum Error Correction},
-Cambridge University Press, 2013.
+\bibitem{Mavadia2017}
+Mavadia, Frey, Sastrawan, Dona, and Biercuk,
+``Prediction and real-time compensation of qubit decoherence via machine
+  learning,''
+\textit{Nat.\ Commun.}\ \textbf{8}, 14106 (2017); arXiv:1604.03991.
 
 \bibitem{Paladino2014}
 E.~Paladino, Y.~M.~Galperin, G.~Falci, and B.~L.~Altshuler,
@@ -956,6 +1026,27 @@ C.-S.~Chen and E.-J.~Kuo,
 ``Unraveling quantum environments: Transformer-assisted learning in
   Lindblad dynamics,''
 \textit{Phys.\ Rev.\ A}\ \textbf{112}, 042227 (2025); arXiv:2505.06928.
+
+\bibitem{Luchnikov2020}
+Luchnikov, Vintskevich, Grigoriev, and Filippov,
+``Machine learning non-Markovian quantum dynamics,''
+\textit{Phys.\ Rev.\ Lett.}\ \textbf{124}, 140502 (2020); arXiv:1902.07019.
+
+\bibitem{Teretenkov2026}
+Teretenkov, Kuznetsov, and Pechen,
+``Learning hidden structures in open quantum dynamics,''
+arXiv:2604.00711 (2026).
+
+\bibitem{Maan2026}
+Maan, Chen, Borneman, Lawrie, Puretzky, Alaeian, Boltasseva, Shalaev, and
+Kildishev,
+``Anticipating decoherence for enhancing coherence in quantum systems,''
+arXiv:2508.02638 (2025).
+
+\bibitem{AbuNada2026}
+Abu-Nada, Banerjee, and Wu,
+``Noise-adaptive predictive dynamical decoupling,''
+arXiv:2606.15769 (2026).
 
 \bibitem{HochreiterSchmidhuber1997}
 S.~Hochreiter and J.~Schmidhuber,
