@@ -1,0 +1,30 @@
+{
+  "csv": "e1_ablation.csv",
+  "created_utc": "2026-11-14T19:46:40+00:00",
+  "command": [
+    "e1_ablation.py"
+  ],
+  "seeds": [
+    42
+  ],
+  "config": {
+    "scenarios": [
+      "A",
+      "B",
+      "C",
+      "D",
+      "E"
+    ],
+    "n_per": 80,
+    "n_epochs": 100
+  },
+  "environment": {
+    "python": "3.12.1",
+    "numpy": "2.4.4",
+    "scipy": "1.17.1",
+    "qutip": "5.2.3",
+    "torch": "2.11.0",
+    "git_commit": "1a8fb8c757c4d9242209339d485053210e8c418f",
+    "torch_threads": 4
+  }
+}

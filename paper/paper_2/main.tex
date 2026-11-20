@@ -34,6 +34,11 @@ We extend the physics-informed residual BiLSTM of
 \cite{Paper1Brusnikin} to two-qubit systems with XXZ and TFIM
 Hamiltonians under unknown time-dependent amplitude damping, and ask
 whether its conclusions transfer.
+The inputs are ensemble averages over repeated preparations at the window
+times, so the setting is characterisation and calibration (prediction for
+subsequent runs), not a warning during a single computation; coherence
+and purity of two qubits need two-body measurements, and the full set of
+these measurements is a state tomography.
 All results are replicated across three seeds.
 The slope-based physics estimate is structurally wrong when two-qubit
 coherence oscillates. A pure Transformer is the best model on both
@@ -87,9 +92,10 @@ and whether the death is permanent at $0.92$.
 In \cite{Paper1Brusnikin} we showed that, for a single qubit under
 unknown time-dependent dissipation, a residual model that adds a learned
 correction $\delta T$ to the slope-based estimate of the decoherence
-time recovers the analytic limit at constant dissipation and, when the
-rate varies, improves both on the bare formula and on the same network
-without the estimate.
+time improves on the bare formula and on the same network without the
+estimate when the rate varies. The physics term is exact for an ideal
+constant-rate trajectory; a trained residual is not constrained to vanish
+in that limit.
 Here we ask whether this carries over to two qubits.
 Three things change.
 
@@ -100,11 +106,19 @@ Three things change.
     states, so the $\ell_1$-coherence oscillates on top of its
     dissipative decay and can increase within an observation window.
     The slope-based estimate assumes it does not.
-  \item \textbf{Partial observation.}
-    The model sees the six single-qubit Pauli expectations, coherence
-    and purity, but no two-body correlators; the two local Bloch vectors
-    do not determine the two-qubit state. Section~\ref{sec:r23} adds the
-    missing correlators.
+  \item \textbf{Inputs that need two-body measurements.}
+    The base input set is the six single-qubit Pauli expectations plus
+    coherence and purity of the two-qubit state. These two are global
+    quantities: the $\ell_1$-coherence contains elements of $\rho$ that
+    are visible only through two-body correlators, and the purity
+    $\mathrm{Tr}\,\rho^2$ contains the sum of their squares, so six local
+    means do not determine them. On a device they would have to be
+    obtained from two-body measurements, and the full set of these is
+    state tomography. The base set is therefore not a partial
+    observation: it is the six local means supplemented by two scalars
+    computed from the full state. Section~\ref{sec:r23} adds the nine
+    two-body correlators explicitly, which makes the window a full
+    tomography.
   \item \textbf{Entanglement.}
     Two-qubit entanglement can vanish in finite time under purely local
     damping \cite{YuEberly2009}, so the joint decay need not follow the
@@ -112,14 +126,55 @@ Three things change.
     takes the time of this sudden death as the target.
 \end{enumerate}
 
+\paragraph{Setting.}
+As in \cite{Paper1Brusnikin}, every input value is an ensemble average:
+an average over repeated preparations of the same initial state, evolved
+to the window time and measured. A single run gives only outcomes $\pm1$,
+and the measurement changes the state, so such a window cannot be
+recorded along one running instance. The use case is characterisation and
+calibration, that is, prediction of the remaining coherence time for
+subsequent runs from the first part of the decay curve, as in the
+experiment of Mavadia et al.~\cite{Mavadia2017}; it is not a warning
+issued during a single computation. Here the averages are computed
+exactly from the simulated $\rho(t)$; the cost of acquiring them is given
+in Sec.~\ref{sec:cost}.
+
+\paragraph{Related work.}
+Chen and Kuo~\cite{TransformerLindblad2025} reconstruct $\gamma(t)$ from
+noise-free ensemble averages. For two qubits (Heisenberg and transverse-field
+Ising models) their inputs are only single-qubit averages, without
+correlators, coherence or purity; the finite number of repetitions and
+tomography are not discussed. Our base input set asks for more, since
+coherence and purity of two qubits are global quantities, so the
+accessibility of the inputs is open in both works.
+Luchnikov et al.~\cite{Luchnikov2020} learn non-Markovian dynamics from a
+single long record of projective measurements in random bases on one
+instance, with the back-action of every measurement in the likelihood,
+and Teretenkov, Kuznetsov and Pechen~\cite{Teretenkov2026} learn the
+probabilities of multi-time outcome sequences for a fixed algebra of
+measurable observables. Both take as input what is actually measured,
+unlike the ensemble averages used here.
+Mavadia et al.~\cite{Mavadia2017} predict the future phase of a trapped-ion
+qubit from past Ramsey phase estimates, with probing and compensation
+separated in time; this is the closest experimental analogue of our
+scenario, although they predict a phase correction and not a threshold
+crossing time. Maan et al.~\cite{Maan2026} predict the drift of the
+spectral line of a single-photon emitter from continuously measured
+spectra, a parameter of the environment and not a time to threshold.
+Abu-Nada, Banerjee and Wu~\cite{AbuNada2026} predict the next value of
+$\langle\sigma_x\rangle$ of one dephased qubit to trigger decoupling
+pulses; their input is an average over noise trajectories, and how it is
+measured is not discussed.
+
 \subsection*{Scenarios}
 
 Both scenarios (Table~\ref{tab:scenarios2}) use per-qubit $\sigma_-$
 jump operators with the Bernstein $\gamma(t)$ parameterisation of
 \cite{Paper1Brusnikin}: degree-4 polynomials with non-negative
-coefficients bounded by $\gamma \leq 0.8$, cycling through six profile
-shapes (random, monotone increasing, monotone decreasing, peak, step-up,
-step-down).
+coefficients bounded by $\gamma \leq 0.8$. The standard D and E
+generators cycle through five profile shapes (random, peak, step-up,
+step-down, monotone increasing). The separate fixed-$J$ sweeps also
+include a monotone-decreasing profile.
 The dynamics is the two-qubit Lindblad equation ($\hbar = 1$)
 \begin{equation}
   \dot\rho = -i[H,\rho]
@@ -157,8 +212,11 @@ The XXZ model is isotropic ($\Delta = 1$). The TFIM is written with the
 coupling on $\sigma_x$ and the field on $\sigma_z$, which fixes its
 parity as $P = \sigma_z\otimes\sigma_z$.
 
-Each trajectory contributes five windows whose end $t_\mathrm{obs}$ is
-drawn uniformly among grid points with $L\,dt \le t_\mathrm{obs} < T_2$.
+Each trajectory contributes five windows whose labelled end
+$t_\mathrm{obs}=t_j$ is drawn uniformly among grid points with
+$L\,dt \le t_\mathrm{obs} < T_2$. The input contains the $L$ samples at
+$t_{j-L},\ldots,t_{j-1}$; its last measured point thus precedes
+$t_\mathrm{obs}$ by one grid step.
 The regression target is the remaining time $T_2 - t_\mathrm{obs}$; the
 alarm label is $T_2 - t_\mathrm{obs} \le \Delta t = 1$.
 Train, validation and test sets are split $80/10/10$ by trajectory, so
@@ -192,16 +250,20 @@ Because oscillating coherence often yields near-zero or positive slopes,
 the physics term is gated: $T_\mathrm{physics}$ is set to zero when the
 coefficient of determination of the slope fit, $R^2_\mathrm{OLS}$, is
 below $\tau = 0.7$ or when $\hat s \ge 0$, at training and inference
-alike.
+alike. If the raw fit has $R^2_\mathrm{OLS}<0.7$, the implementation also
+tests a coherence envelope and uses its slope if that fit has the better
+coefficient of determination.
 
 The ablation compares four variants on identical data.
 \texttt{physics\_only}: the ungated formula of Eq.~\ref{eq:residual},
 no learning.
 \texttt{lstm\_only}: the same network with $T_\mathrm{physics}$ and
-$\hat s$ zeroed, learning the full target.
+$\hat s$ zeroed, learning the full target while retaining the other
+derived scalar inputs.
 \texttt{physics\_lstm}: the gated residual model.
 \texttt{transformer}: a Transformer encoder \cite{Vaswani2017} over the
-same channels, learning the full target, architecturally analogous to
+eight base channels without the two appended logarithmic channels,
+learning the full target, architecturally analogous to
 the model used in \cite{TransformerLindblad2025} for the inverse
 $\gamma(t)$-reconstruction task.
 The cross-system and $J$-sweep experiments use a larger Transformer
@@ -212,6 +274,21 @@ $p = 1/\bigl(1+e^{5(\widehat T_{2,\mathrm{rem}}-1)}\bigr)$; the
 classification head of the networks enters only the training loss, as an
 auxiliary term. AUROC therefore measures how well the predicted remaining
 time ranks the windows with respect to the event $T_2 - t_\mathrm{obs}\le1$.
+
+\subsection{Cost of data acquisition}
+\label{sec:cost}
+
+Each input value is an average over $N$ repeated preparations, measured
+in $S$ settings at each of $L$ window time points, so a window costs
+$N\times S\times L$ shots. Full two-qubit tomography needs $S=9$
+settings ($\sigma_a\otimes\sigma_b$, $a,b\in\{x,y,z\}$); three local
+settings give only the six single-qubit means. An estimated expectation
+value is the mean of $N$ outcomes $\pm1$ and has binomial standard
+deviation $\sigma \approx \sqrt{(1-\langle\sigma\rangle^2)/N}$.
+As an arithmetic illustration only, $N=1000$, $S=9$ and the main
+experimental window length $L=20$ give $1.8\cdot10^{5}$ shots for one
+window. All results below use exact averages ($N\to\infty$); these
+tables do not evaluate the dependence of prediction on finite $N$.
 
 \subsection{Evaluation and replication}
 
@@ -1060,7 +1137,7 @@ grant from any funding agency.''}
 
 % --------------------------------------------------------------------------
 \bibliographystyle{unsrt}
-\begin{thebibliography}{13}
+\begin{thebibliography}{99}
 
 \bibitem{Paper1Brusnikin}
 N.~Brusnikin,
@@ -1079,6 +1156,33 @@ C.-S.~Chen and E.-J.~Kuo,
 ``Unraveling quantum environments: Transformer-assisted learning in
   Lindblad dynamics,''
 \textit{Phys.\ Rev.\ A}\ \textbf{112}, 042227 (2025); arXiv:2505.06928.
+
+\bibitem{Luchnikov2020}
+Luchnikov, Vintskevich, Grigoriev, and Filippov,
+``Machine learning non-Markovian quantum dynamics,''
+\textit{Phys.\ Rev.\ Lett.}\ \textbf{124}, 140502 (2020); arXiv:1902.07019.
+
+\bibitem{Teretenkov2026}
+Teretenkov, Kuznetsov, and Pechen,
+``Learning hidden structures in open quantum dynamics,''
+arXiv:2604.00711 (2026).
+
+\bibitem{Mavadia2017}
+Mavadia, Frey, Sastrawan, Dona, and Biercuk,
+``Prediction and real-time compensation of qubit decoherence via machine
+  learning,''
+\textit{Nat.\ Commun.}\ \textbf{8}, 14106 (2017); arXiv:1604.03991.
+
+\bibitem{Maan2026}
+Maan, Chen, Borneman, Lawrie, Puretzky, Alaeian, Boltasseva, Shalaev, and
+Kildishev,
+``Anticipating decoherence for enhancing coherence in quantum systems,''
+arXiv:2508.02638 (2025).
+
+\bibitem{AbuNada2026}
+Abu-Nada, Banerjee, and Wu,
+``Noise-adaptive predictive dynamical decoupling,''
+arXiv:2606.15769 (2026).
 
 \bibitem{Raissi2019}
 M.~Raissi, P.~Perdikaris, and G.~E.~Karniadakis,
