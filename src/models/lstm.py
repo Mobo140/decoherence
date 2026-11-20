@@ -176,6 +176,8 @@ class LSTMPredictor(ports.IPredictor):
     dt: float = dataclasses.field(default=0.1, init=False, repr=False)
     feature_scaler: standardize.Standardizer | None = dataclasses.field(
         default=None, init=False, repr=False)
+    feature_names: list[str] = dataclasses.field(
+        default_factory=list, init=False, repr=False)
     scalers: dict[str, standardize.Standardizer] = dataclasses.field(
         default_factory=_identity_scalers, init=False, repr=False)
     device: str = dataclasses.field(default="cpu", init=False, repr=False)
@@ -312,6 +314,7 @@ class LSTMPredictor(ports.IPredictor):
             "num_layers": self.num_layers,
             "dropout": self.dropout,
             "n_features": self.net.lstm.input_size,
+            "feature_names": self.feature_names,
             "use_physics_prior": self.use_physics_prior,
             "adaptive_prior_r2_threshold": self.adaptive_prior_r2_threshold,
             "risk_pos_weight": self.risk_pos_weight,
@@ -371,6 +374,7 @@ class LSTMPredictor(ports.IPredictor):
         p.net = net
         p.feature_scaler = standardize.Standardizer(
             ckpt["feature_mean"], ckpt["feature_std"])
+        p.feature_names = list(ckpt.get("feature_names", []))
         p.scalers = _scalers_from_checkpoint(ckpt)
         p.dt = ckpt.get("dt", 0.1)
         return p
@@ -384,6 +388,7 @@ class LSTMPredictor(ports.IPredictor):
     ) -> tuple[list[float], list[float]]:
         # The physics formulas must use the actual simulation step.
         self.dt = float(ds.metadata.get("dt", self.dt))
+        self.feature_names = list(ds.feature_names)
         train = self._arrays(ds, ds.train_idx)
         val = self._arrays(ds, ds.val_idx)
         self._fit_scalers(train)
@@ -460,7 +465,7 @@ class LSTMPredictor(ports.IPredictor):
                  window[:, -2:]],
                 axis=-1,
             )
-        w = lstm_data.add_log(window[np.newaxis], [])[0]
+        w = lstm_data.add_log(window[np.newaxis], self.feature_names)[0]
         normed = self.feature_scaler.apply(w)
         return torch.tensor(normed, dtype=torch.float32).unsqueeze(0).to(
             self.device)

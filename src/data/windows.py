@@ -38,6 +38,7 @@ class _Windows:
     dissipator_codes: list[float] = dataclasses.field(default_factory=list)
     coupling: list[float] = dataclasses.field(default_factory=list)
     censored: list[bool] = dataclasses.field(default_factory=list)
+    trajectory_indices: list[int] = dataclasses.field(default_factory=list)
 
 
 def _check_ratios(train_ratio: float, val_ratio: float) -> None:
@@ -241,6 +242,7 @@ def _add_trajectory_windows(
     window_length: int,
     horizon: float,
     censored: bool,
+    trajectory_index: int,
 ) -> None:
     """Appends one labelled window per end index to `rows`."""
     interaction, dissipator, coupling = context_codes(
@@ -264,6 +266,7 @@ def _add_trajectory_windows(
         rows.dissipator_codes.append(dissipator)
         rows.coupling.append(coupling)
         rows.censored.append(censored)
+        rows.trajectory_indices.append(trajectory_index)
 
 
 def build_dataset(
@@ -340,7 +343,7 @@ def build_dataset(
         ends = sample_window_ends(
             valid, samples_per_trajectory, min_window_gap, rng)
         _add_trajectory_windows(
-            rows, traj, ends, split_of[i], window_length, horizon, censored)
+            rows, traj, ends, split_of[i], window_length, horizon, censored, i)
     if not rows.sequences:
         raise RuntimeError(
             "No valid pre-decoherence windows found. "
@@ -387,6 +390,7 @@ def _assemble(
             "dissipator_type": np.array(
                 rows.dissipator_codes, dtype=np.float32),
             "J": np.array(rows.coupling, dtype=np.float32),
+            "trajectory_index": np.array(rows.trajectory_indices, dtype=np.int64),
         },
         censored=censored,
         metadata={

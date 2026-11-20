@@ -44,7 +44,9 @@ class Dataset:
             2.0 = 2-qubit XXZ, 3.0 = 2-qubit TFIM), `dissipator_type`
             (0.0 = sigma_- amplitude damping, 1.0 = sigma_z dephasing) and
             `J` (coupling; 0.0 for one qubit), all float32. A missing key
-            means the value is unknown.
+            means the value is unknown. `trajectory_index` identifies the
+            source trajectory in the input sequence and permits experiments
+            with per-trajectory targets to preserve that association.
         censored: True where t_decoh_abs is only a lower bound (the
             threshold was not crossed by t_max). Empty if unknown.
 

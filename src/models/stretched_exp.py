@@ -58,8 +58,9 @@ class StretchedExpPredictor(ports.IPredictor):
         """
         coh = np.abs(window[:, -1]) + 1e-8
         n_steps = len(coh)
-        # The window ends at t_obs, so its absolute time axis is shifted.
-        t = t_obs - (n_steps - 1 - np.arange(n_steps)) * self.dt
+        # `windows.py` labels t_obs at the first point after the input
+        # slice, so the last observed row is t_obs - dt.
+        t = t_obs - (n_steps - np.arange(n_steps)) * self.dt
         t = np.clip(t, 1e-6, None)
         log_coh = np.log(coh)
         try:

@@ -229,18 +229,18 @@ def _inverse_row(simulator, configs, dataset, fraction: float,
 
     test_seqs = dataset.sequences[dataset.test_idx]
     test_t_decoh = dataset.t_decoh_abs[dataset.test_idx]
-    train_gamma = np.array([
-        gamma_targets[i % len(gamma_targets)] for i in dataset.train_idx])
+    trajectory_indices = dataset.context["trajectory_index"]
+    train_gamma = gamma_targets[trajectory_indices[dataset.train_idx]]
     reconstructor = GammaReconstructorPredictor(simulator)
     reconstructor.train_gamma_reconstruction(
         dataset.sequences[dataset.train_idx], train_gamma,
         n_epochs=n_epochs, verbose=True)
 
     predictions = []
-    for i, sequence in enumerate(test_seqs):
+    for row_index, sequence in zip(dataset.test_idx, test_seqs):
         try:
             t2_pred = reconstructor.predict_t2(
-                sequence, configs[i % len(configs)])
+                sequence, configs[trajectory_indices[row_index]])
         except Exception:  # pylint: disable=broad-except
             # A reconstructed γ can make the solver fail; score such
             # windows as the pilot median instead of dropping them.

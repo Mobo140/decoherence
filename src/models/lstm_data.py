@@ -55,17 +55,19 @@ def add_log(windows: np.ndarray, feature_names: list[str]) -> np.ndarray:
 
     Args:
         windows: Observables, shape (..., F).
-        feature_names: Names of the F channels. A missing `coherence_l1`
-            defaults to the last channel and a missing `purity` to the one
-            before it.
+        feature_names: Names of the F channels. Both `coherence_l1` and
+            `purity` must be named; otherwise two zero channels are appended.
 
     Returns:
         float32 array of shape (..., F + 2).
     """
     names = list(feature_names)
-    ci = names.index("coherence_l1") if "coherence_l1" in names \
-        else windows.shape[-1] - 1
-    pi = names.index("purity") if "purity" in names else windows.shape[-1] - 2
+    if "coherence_l1" not in names or "purity" not in names:
+        return np.concatenate([
+            windows.astype(np.float32),
+            np.zeros(windows.shape[:-1] + (2,), dtype=np.float32)], axis=-1)
+    ci = names.index("coherence_l1")
+    pi = names.index("purity")
     lc = np.log(np.abs(windows[..., ci:ci + 1]) + 1e-8).astype(np.float32)
     lp = np.log(np.abs(windows[..., pi:pi + 1]) + 1e-8).astype(np.float32)
     return np.concatenate([windows.astype(np.float32), lc, lp], axis=-1)
@@ -117,13 +119,14 @@ def prepare_arrays(
     remaining = dataset.remaining_time[idx]
     t_obs = dataset.t_obs[idx]
     risk = dataset.risk_labels[idx]
-    slopes, log_coh, phys, r2 = physics_prior.batch_physics(
-        windows, dataset.feature_names, dt, t_obs, t_max,
-        adaptive_r2_threshold=adaptive_r2_threshold,
-    )
-    if not use_physics_prior:
-        phys = np.zeros_like(phys)
-        slopes = np.zeros_like(slopes)
+    if use_physics_prior:
+        slopes, log_coh, phys, r2 = physics_prior.batch_physics(
+            windows, dataset.feature_names, dt, t_obs, t_max,
+            adaptive_r2_threshold=adaptive_r2_threshold,
+        )
+    else:
+        zeros = np.zeros(len(windows), dtype=np.float32)
+        slopes, log_coh, phys, r2 = zeros, zeros, zeros, zeros
     target = remaining - phys if residual_output else remaining
     if len(dataset.censored) == len(dataset.sequences):
         censored = dataset.censored[idx].astype(np.float32)
