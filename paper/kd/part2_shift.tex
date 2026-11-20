@@ -1,0 +1,330 @@
+% Часть 2: сдвиг уровней, двойной коммутатор, примеры Surf. Sci.
+
+\subsection{Сдвиг уровней (Surf.\ Sci., ур.~17--24)}
+\label{sec:kd_shift}
+
+\paragraph{Зачем.} В Surf.\ Sci.\ обмен с электронами не только вызывает
+переходы, но и сдвигает уровни атома, уменьшая энергии переходов. Частные
+формулы статьи для сдвига (ур.~23, 24) не совпали с нашим расчётом. Чтобы
+понять, кто прав, выведем сдвиг из той же собственной
+энергии~\eqref{eq:kd_sigma}.
+
+\paragraph{Исходное выражение.} Из~\eqref{eq:kd_sigma} и~\eqref{eq:kd_trace} для
+одного атома ($K=1$) вещественная часть даёт
+\begin{gather*}
+\delta E_n=\frac{(\rho_\sigma J)^2}{2}\sum_{n',a}|\langle n|S_a|n'\rangle|^2\,
+\Phi(\Delta_{nn'}),\qquad \Delta_{nn'}=E_n-E_{n'},\\
+\Phi(\Delta)=\mathcal P\!\int\!\!\int d\epsilon\,d\epsilon'\,
+\frac{f(\epsilon)[1-f(\epsilon')]}{\Delta+\epsilon-\epsilon'} .
+\end{gather*}
+Множитель $\tfrac{J^2}{2}\rho_\sigma^2$ --- тот же, что в скорости, только без $2\pi$:
+в скорость входит $2\pi\delta$, в сдвиг --- главное значение.
+
+\paragraph{Разложение $\Phi$ по малой щели.} Щели атома ($\sim$ мэВ) много меньше
+ширины зоны $W$ ($\sim$ эВ), поэтому раскладываем $\Phi$ по $\Delta$. При $T\to0$
+$f(\epsilon)=\theta(-\epsilon)$ и $1-f(\epsilon')=\theta(\epsilon')$. Для зоны $[-W,W]$ после замены
+$x=-\epsilon$, $y=\epsilon'$ (обе от 0 до $W$):
+\[
+\Phi'(0)=-\int_0^W\!dx\int_0^W\!dy\,\frac{1}{(x+y)^2},\qquad
+\int_0^W\frac{dy}{(x+y)^2}=\frac1x-\frac1{x+W},
+\]
+\[
+\Phi'(0)=-\int_{x_{\min}}^{W}\Big[\frac1x-\frac1{x+W}\Big]dx
+=-\ln\frac{W}{x_{\min}}+\ln\frac{2W}{W+x_{\min}}\approx-\ln\frac{W}{x_{\min}}+\ln2 .
+\]
+При $T=0$ интеграл расходится логарифмически на нижнем пределе; при конечной
+температуре ступенька $f$ размыта на $k_BT$, и расходимость обрезается на
+$x_{\min}\sim k_BT$:
+\[
+\Phi(\Delta)\approx\Phi(0)-\Delta\,L,\qquad L=\ln\frac{W}{k_BT}+O(1).
+\]
+Проверка с настоящими функциями Ферми: при $k_BT/W=10^{-2}$, $3\cdot10^{-3}$,
+$10^{-3}$ получено $\Phi'(0)=-3.65$, $-4.85$, $-5.95$. При уменьшении $k_BT$ в 10 раз
+наклон меняется на $\ln10=2.30$: коэффициент при логарифме равен 1.
+Постоянная под логарифмом зависит от формы края зоны (в статье
+$L=\ln(2W/\pi k_BT)$) и на выводы не влияет.
+
+\paragraph{Итоговая формула.} Слагаемое $\Phi(0)$ даёт
+$\Phi(0)\sum_a\langle n|S_a^2|n\rangle=\Phi(0)\,S(S+1)$ (вставлен полный набор
+$\sum_{n'}|n'\rangle\langle n'|=1$). Оно одинаково для всех уровней и в энергиях переходов
+сокращается.
+\begin{resbox}[Перенормированная энергия перехода]
+\begin{equation}
+\tilde\Delta_{nm}=\Delta_{nm}-\frac{(\rho_\sigma J)^2L}{2}\,(B_n-B_m),\qquad
+B_n=\sum_{a,n'}|\langle n|S_a|n'\rangle|^2\,(E_n-E_{n'}) .
+\label{eq:kd_shift}
+\end{equation}
+\end{resbox}
+\begin{paperbox}{Surf.\ Sci., ур.~20--21}
+\[
+\mathrm{Re}[I(\Delta)]\approx\mathrm{Re}[I(0)]-\frac\Delta4(\rho J)^2\ln\frac{2W}{\pi k_BT},
+\]
+\[
+\tilde\Delta_{nm}\approx\Delta_{nm}-\frac{(\rho J)^2}{4}\ln\frac{2W}{\pi k_BT}
+\sum_{n',a}\Big(|\langle n|S_a|n'\rangle|^2\Delta_{nn'}-|\langle m|S_a|n'\rangle|^2\Delta_{mn'}\Big).
+\]
+\end{paperbox}
+\begin{cmpbox}
+Сумма в ур.~21 --- это $B_n-B_m$; формула совпадает с~\eqref{eq:kd_shift} с
+точностью до нормировки: у нас коэффициент $\tfrac12(\rho_\sigma J)^2$, в статье
+$\tfrac14(\rho J)^2$.
+\end{cmpbox}
+
+\paragraph{Проверка согласованности нормировок.} Из~\eqref{eq:kd_rate}
+и~\eqref{eq:kd_shift} отношение коэффициентов от нормировки $\rho$ и $J$ не зависит:
+\begin{resbox}[Отношение «сдвиг : скорость»]
+\[
+\frac{\text{коэффициент при } L(B_n-B_m)}{\text{префактор скорости при } G\sum_a|S^a|^2}
+=\frac{(\rho_\sigma J)^2/2}{\pi(\rho_\sigma J)^2}=\frac{1}{2\pi}.
+\]
+\end{resbox}
+\begin{cmpbox}
+Surf.\ Sci.: ур.~14 даёт $\tfrac\pi2(\rho J)^2$, ур.~20 --- $\tfrac14(\rho J)^2$, отношение
+$\tfrac{1/4}{\pi/2}=\tfrac1{2\pi}$. \textbf{Ур.~14 и ур.~20 согласованы}, дальше пользуемся
+их коэффициентом $\tfrac14$ (нормировка Surf.\ Sci.).
+\end{cmpbox}
+
+\subsection{Вычисление $B_n$ через двойной коммутатор}
+\label{sec:kd_Bn}
+
+\paragraph{Зачем.} $B_n$ --- сумма по всем уровням. Её можно вычислить в общем
+виде, не находя собственных состояний, и получить ответ сразу для любого
+спина. Это и решает вопрос о коэффициентах.
+
+\paragraph{Переход к коммутатору.} Сумма по $n'$ с весом $(E_n-E_{n'})$ --- это
+вставка оператора $(E_n-H)$ между двумя $S_a$ (так как $\sum_{n'}|n'\rangle E_{n'}\langle n'|=H$):
+\[
+B_n=\sum_a\sum_{n'}\langle n|S_a|n'\rangle(E_n-E_{n'})\langle n'|S_a|n\rangle
+=\sum_a\langle n|S_a(E_n-H)S_a|n\rangle .
+\]
+Поскольку $H|n\rangle=E_n|n\rangle$,
+\[
+(E_n-H)S_a|n\rangle=(S_aH-HS_a)|n\rangle=-[H,S_a]|n\rangle
+\quad\Rightarrow\quad
+B_n=-\sum_a\langle n|S_a[H,S_a]|n\rangle .
+\]
+$B_n$ вещественно, поэтому $B_n=\tfrac12(B_n+B_n^*)$. Для эрмитовых $H$, $S_a$
+\[
+[H,S_a]^\dagger=-[H,S_a],\qquad
+\langle n|S_a[H,S_a]|n\rangle^*=-\langle n|[H,S_a]S_a|n\rangle .
+\]
+Складывая и используя $S_a[H,S_a]-[H,S_a]S_a=-[S_a,[S_a,H]]$:
+\begin{resbox}[$B_n$ через двойной коммутатор]
+\begin{equation}
+B_n=\frac12\sum_a\langle n|\big[S_a,[S_a,H]\big]|n\rangle .
+\label{eq:kd_Bn}
+\end{equation}
+\end{resbox}
+
+\paragraph{Зеемановский гамильтониан $H=bS_z$.} С $[S_x,S_z]=-iS_y$ и $[S_y,S_z]=iS_x$:
+\[
+\begin{aligned}
+&[S_x,[S_x,S_z]]=[S_x,-iS_y]=-i\cdot iS_z=S_z,\\
+&[S_y,[S_y,S_z]]=[S_y,iS_x]=i\cdot(-iS_z)=S_z,\\
+&[S_z,[S_z,S_z]]=0,
+\end{aligned}
+\qquad\Rightarrow\qquad \sum_a[S_a,[S_a,S_z]]=2S_z .
+\]
+Значит $B_n=\tfrac12\cdot2\,bm_n=E_n$ и $B_n-B_m=\Delta_{nm}$.
+\begin{resbox}[Сдвиг в поле, нормировка Surf.\ Sci.]
+\[
+\tilde\Delta=\Delta\Big[1-\tfrac14(\rho J)^2L\Big].
+\]
+\end{resbox}
+\begin{paperbox}{Surf.\ Sci., ур.~22 (спин $1/2$ в поле)}
+\[
+\tilde\Delta_{\uparrow,\downarrow}=\Delta^0_{\uparrow,\downarrow}\Big(1-\frac{g_e}{2}\rho J-\frac14(\rho J)^2\ln\frac{2W}{\pi k_BT}\Big).
+\]
+\end{paperbox}
+\begin{cmpbox}
+Слагаемое второго порядка совпадает (первый порядок $\tfrac{g_e}2\rho J$ --- сдвиг
+Найта, к ванне не относится). По словам авторов, это совпадает с
+результатом Langreth и Wilkins.
+\end{cmpbox}
+
+\paragraph{Анизотропия $H=DS_z^2+E(S_x^2-S_y^2)$.} Сначала $DS_z^2$, для $a=x$:
+\[
+[S_x,S_z^2]=[S_x,S_z]S_z+S_z[S_x,S_z]=-i\big(S_yS_z+S_zS_y\big),
+\]
+\[
+\begin{aligned}
+\relax[S_x,-i(S_yS_z+S_zS_y)]
+&=-i\big([S_x,S_y]S_z+S_y[S_x,S_z]+[S_x,S_z]S_y+S_z[S_x,S_y]\big)\\
+&=-i\big(iS_z^2-iS_y^2-iS_y^2+iS_z^2\big)=2S_z^2-2S_y^2 .
+\end{aligned}
+\]
+Для $a=y$ так же получается $2S_z^2-2S_x^2$, для $a=z$ --- ноль. Сумма:
+\[
+\sum_a[S_a,[S_a,S_z^2]]=4S_z^2-2\big(S_x^2+S_y^2\big)=6S_z^2-2S(S+1).
+\]
+Для $S_x^2-S_y^2$ аналогично получается $6(S_x^2-S_y^2)$ без константы. Итого
+\[
+\sum_a[S_a,[S_a,H]]=6H-2DS(S+1),\qquad B_n=3E_n-DS(S+1),\qquad B_n-B_m=3\Delta_{nm}.
+\]
+\begin{resbox}[Сдвиг при анизотропии, нормировка Surf.\ Sci.]
+\begin{equation}
+\tilde\Delta=\Delta\Big[1-\tfrac34(\rho J)^2L\Big]\qquad\text{при любых } S,\ D,\ E .
+\label{eq:kd_shift34}
+\end{equation}
+\end{resbox}
+
+\paragraph{Общее правило.} Зеемановский член --- тензор ранга $k=1$,
+квадратичная анизотропия --- ранга $k=2$. Для тензорного оператора ранга $k$
+двойной коммутатор со спином равен $k(k+1)$ раз самому оператору.
+\begin{resbox}[Правило для сдвигов]
+\[
+B_n-B_m=\frac{k(k+1)}{2}\,\Delta_{nm}:\qquad 1\ \text{для поля},\qquad 3\ \text{для анизотропии}.
+\]
+Отношение «анизотропия : поле» $=3$ не зависит ни от нормировки, ни от спина.
+Формула~\eqref{eq:kd_Bn} и все три коммутатора проверены численно для
+$S=\tfrac12,1,\tfrac32,2,\tfrac52$ с точностью $10^{-14}$.
+\end{resbox}
+
+\subsection{Явные примеры из статьи Surf.\ Sci.}
+\label{sec:kd_examples}
+
+\paragraph{Зачем.} Проверим общий результат прямым подсчётом матричных
+элементов для двух случаев статьи и сравним с её ур.~23 и~24. Нужны
+стандартные формулы
+\[
+S_\pm|m\rangle=\sqrt{S(S+1)-m(m\pm1)}\,|m\pm1\rangle,\qquad S_x=\tfrac12(S_++S_-),\qquad
+S_y=\tfrac1{2i}(S_+-S_-).
+\]
+
+\paragraph{$S=3/2$, $E=0$.} $H=DS_z^2$, $E_m=Dm^2$:
+\[
+E_{\pm3/2}=\tfrac94D,\qquad E_{\pm1/2}=\tfrac14D,\qquad \Delta_0=E_{3/2}-E_{1/2}=2D .
+\]
+Уровень $m=\tfrac32$ связан операторами $S_x$, $S_y$ только с $m=\tfrac12$:
+\[
+|\langle\tfrac12|S_-|\tfrac32\rangle|^2=\tfrac{15}4-\tfrac34=3\quad\Rightarrow\quad
+|\langle\tfrac12|S_x|\tfrac32\rangle|^2=|\langle\tfrac12|S_y|\tfrac32\rangle|^2=\tfrac34 .
+\]
+Уровень $m=\tfrac12$ связан с $\tfrac32$ (те же $\tfrac34+\tfrac34$) и с $-\tfrac12$ (равные энергии,
+вклада нет); $S_z$ диагонален и вклада не даёт. Поэтому
+\[
+B_{3/2}=\tfrac32(E_{3/2}-E_{1/2})=\tfrac32\Delta_0,\qquad
+B_{1/2}=\tfrac32(E_{1/2}-E_{3/2})=-\tfrac32\Delta_0 .
+\]
+Через $\Lambda=\sum_a|\langle\tfrac12|S_a|\tfrac32\rangle|^2=\tfrac32$: каждый из двух уровней вносит в
+разность $B_{3/2}-B_{1/2}$ одинаковый вклад $\Lambda\Delta_0$ (уровни «отталкиваются»), и
+вклады складываются.
+\begin{resbox}[Сдвиг перехода $S=3/2$, нормировка Surf.\ Sci.]
+\begin{gather*}
+B_{3/2}-B_{1/2}=2\Lambda\Delta_0=3\Delta_0,\\
+\tilde\Delta=\Delta_0\Big[1-\tfrac14(\rho J)^2L\cdot2\Lambda\Big]
+=\Delta_0\Big[1-\frac{\Lambda}{2}(\rho J)^2L\Big],\qquad \frac\Lambda2=\frac34 .
+\end{gather*}
+\end{resbox}
+\begin{paperbox}{Surf.\ Sci., ур.~23}
+\begin{gather*}
+\tilde\Delta\equiv\tilde E_{3/2}-\tilde E_{1/2}\approx\Delta_0\Big(1-(\rho J)^2\,\frac\Lambda8\,\ln\frac{2W}{\pi k_BT}\Big),\\
+\Lambda=\sum_a|\langle1/2|S_a|3/2\rangle|^2,\qquad \Lambda\approx\tfrac32\big(1+E^2/D^2\big).
+\end{gather*}
+\end{paperbox}
+\begin{cmpbox}
+Напечатано $\tfrac\Lambda8=\tfrac3{16}$, по ур.~20--22 той же статьи получается $\tfrac\Lambda2=\tfrac34$ ---
+в четыре раза больше. Отношение к ур.~22: $\tfrac{3/16}{1/4}=\tfrac34$ вместо
+обязательного 3.
+\end{cmpbox}
+
+\paragraph{Откуда взялось $\Lambda/8$.} Ур.~23 в Surf.\ Sci.\ не выведено, а приведено
+со ссылкой [37] статьи --- эксперимент с атомами Co на Cu$_2$N:
+\begin{paperbox}{J.~C.~Oberg et al., Nat.\ Nanotechnol.\ \textbf{9}, 64 (2014), ур.~(2)}
+\[
+\Delta=\Delta_0\Big[1-\frac{3}{16}(\rho J)^2\ln\frac{2W}{\pi k_BT}\Big].
+\]
+\end{paperbox}
+Нормировка $\rho$ и $J$ в этой работе задана в её дополнительных материалах,
+которые нам недоступны.
+\begin{cmpbox}[Вывод по ур.~23]
+Множитель 4 между $\tfrac3{16}$ и $\tfrac34$ --- ровно множитель, на который
+отличаются $(\rho J)^2$ при плотности состояний на одну проекцию спина и на
+обе (раздел~\ref{sec:kd_conv}). Наиболее вероятно, коэффициент верен в
+нормировке Oberg et al., а в Surf.\ Sci.\ перенесён без пересчёта к нормировке
+ур.~20--22, хотя обозначен тем же символом $\rho J$.
+\end{cmpbox}
+
+\paragraph{Зависимость от $E$.} После ур.~23 статья даёт $\Lambda\approx\tfrac32(1+E^2/D^2)$,
+то есть сдвиг будто бы растёт с $E$. По~\eqref{eq:kd_shift34} коэффициент равен $\tfrac34$
+при любом $E$. При $E\ne0$ уровни остаются двумя крамерсовыми дублетами, но
+состояния внутри них перемешиваются. Поэтому $\Lambda$ нужно определять
+независимо от базиса внутри дублета: просуммировать $|\langle n|S_a|n'\rangle|^2$ по
+обоим состояниям верхнего дублета и усреднить по нижнему. Численно для
+$S=\tfrac32$, $D=-3.5$~мэВ:
+\begin{center}\small
+\begin{tabular}{lccc}
+\toprule
+$E$, мэВ & $(B_{\text{верх}}-B_{\text{ниж}})/\Delta_0$ & $\Lambda$ (точно) & $\tfrac32(1+E^2/D^2)$ (статья) \\
+\midrule
+0 & 3.000 & 1.500 & 1.500 \\
+2 & 3.000 & 1.500 & 1.990 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\begin{cmpbox}
+Полная сумма и $\Lambda$ от $E$ не зависят; оценка статьи для $\Lambda$ при $E=2$~мэВ с
+точным значением не совпадает. Сдвиг перехода от $E$ не зависит.
+\end{cmpbox}
+
+\paragraph{$S=1$.} В базисе $|1\rangle,|0\rangle,|{-1}\rangle$ оператор
+$S_x^2-S_y^2=\tfrac12(S_+^2+S_-^2)$ связывает только $|1\rangle$ и $|{-1}\rangle$ (элемент 1):
+\[
+H=\begin{pmatrix}D&0&E\\0&0&0\\E&0&D\end{pmatrix},\qquad
+\begin{aligned}
+&|0\rangle:\ E_0=0,\\
+&|\alpha\rangle=(|1\rangle-|{-1}\rangle)/\sqrt2:\ E_\alpha=D-E,\\
+&|\beta\rangle=(|1\rangle+|{-1}\rangle)/\sqrt2:\ E_\beta=D+E,
+\end{aligned}
+\qquad \Delta\equiv E_\beta-E_\alpha=2E .
+\]
+Значения $D\mp E$ проверены диагонализацией. Матричные элементы:
+\[
+S_z|\beta\rangle=|\alpha\rangle,\qquad S_x|0\rangle=|\beta\rangle,\qquad S_y|0\rangle=-i|\alpha\rangle,
+\]
+все с $|\cdot|^2=1$. Вклады в $B_\beta-B_\alpha$:
+\begin{itemize}
+\item внутри дублета ($S_z$):
+  $1\cdot(E_\beta-E_\alpha)-1\cdot(E_\alpha-E_\beta)=2\Delta$;
+\item через уровень $|0\rangle$ ($S_x$, $S_y$):
+  $1\cdot(E_\beta-E_0)-1\cdot(E_\alpha-E_0)=\Delta$.
+\end{itemize}
+\begin{resbox}[Сдвиг расщепления $S=1$, нормировка Surf.\ Sci.]
+\begin{gather*}
+B_\beta-B_\alpha=3\Delta,\qquad \tilde\Delta_{\beta\alpha}=\Delta_{\beta\alpha}\Big[1-\tfrac34(\rho J)^2L\Big],\\
+\text{вклады «дублет : уровень 0»}=2:1 .
+\end{gather*}
+\end{resbox}
+\begin{paperbox}{Surf.\ Sci., ур.~24 и текст перед ним}
+\begin{gather*}
+E_\alpha=-D-E,\qquad E_\beta=-D+E,\qquad E_0=0;\\
+\tilde\Delta_{\beta,\alpha}=\Delta_{\beta,\alpha}\Big[1-\frac32(\rho J)^2\ln\frac{2W}{\pi k_BT}\Big],
+\qquad \Delta_{\beta,\alpha}=2E .
+\end{gather*}
+После ур.~24: вклад элементов внутри дублета $\alpha,\beta$ вдвое больше вклада
+связи с уровнем 0.
+\end{paperbox}
+\begin{cmpbox}
+\begin{itemize}
+\item Отношение вкладов 2:1 совпадает с текстом статьи, но коэффициент
+  ур.~24 $\tfrac32$ вдвое больше, чем даёт этот подсчёт ($\tfrac34$).
+\item Собственные значения напечатаны как $-D\mp E$; при $D<0$ это противоречит
+  указанному там же порядку $E_\alpha<E_\beta<E_0$. Правильно $D\mp E$ --- опечатка в знаке,
+  на расщепление $2E$ не влияет.
+\end{itemize}
+\end{cmpbox}
+
+\begin{cmpbox}[Вывод по Surf.\ Sci.]
+Проверка, не зависящая от нормировки: отношение «анизотропия : поле»
+обязано быть $3$. В статье ур.~22 даёт $\tfrac14$, ур.~24 --- $\tfrac32$ (отношение 6),
+ур.~23 --- $\tfrac3{16}$ (отношение $\tfrac34$).
+\begin{itemize}
+\item Ур.~14, 20, 21, 22 и словесный подсчёт для $S=1$ согласованы между собой.
+\item Ур.~23 и~24 с ними в одной нормировке не согласуются. Каждое совпадает с
+  правильным ответом в \emph{другой} нормировке: ур.~23 --- в нормировке Oberg et al.,
+  ур.~24 --- при плотности состояний на одну проекцию спина без общего
+  множителя $\tfrac12$ ур.~14 и~20 (раздел~\ref{sec:kd_conv}).
+\item Наш код вычисляет общую сумму ур.~21 и в нормировке ур.~22 даёт $\tfrac34$
+  для любой анизотропии.
+\end{itemize}
+\end{cmpbox}

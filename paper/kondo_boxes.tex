@@ -1,0 +1,17 @@
+% Рамки для формул. Подключается в преамбуле description_ru.tex и
+% report_2026-11/report.tex после xcolor.
+%   paperbox{заголовок} --- формула статьи как напечатано (серая);
+%   resbox[заголовок]   --- наш результат (синяя);
+%   cmpbox[заголовок]   --- сравнение со статьёй, вердикт (оранжевая);
+%   keybox              --- ключевая формула без заголовка (синяя рамка).
+\usepackage[most]{tcolorbox}
+\tcbset{kdbase/.style={breakable,enhanced,arc=1mm,boxrule=0.5pt,
+  left=2mm,right=2mm,top=1mm,bottom=1mm,before skip=6pt,after skip=6pt,
+  fonttitle=\small\bfseries,toptitle=0.5mm,bottomtitle=0.5mm}}
+\newtcolorbox{paperbox}[1]{kdbase,colback=gray!4,colframe=gray!55!black,
+  colbacktitle=gray!18,coltitle=black,title={#1}}
+\newtcolorbox{resbox}[1][Результат]{kdbase,colback=blue!3,
+  colframe=blue!45!black,colbacktitle=blue!12,coltitle=black,title={#1}}
+\newtcolorbox{cmpbox}[1][Сравнение со статьёй]{kdbase,colback=orange!4,
+  colframe=orange!65!black,colbacktitle=orange!15,coltitle=black,title={#1}}
+\newtcolorbox{keybox}{kdbase,colback=blue!2,colframe=blue!40!black}
