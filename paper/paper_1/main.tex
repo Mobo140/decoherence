@@ -33,6 +33,9 @@ in Single-Qubit Systems Under Unknown Time-Dependent Dissipation}}
 We address the problem of predicting the remaining decoherence time $T_2$
 of a single qubit from a short window of Pauli expectation values,
 \emph{without} knowledge of the dissipation rate $\gamma(t)$.
+The window values are ensemble averages over repeated preparations, so
+the setting is characterisation and calibration (prediction for subsequent
+runs), not a warning during a single computation.
 For constant $\gamma$ and amplitude damping, the least-squares slope of
 $\log C(t)$ gives $T_2$ exactly and no learning is needed.
 For unknown, time-dependent $\gamma(t)$ we combine this slope-based
@@ -46,7 +49,7 @@ Nearly all of the gain comes from the estimate as an input feature; the
 residual output structure adds at most $0.01$.
 The estimate is sensitive to measurement noise, and a residual model
 trained on clean data inherits this; training on noisy copies of the
-windows removes it: at $\sigma = 0.05$ the residual model keeps
+windows mitigates it in the tested setting: at $\sigma = 0.05$ the residual model keeps
 $R^2 = 0.70$ instead of $0.31$, level with networks that do not use the
 estimate, at a cost of $0.02$ on clean data.
 Followed along each trajectory, the residual model predicts $T_2$ within
@@ -86,10 +89,27 @@ The \emph{decoherence time} $T_2$ is the time at which the
 $\ell_1$-coherence $C(t) = \sum_{i \neq j}|\rho_{ij}(t)|$ falls to
 $e^{-1}$ of its initial value.
 
-Knowing the remaining decoherence time from a partial trajectory is
-directly actionable: it enables error-correction protocols to
-preemptively reset or re-encode qubits before fidelity falls below a
-critical threshold~\cite{Lidar2013}.
+Knowing the remaining decoherence time from the beginning of a decay
+curve is useful for characterisation and calibration: it tells how long a
+given device configuration will stay coherent in subsequent runs, so that,
+for example, the recalibration interval or the circuit depth can be chosen
+accordingly. The same separation in time between probing and use underlies
+the prediction of qubit dephasing in the experiment of Mavadia et
+al.~\cite{Mavadia2017}.
+
+\paragraph{Setting.}
+Each Pauli expectation is an \emph{ensemble average} over repeated
+preparations of the same initial state, evolved to the window time and
+measured. Coherence and purity are nonlinear functions computed from these
+expectations, not themselves averages of single-shot outcomes. A single run gives only outcomes $\pm1$, and the
+measurement changes the state, so such a window cannot be recorded along
+one running instance. The use case is therefore characterisation and
+calibration: the first part of the decay curve is measured on repeated
+preparations, and the remaining time is predicted for the following runs.
+It is not a warning issued during a single computation. Here the
+averages are computed exactly from the simulated $\rho(t)$ for the original
+experiments; the separate finite-shot experiment R29 uses sampled outcomes
+(Sec.~\ref{sec:r29}). Acquisition cost is discussed in Sec.~\ref{sec:cost}.
 
 \paragraph{When is ML needed?}
 For constant $\gamma$ and $\sigma_-$ (amplitude damping), the coherence
@@ -143,12 +163,44 @@ Photonic        & Cavity leakage rate drift \\
 The closest related work, arXiv:2505.06928~\cite{TransformerLindblad2025},
 uses a pure Transformer to \emph{reconstruct} $\gamma(t)$ from a
 \emph{complete} trajectory via Bernstein polynomial regression.
-That work solves an offline inverse problem; ours solves an online
-forward problem (Table~\ref{tab:comparison}).
+That work solves an inverse problem; ours solves a direct prediction
+problem (Table~\ref{tab:comparison}).
+Its inputs are noise-free ensemble averages from QuTiP: $\langle\sigma_z\rangle$
+or all three Pauli averages for one qubit, and for two qubits only
+single-qubit averages; the finite number of repetitions, tomography and
+the back-action of measurement are not discussed. Our inputs are of the
+same kind, so the question of their accessibility applies to both: each
+value requires repeated preparations at every window time
+(Sec.~\ref{sec:cost}).
 In Sec.~\ref{sec:e5} we directly compare the two approaches on the same
 partial-window setting and show that the inverse approach is
-ill-conditioned at short windows ($R^2 < -0.83$ for all $f \leq 0.50$),
-while direct prediction remains reliable ($R^2 = 0.92$--$0.96$).
+ill-conditioned at short windows (mean $R^2$ over three seeds from $-0.44$
+to $-2.18$ across window fractions $f \leq 0.50$), while direct prediction
+remains reliable (mean $R^2 = 0.95$--$0.97$).
+
+Other work differs in what is observed. Luchnikov et
+al.~\cite{Luchnikov2020} learn non-Markovian dynamics from a single long
+record of projective measurements in random bases on one instance of the
+system, with the back-action of each measurement included in the
+likelihood; this is the opposite of the repeated identical preparations
+that our inputs need. Teretenkov, Kuznetsov and Pechen~\cite{Teretenkov2026}
+fix the algebra of observables that can actually be measured and learn the
+probabilities of multi-time outcome sequences, from which a generator is
+fitted; for settings where only sequential measurements are available,
+this is the framework to which our problem should be transferred.
+Mavadia et al.~\cite{Mavadia2017} predict the future phase of a trapped-ion
+qubit from past Ramsey phase estimates, with probing and compensation
+separated in time, which is the closest experimental analogue of our
+scenario; they predict a phase correction, not the time at which coherence
+crosses a threshold. Maan et al.~\cite{Maan2026} predict the drift of the
+spectral line of a single-photon emitter from spectra that are measured
+continuously, that is, a classical signal that is actually available in time;
+what is predicted is a parameter of the environment, not the time to a
+threshold, and a closed-loop compensation was not realised. Abu-Nada,
+Banerjee and Wu~\cite{AbuNada2026} predict the next value of
+$\langle\sigma_x\rangle$ for a dephased qubit under telegraph noise to
+trigger decoupling pulses; their input is also an average over noise
+trajectories, and how it is measured is not discussed.
 
 \begin{table}[h]
 \centering
@@ -159,7 +211,7 @@ while direct prediction remains reliable ($R^2 = 0.92$--$0.96$).
  & arXiv:2505.06928 & \textbf{This work} \\
 \midrule
 Goal        & Reconstruct $\gamma(t)$ & Predict $T_2$ remaining \\
-Task        & Inverse (offline)       & Early warning (online) \\
+Task        & Inverse problem         & Direct prediction \\
 Input       & Full trajectory         & Partial window \\
 Output      & Bernstein coeffs        & $T_2 +$ risk score \\
 Physics     & None                    & OLS prior embedded \\
@@ -185,12 +237,17 @@ The coefficient range differs by channel, since the two dissipators give
 different $T_2$ for the same rate: $\gamma \leq 0.8$ for amplitude
 damping ($T_2 \approx 2/\gamma$) and $\gamma \leq 0.2$ for dephasing
 ($T_2 = 1/2\gamma$), so that $T_2 \gtrsim 2.5$ in both.
-Each scenario uses 100 randomly sampled configurations, integrated on a
+Unless stated otherwise, each scenario uses 100 randomly sampled configurations, integrated on a
 grid of step $dt = 0.1$ up to $t_\mathrm{max} = 20$ ($30$ for
 scenario~A, whose slowest configurations decohere later), via the
 Lindblad solver in \textsc{QuTiP}~\cite{qutip}.
-Each trajectory contributes five windows, sampled at random end times
-strictly before $T_2$.
+Each trajectory contributes up to five windows with prediction indices sampled
+without replacement strictly before $T_2$. For index $e$ the input is
+$\mathbf w=(x_{e-W},\ldots,x_{e-1})$, whereas the prediction time is
+$t_\mathrm{obs}=t_e$; the last observation is therefore one grid step
+($dt=0.1$) earlier. Windows cannot be formed if too little history is
+available, and trajectories without a threshold crossing are excluded from
+the reported standard experiments.
 
 \begin{table}[h]
 \centering
@@ -207,6 +264,22 @@ C & $\sigma_z$ (dephasing)         & Time-dependent \\
 \end{tabular}
 \end{table}
 
+\subsection{Cost of data acquisition}
+\label{sec:cost}
+
+Each window value is an average over $N$ repeated preparations, measured
+in $S$ settings at each of $L$ window time points, so a window costs
+$N\times S\times L$ shots. For one qubit $S=3$ ($\sigma_x,\sigma_y,\sigma_z$),
+which also gives coherence and purity; for full two-qubit tomography
+$S=9$, while three local settings give only the six single-qubit means.
+An estimated expectation value is the mean of $N$ outcomes $\pm1$ and
+has binomial standard deviation
+$\sigma \approx \sqrt{(1-\langle\sigma\rangle^2)/N}$.
+As an arithmetic illustration only, $N=1000$, $S=3$ and $L=50$ give
+$1.5\cdot10^{5}$ shots for one window. The original E and R1--R27 results use exact
+averages, except for their explicitly simulated additive-noise tests; R29
+separately evaluates finite $N$ in Sec.~\ref{sec:r29}.
+
 \subsection{Physics-informed residual architecture}
 
 The OLS-slope formula~(\ref{eq:ols}) provides a useful starting point
@@ -221,18 +294,18 @@ We therefore structure the model as a residual corrector:
 \end{equation}
 where $\mathbf{w} \in \mathbb{R}^{W \times F}$ is the observation window.
 This design has two properties:
-(i)~\emph{analytical recovery}: when $\gamma$ is constant the network
-learns $\delta T \approx 0$, exactly recovering Eq.~(\ref{eq:ols});
-(ii)~\emph{corrective capacity}: when $\gamma(t)$ varies, the LSTM
-corrects only the residual---a much easier regression target than
-predicting $T_2$ from scratch.
+(i)~\emph{analytical limit}: if the correction is zero, the model reduces
+to the physical estimate in Eq.~(\ref{eq:ols}); training does not enforce a
+zero correction, and the learned model need not recover the analytic limit
+exactly; (ii)~\emph{corrective capacity}: when $\gamma(t)$ varies, the LSTM
+learns a residual, which can be compared empirically with direct regression.
 
 \paragraph{Network details.}
 A bidirectional LSTM~\cite{HochreiterSchmidhuber1997} (hidden size 64,
 1 layer) processes $\mathbf{w}$---the three Pauli expectations,
 $\ell_1$-coherence and purity---augmented with $\log C$ and
 $\log(\mathrm{purity})$, so $F = 7$ input channels.
-The mean-pooled output is concatenated with seven physics scalars
+The mean-pooled output is concatenated with seven scalar inputs
 $(t_\text{obs},\text{slope},\log C_\text{obs},T_\text{physics},
 R^2_\text{OLS}$, and two categorical codes identifying the Hamiltonian
 and the jump operator$)$, yielding a 135-dimensional representation fed
@@ -260,14 +333,18 @@ Unless stated otherwise the observation window is $W = 20$ steps.
 \texttt{stretched\_exp}: fit of $C(t)=C_0\exp(-(t/\tau)^\beta)$ over the
 window, $T_2=\tau$, no learning.
 \texttt{lstm\_only}: the same BiLSTM with $T_\text{physics}$ and the slope
-set to zero, predicting the whole remaining time.
+set to zero, predicting the whole remaining time; the other scalars, including
+$\log C$, $R^2_\text{OLS}$ and the scenario codes, remain inputs.
 \texttt{physics\_feature}: the same BiLSTM receiving $T_\text{physics}$ as
 an input scalar but predicting the whole remaining time (no residual
 output).
 \texttt{physics\_lstm}: full residual model (ours).
-\texttt{transformer}: pure Transformer encoder over the same channels, no
-physics scalars, analogous to arXiv:2505.06928 applied to the $T_2$
-task.
+\texttt{transformer}: pure Transformer encoder over the five raw channels,
+without the two log channels or physics scalars. The current implementation
+projects them to dimension 64, adds sinusoidal position encoding, and uses
+two encoder layers with four attention heads and feed-forward dimension 256,
+followed by mean pooling and two heads. This is analogous to
+arXiv:2505.06928 applied to the $T_2$ task, but does not reconstruct $\gamma$.
 
 % --------------------------------------------------------------------------
 \section{Experiments}
@@ -275,7 +352,7 @@ task.
 Regression is scored by $R^2$ and MAE of the predicted decoherence time
 $\widehat T_2 = t_\mathrm{obs} + \widehat T_{2,\text{rem}}$ against the
 true $T_2$ over all test windows; the alarm by AUROC~\cite{Fawcett2006}.
-All results are mean $\pm$ s.d.\ over seeds $\{42,43,44\}$; a seed fixes the sampled configurations, the split and the
+Unless stated otherwise, replication results are mean $\pm$ s.d.\ over seeds $\{42,43,44\}$; a seed fixes the sampled configurations, the split and the
 network initialisation, and comparisons are made as paired differences
 within a seed.
 With 100 trajectories per scenario the test split holds 10 trajectories
@@ -283,13 +360,13 @@ With 100 trajectories per scenario the test split holds 10 trajectories
 between $-2.0$ and $0.0$; Sec.~\ref{sec:r13} therefore scores the same
 models on a large independent test set.
 
-\subsection{E1 --- Ablation study}
+\subsection{E1 and R7 --- Ablation study}
 \label{sec:e1}
 \label{sec:r7}
 
 \begin{table}[h]
 \centering
-\caption{Ablation, 100 trajectories per scenario, built-in test split
+\caption{R7 replication of the E1-style ablation, 100 trajectories per scenario, built-in test split
   (10 trajectories): $R^2$, mean $\pm$ s.d.\ over three
   seeds.\label{tab:e1}\label{tab:r7}}
 \footnotesize
@@ -307,8 +384,15 @@ Variant & A & B & C \\
 \end{tabular}
 \end{table}
 
-For constant $\gamma$ (A) the formula is exact in every seed and any
-learned correction only adds error.
+The table is from \texttt{r7\_multiseed\_1qubit.csv}, not the current
+local \texttt{e1\_ablation.csv}. The latter has provenance for a single
+seed 42 run with 80 configurations per scenario and gives B $R^2=0.968$
+for \texttt{physics\_lstm} and $0.919$ for \texttt{lstm\_only}. The
+archived single-run \texttt{e1\_ablation\_p1.csv} instead gives 0.945
+and 0.009; its separate provenance is unavailable. For constant $\gamma$
+(A), the OLS formula is exact in the ideal continuous model, and in these
+tests its numerical $R^2$ rounds to 1.000; the learned correction adds
+error in the reported runs.
 The residual model beats \texttt{lstm\_only} and the Transformer in every
 seed on every scenario (paired differences $0.05$--$0.10$ and
 $0.02$--$0.06$).
@@ -320,15 +404,17 @@ not resolved on a test split of this size.
 \subsection{Independent test set}
 \label{sec:r13}
 
-We train the models exactly as in E1 and score them on 400 fresh
-trajectories per scenario from an independent generator seed, with 95\%
-bootstrap intervals obtained by resampling trajectories
-(Table~\ref{tab:r13}).
+R13 trains on 100 configurations per scenario and scores 400 fresh
+trajectories per scenario from an independent generator seed. Its 95\%
+bootstrap groups windows by the numerical value of true absolute $T_2$,
+rather than an explicit trajectory identifier. Different trajectories with
+identical stored values are therefore merged; the reported intervals are an
+approximation to trajectory-grouped intervals (Table~\ref{tab:r13}).
 
 \begin{table}[h]
 \centering
 \caption{$R^2$ on 400 independent test trajectories per scenario (models
-  trained as in E1); mean over three seeds, in brackets the mean 95\%
+  trained in R13); mean over three seeds, in brackets the mean 95\%
   bootstrap interval.\label{tab:r13}}
 \footnotesize
 \setlength{\tabcolsep}{2.5pt}
@@ -361,8 +447,8 @@ well.
   \centering
   \includegraphics[width=\columnwidth]{fig_r13_independent}
   \caption{$R^2$ on 400 independent test trajectories per scenario, mean
-    over three seeds; whiskers are the mean 95\% trajectory-bootstrap
-    intervals (Table~\ref{tab:r13}).}
+    over three seeds; whiskers are mean 95\% intervals obtained by grouping
+    windows on stored true $T_2$ (Table~\ref{tab:r13}).}
   \label{fig:r13}
 \end{figure}
 
@@ -402,7 +488,7 @@ Variant & A & B & C \\
 \texttt{physics\_lstm} is trained on a mixture of scenarios B and C
 (120 trajectories each) for window lengths
 $L = \max\bigl(5,\ \mathrm{round}(f\,\mathrm{median}(T_2)/dt)\bigr)$
-(Table~\ref{tab:e2}). The window end $t_\mathrm{obs}$ is drawn uniformly
+(Table~\ref{tab:e2}). The prediction index defining $t_\mathrm{obs}$ is drawn uniformly
 over $[L\,dt, T_2)$, so $L$ controls how much history the model sees, not
 how early the prediction is made.
 
@@ -438,11 +524,11 @@ measured directly in Sec.~\ref{sec:r18}.
 \subsection{How early the prediction is reliable}
 \label{sec:r18}
 
-The metrics above average over windows whose end is drawn uniformly
-before $T_2$. To see at which stage of the decay the prediction becomes
+The metrics above average over windows whose prediction index is drawn
+uniformly before $T_2$. To see at which stage of the decay the prediction becomes
 reliable, we train the models as in E1 and follow 200 fresh trajectories
-per scenario step by step: a window ends at every grid point from the
-first full window to $T_2$, and the error of the predicted $T_2$ is
+per scenario step by step: a prediction is made at every grid point from
+the first full window up to $T_2$, and the error of the predicted $T_2$ is
 binned in the elapsed fraction of the lifetime, $t_\mathrm{obs}/T_2$
 (Fig.~\ref{fig:r18}). The alarm of a trajectory fires at the first
 $t_\mathrm{obs}$ where the predicted remaining time is $\le 1$; it is on
@@ -478,7 +564,7 @@ Variant & on time & early & missed & lead & on time & early & missed & lead \\
 \end{tabular}
 \end{table}
 
-The first full window ends at about one third of the lifetime on B and at
+The first prediction follows a full window at about one third of the lifetime on B and at
 40\% on C; no earlier prediction is possible with a window of two time
 units. From there on the residual model is the most accurate learned
 model at every stage: it predicts $T_2$ within 10\% for 59\% of the
@@ -550,14 +636,16 @@ OLS estimate at $\sigma \ge 0.05$ (experiment R17, no training). The
 problem is the estimator $-1/\hat s$ itself: on slowly decaying windows the
 change of $\log C$ is comparable to the noise, and dividing by a small
 slope amplifies any error.
-During training the physics scalars are computed from clean windows, so
+In clean-data training the physics scalars are computed from clean windows, so
 the network never learns how far to trust $T_\text{physics}$ on a noisy
 window. We therefore extend the training and validation sets with two
 noisy copies of every window ($\sigma$ drawn log-uniformly from
 $[0.005, 0.12]$) and compute every input---the window and the slope, OLS
 $R^2$ and $T_\text{physics}$ derived from it---from the noisy copy.
-The standard error of the slope is a function of the slope and the OLS
-$R^2$, so the network already has it. Test windows are as in
+These R16 copies are distinct from the BiLSTM constructor option
+\texttt{augment\_sigma}, which adds noise inside the training step without
+recomputing the previously prepared physics scalars. The Transformer does
+not receive those scalars. Test windows are as in
 Table~\ref{tab:e3} (Table~\ref{tab:r16}, Fig.~\ref{fig:r16}).
 
 \begin{table}[h]
@@ -791,6 +879,53 @@ $\gamma$ inherits that ambiguity. Direct prediction does not try to
 recover what the window does not determine.
 
 % --------------------------------------------------------------------------
+\subsection{R29 --- Finite-shot observations}
+\label{sec:r29}
+R29 is a later, separate experiment, not the source of the preceding
+Gaussian-noise results. At each time point and for each Pauli axis it draws
+$N$ independent outcomes with probability $(1+\langle\sigma_a\rangle)/2$
+for $+1$. It forms $\hat r_a=2n_{a,+}/N-1$ and derives
+$\hat C=\sqrt{\hat r_x^2+\hat r_y^2}$ and
+$\hat P=(1+|\hat{\mathbf r}|^2)/2$ from the same three estimates. The
+three Pauli means are unbiased, but the nonlinear $\hat C$ and $\hat P$
+need not be; linear inversion may yield an unphysical estimated density
+matrix. Labels remain the ideal simulated $T_2$.
+
+The saved run uses scenarios B and C, 100 configurations each, $W=50$,
+up to five windows per trajectory and a trajectory split of 80/10/10.
+It compares training on exact inputs with training on finite-shot inputs
+at the same $N$ used for testing; training and test shot streams are
+distinct. Seeds 42--46 vary the sampled configurations and training as well
+as the measurement draws. Table~\ref{tab:r29} reports the pooled B+C test
+scores of the residual BiLSTM and Transformer at $N=1000$, alongside the exact-input
+control. This means $3NW=150{,}000$ preparations per window; it is not a
+measurement of acquisition time. Within each seed the same underlying test
+trajectories are used for the comparisons.
+\begin{table}[h]
+\centering\small
+\caption{R29, pooled B+C: mean $R^2$ of absolute $T_2$ and sample s.d.\
+across five seeds. Exact/shot and shot/shot denote the training/test input
+regimes; the finite-shot rows use $N=1000$.}
+\label{tab:r29}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lccc}\toprule
+Model & Exact/exact & Exact/shot & Shot/shot\\\midrule
+Residual BiLSTM & $0.855\pm0.175$ & $0.416\pm0.324$ & $0.811\pm0.146$\\
+Transformer & $0.772\pm0.139$ & $0.766\pm0.145$ & $0.740\pm0.125$\\
+\bottomrule\end{tabular}}
+\end{table}
+The scores describe a small synthetic test set, not a hardware validation;
+the s.d. combines changes in trajectories and fitting, and is not an
+interval for the paired difference. The saved CSV includes
+$N\in\{100,300,1000,3000,10000\}$ and also reports B and C separately;
+the small scenario-specific subsets can yield unstable $R^2$ or undefined
+AUROC. No monotonic scaling or universal advantage follows from this table.
+The run's provenance records commit \texttt{9eeb5a1acb80f79978a8d6494eacdf879d92e4ed};
+the script and CSV are retained in the experiment worktree
+\path{Decoherence-wt-exp/experiments/new/r29_finite_shots_1q.py} and
+\path{Decoherence-wt-exp/experiments/results/r29_finite_shots_1q.csv}.
+
+% --------------------------------------------------------------------------
 \section{Discussion}
 
 \paragraph{What the physics estimate contributes.}
@@ -806,29 +941,31 @@ Unlike a PINN~\cite{Raissi2019}, where physics enters as a soft penalty,
 the estimate here enters as an input and as part of the output; the
 price is that its errors propagate, which makes a model trained on clean
 data sensitive to measurement noise (Sec.~\ref{sec:e3}). Training on noisy
-windows teaches the network how far to trust the estimate and removes
-this sensitivity at a small cost on clean data.
+windows improves robustness in the tested noise distribution at a small cost
+on clean data, but does not establish robustness to arbitrary measurement noise.
 
 \paragraph{Risk score as a practical interface.}
 The alarm score is a monotone function of the predicted remaining time,
 and AUROC $\approx 0.98$ means that the predicted remaining time ranks
 windows well with respect to imminent decoherence even where $R^2$ is
 moderate.
-This decoupling matters for deployment: a quantum error-correction
-scheduler only needs a calibrated probability estimate to decide whether
-to reset a qubit, not a precise $T_2$ value.
+This decoupling matters in use: a calibration routine only needs a
+ranking of whether a configuration will lose coherence within the horizon.
+The logistic score is not established as a calibrated probability.
 The alarm needs only a short window (AUROC $0.979$ with five steps),
-which suits real-time integration.
+which keeps the number of window time points, and with it the acquisition
+cost (Sec.~\ref{sec:cost}), small.
 
 \paragraph{Limitations.}
-The experiments were conducted on simulated data with 100 trajectories
+The original experiments were conducted on simulated data with 100 trajectories
 per scenario (500 in Sec.~\ref{sec:r11}); the built-in test splits of 10
 trajectories resolve only the larger differences, which is why the main
 comparison is made on an independent test set. Measurement noise is
 modelled as Gaussian noise added to every channel separately, white or
 correlated in time (Sec.~\ref{sec:r21}), whereas on hardware the coherence
 and purity would be computed from the noisy expectations and their errors
-would be correlated across channels. The correlation of the training
+would be correlated across channels. R29 addresses finite-shot noise for a
+specific single-qubit measurement protocol, not every hardware error source. The correlation of the training
 noise has to be chosen in advance; a mismatch with the hardware noise
 costs accuracy (Sec.~\ref{sec:r21}).
 Validation on real hardware, where $\gamma(t)$ is neither a Bernstein
@@ -879,12 +1016,14 @@ All data in this paper are simulated; no experimental data were used.
 Every table is produced by the accompanying code from the trajectory
 generator described in Sec.~\ref{sec:sim}, and the result files behind
 each table are retained alongside it.
-Regenerating them requires only the seeds listed below.
+Reproduction also requires the recorded code version, dependencies,
+configuration and random-number streams. R29 is an additional, later
+experiment; its saved CSV, provenance and script are in the experiment
+worktree and the study archive.
 
 \section*{Code availability}
-The simulation, training, evaluation and figure-generating code, together
-with the result files behind every table and every replication reported
-here, is publicly available at
+The simulation, training, evaluation and figure-generating code for the
+original experiments is available at
 \url{https://github.com/Mobo140/decoherence}.
 Correlated noise and the stochastic dissipation rate are experiment R21
 there, and training with correlated noise R22.
@@ -894,20 +1033,16 @@ All reported runs are seeded end to end: the sampled system
 configurations, the trajectory simulation (including each trajectory's
 random initial pure state), the window sampling and train/validation/test
 split, and the network initialisation and batch order.
-Repeated runs of the experiment suite reproduce byte-identically for a
-given state of the trajectory cache; the cache stores each simulated
-trajectory under a key derived from its configuration, seed and index, so
-a cold cache---the state from which an independent replication
-starts---and a fully populated one are each deterministic, while a
-partially populated one is not, because the initial states are drawn from
-one seeded stream whose position depends on how many trajectories are
-cache hits.
+The present code uses a process-local trajectory cache. Historical runs
+may have used a different cache and code revision, so a seed alone does not
+establish byte-identical reproduction of the saved tables.
 Results were produced with Python~3.12.1, NumPy~2.4.4, SciPy~1.17.1,
 QuTiP~5.2.3 and PyTorch~2.11.0 on CPU.
-Single-run tables use seed~42; every replication reported here uses seeds
-$\{42,43,44\}$ (R22: $42$--$46$) and states its per-seed values so that
-any comparison can be checked against its own spread.
-BiLSTM training is bit-identical across runs. Transformer training on
+The historical single-run tables use seed~42; replications generally use seeds
+$\{42,43,44\}$ (R22 and R29: $42$--$46$); per-seed values are
+retained in the corresponding CSV files.
+BiLSTM training was bit-identical in repeated runs under the tested
+environment. Transformer training on
 CPU additionally depends on the number of threads through the order of
 floating-point summation; reruns of the same seed with a different
 thread count differ by up to $0.02$ in $R^2$, below the seed-to-seed
@@ -923,7 +1058,7 @@ grant from any funding agency.''}
 
 % --------------------------------------------------------------------------
 \bibliographystyle{unsrt}
-\begin{thebibliography}{12}
+\begin{thebibliography}{99}
 
 \bibitem{Zurek2003}
 W.~H.~Zurek,
@@ -941,10 +1076,11 @@ H.-P.~Breuer and F.~Petruccione,
 \textit{The Theory of Open Quantum Systems},
 Oxford University Press, 2002.
 
-\bibitem{Lidar2013}
-D.~A.~Lidar and T.~A.~Brun (eds.),
-\textit{Quantum Error Correction},
-Cambridge University Press, 2013.
+\bibitem{Mavadia2017}
+Mavadia, Frey, Sastrawan, Dona, and Biercuk,
+``Prediction and real-time compensation of qubit decoherence via machine
+  learning,''
+\textit{Nat.\ Commun.}\ \textbf{8}, 14106 (2017); arXiv:1604.03991.
 
 \bibitem{Paladino2014}
 E.~Paladino, Y.~M.~Galperin, G.~Falci, and B.~L.~Altshuler,
@@ -956,6 +1092,27 @@ C.-S.~Chen and E.-J.~Kuo,
 ``Unraveling quantum environments: Transformer-assisted learning in
   Lindblad dynamics,''
 \textit{Phys.\ Rev.\ A}\ \textbf{112}, 042227 (2025); arXiv:2505.06928.
+
+\bibitem{Luchnikov2020}
+Luchnikov, Vintskevich, Grigoriev, and Filippov,
+``Machine learning non-Markovian quantum dynamics,''
+\textit{Phys.\ Rev.\ Lett.}\ \textbf{124}, 140502 (2020); arXiv:1902.07019.
+
+\bibitem{Teretenkov2026}
+Teretenkov, Kuznetsov, and Pechen,
+``Learning hidden structures in open quantum dynamics,''
+arXiv:2604.00711 (2026).
+
+\bibitem{Maan2026}
+Maan, Chen, Borneman, Lawrie, Puretzky, Alaeian, Boltasseva, Shalaev, and
+Kildishev,
+``Anticipating decoherence for enhancing coherence in quantum systems,''
+arXiv:2508.02638 (2025).
+
+\bibitem{AbuNada2026}
+Abu-Nada, Banerjee, and Wu,
+``Noise-adaptive predictive dynamical decoupling,''
+arXiv:2606.15769 (2026).
 
 \bibitem{HochreiterSchmidhuber1997}
 S.~Hochreiter and J.~Schmidhuber,
