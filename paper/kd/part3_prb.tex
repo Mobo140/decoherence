@@ -1,0 +1,230 @@
+% Часть 3: димер и чистая дефазировка (PRB).
+
+\subsection{Димер (PRB, ур.~24--34, рис.~2)}
+\label{sec:kd_dimer}
+
+\paragraph{Зачем.} На рис.~2(b) статьи кривые для 2D и 3D вдвое ниже, чем дают
+формулы самой статьи (ур.~31--32) и наш код. Выведем формулы и проверим их
+физическим пределом.
+
+\paragraph{Система.} Два спина $1/2$ на расстоянии $d$, $K\equiv K_d(k_Fd)$. Синглет и
+триплет:
+\[
+|1,1\rangle=|\!\uparrow\uparrow\rangle,\quad
+|1,0\rangle=\tfrac{1}{\sqrt2}(|\!\uparrow\downarrow\rangle+|\!\downarrow\uparrow\rangle),\quad
+|1,-1\rangle=|\!\downarrow\downarrow\rangle,\quad
+|0,0\rangle=\tfrac{1}{\sqrt2}(|\!\uparrow\downarrow\rangle-|\!\downarrow\uparrow\rangle).
+\]
+Матрица ядра: $K_{11}=K_{22}=1$, $K_{12}=K_{21}=K$. Для вектора матричных элементов
+$x=(x_1,x_2)$ на первом и втором спине
+\[
+\sum_{ll'}K_{ll'}x_lx_{l'}^*=|x_1|^2+|x_2|^2+2K\,\mathrm{Re}(x_1x_2^*).
+\]
+
+\paragraph{Переход $|1,0\rangle\to|0,0\rangle$ (рис.~2b).} Действуем $S^z_1$:
+\[
+S^z_1|1,0\rangle=\tfrac12\cdot\tfrac1{\sqrt2}(|\!\uparrow\downarrow\rangle-|\!\downarrow\uparrow\rangle)=\tfrac12|0,0\rangle,\qquad
+S^z_2|1,0\rangle=-\tfrac12|0,0\rangle .
+\]
+$S^x$, $S^y$ меняют полный $S^z$ и на $|0,0\rangle$ элементов не имеют. Итак
+$x=(\tfrac12,-\tfrac12)$ только для $a=z$:
+\[
+\sum_{ll'}K_{ll'}x_lx_{l'}=\tfrac14+\tfrac14+2K\cdot\big(-\tfrac14\big)=\tfrac12(1-K).
+\]
+Делим на $\tfrac12$ --- ту же сумму для одиночного спина (раздел~\ref{sec:kd_rate}).
+
+\paragraph{Переход $|1,0\rangle\to|1,-1\rangle$ в сильном поле (рис.~2c).} $S^-_l$ опускает
+спин $l$: $S^-_{1,2}|1,0\rangle=\tfrac1{\sqrt2}|\!\downarrow\downarrow\rangle$. С $S^x=\tfrac12(S^++S^-)$ и
+$S^y=\tfrac1{2i}(S^+-S^-)$ для обоих $l$
+\[
+\langle1,-1|S^x_l|1,0\rangle=\tfrac1{2\sqrt2},\qquad \langle1,-1|S^y_l|1,0\rangle=\tfrac{i}{2\sqrt2}.
+\]
+Для $a=x$: $\tfrac18+\tfrac18+2K\cdot\tfrac18=\tfrac14(1+K)$; для $a=y$ то же; всего $\tfrac12(1+K)$.
+\begin{resbox}[Скорости димера]
+\[
+\Gamma_{|1,0\rangle\to|0,0\rangle}=\Gamma_0\,(1-K_d(k_Fd)),\qquad
+\Gamma_{|1,0\rangle\to|1,-1\rangle}=\Gamma_0\,(1+K_d(k_Fd)).
+\]
+\end{resbox}
+\begin{paperbox}{PRB, ур.~28, 30 (1D) и ур.~31--34 (2D, 3D)}
+\[
+\Gamma_{|1,S_Z\rangle\to|0,0\rangle}=\Gamma_0(\Delta_{ST})\big[1-\cos^2(k_Fd)\big],\qquad
+\Gamma_{|1,-1\rangle\to|1,0\rangle}=\Gamma_0(g\mu_BB_z)\big[1+\cos^2(k_Fd)\big],
+\]
+\[
+\Gamma^d_{|1,S_Z\rangle\to|0,0\rangle}=\Gamma_0(\Delta_{S,T})\,F^d(k_Fd),\qquad
+F^d(x)=\begin{cases}1-J_0^2(x),&d=2\\1-\mathrm{sinc}^2(x),&d=3\end{cases}
+\]
+\[
+\Gamma^d_{|1,-1\rangle\to|1,0\rangle}=\Gamma_0(g\mu_BB_z)\,F^d_T(k_Fd),\qquad
+F^d_T(x)=\begin{cases}1+J_0^2(x),&d=2\\1+\mathrm{sinc}^2(x),&d=3\end{cases}
+\]
+\end{paperbox}
+\begin{cmpbox}
+Формулы статьи совпадают с нашими во всех размерностях. Расхождение только
+с напечатанным рисунком~2(b) --- ниже.
+\end{cmpbox}
+
+\paragraph{Физический смысл.} При $k_Fd=0$ ($K=1$) переход в синглет запрещён
+($1-K=0$), а переход внутри триплета вдвое быстрее одиночного спина ($1+K=2$).
+Это аналог суб- и сверхизлучения: амплитуды рассеяния на двух атомах
+складываются в противофазе или в фазе.
+
+\paragraph{Предел далёких спинов --- решающая проверка.} В 2D и 3D $K\to0$ при
+$k_Fd\to\infty$. Далёкие спины рассеивают электроны независимо, и скорость
+равна некогерентной сумме $\sum_l\sum_a|\langle f|S^a_l|i\rangle|^2$. Для обоих
+переходов она равна $\tfrac12$ ($\tfrac14+\tfrac14$ и $\tfrac18\cdot4$) --- как для одиночного спина
+(проверено численно).
+\begin{resbox}[Обязательный предел]
+\[
+\Gamma_{|1,0\rangle\to|0,0\rangle},\ \Gamma_{|1,0\rangle\to|1,-1\rangle}\ \xrightarrow[k_Fd\to\infty]{}\ \Gamma_0\qquad(d=2,3).
+\]
+\end{resbox}
+\begin{paperbox}{PRB, текст после ур.~34}
+В пределе, где осцилляции затухли, субрадиантное (синглетное) состояние
+излучает со скоростью, вдвое меньшей, чем одиночный спин.
+\end{paperbox}
+\begin{cmpbox}[Сравнение с рис.~2]
+\begin{itemize}
+\item Рис.~2(c): кривые 2D и 3D стремятся к 1, как положено.
+\item Рис.~2(b): кривые 2D и 3D стремятся к 0.5, хотя обе панели нормированы
+  на один и тот же $\Gamma_0$.
+\item Оцифровка из PDF: кривые 2D и 3D рис.~2(b) совпадают с $(1-K)/2$ с
+  точностью 0.001--0.003; кривая 1D рис.~2(b) и все кривые рис.~2(c) --- с
+  формулами без множителя $\tfrac12$.
+\end{itemize}
+\end{cmpbox}
+
+\paragraph{Откуда могла взяться «половина».} В 1D $K=\cos^2(k_Fd)$ не затухает, а
+осциллирует со средним $\tfrac12$, поэтому среднее значение 1D-кривой $1-K$ равно
+$\tfrac12$. Вероятно, этот вывод для 1D был перенесён на 2D и 3D, где он неверен.
+
+\begin{cmpbox}[Вывод по рис.~2]
+Ур.~31--32, наш расчёт, панель (c) и предел независимых спинов согласованы
+между собой; кривые 2D и 3D панели (b) отличаются от них множителем $\tfrac12$.
+Расхождение --- в рисунке статьи.
+\end{cmpbox}
+
+\subsection{Чистая дефазировка (PRB, ур.~15--16, 38--39, рис.~4, приложение C)}
+\label{sec:kd_deph}
+
+\paragraph{Зачем.} Рис.~4 статьи (дефазировка изинговских цепочек) не совпадает с
+нашим расчётом. Оцифровка показала, что рисунок построен по ур.~16 в
+напечатанном виде. Выведем дефазировку и проверим ур.~16.
+
+\paragraph{Откуда берётся дефазировка.} Часть оператора коллапса с $\omega=0$
+(раздел~\ref{sec:kd_davies}) диагональна:
+\[
+L_0=\sqrt{c}\sum_Ma_M|M\rangle\langle M|,\qquad a_M=\langle M|A|M\rangle,\qquad
+c=\tfrac{\pi(\rho J)^2}{4}\lambda\,G(0)=\tfrac{\pi(\rho J)^2}{4}\lambda\,k_BT .
+\]
+Действие слагаемых Линдблада на когерентность $\rho_{MM'}=\langle M|\rho|M'\rangle$:
+\[
+\langle M|L_0\rho L_0^\dagger|M'\rangle=c\,a_Ma_{M'}\rho_{MM'},\qquad
+\langle M|\tfrac12\{L_0^\dagger L_0,\rho\}|M'\rangle=\tfrac c2\big(a_M^2+a_{M'}^2\big)\rho_{MM'} .
+\]
+Разность (для вещественных $a$):
+\[
+c\Big(a_Ma_{M'}-\tfrac12a_M^2-\tfrac12a_{M'}^2\Big)\rho_{MM'}=-\tfrac c2(a_M-a_{M'})^2\rho_{MM'} .
+\]
+Когерентность затухает со скоростью $\tfrac c2(a_M-a_{M'})^2$, населённости не
+меняются. Множитель $\tfrac12$ --- из структуры лиувиллиана. Суммируя по модам ядра:
+\begin{resbox}[Скорость чистой дефазировки]
+\begin{equation}
+\gamma^{\rm ad}_{MM'}=\frac{\pi(\rho J)^2}{8}\,k_BT\sum_a\sum_{nn'}
+K_d(k_F|\mathbf r_n-\mathbf r_{n'}|)\,\Delta S^a_n\,\Delta S^a_{n'},
+\qquad \Delta S^a_n=S^a_{MM}(n)-S^a_{M'M'}(n).
+\label{eq:kd_ad}
+\end{equation}
+До усреднения по поверхности Ферми здесь стоит
+$\big|\sum_ne^{i\mathbf q\cdot\mathbf r_n}\Delta S_n\big|^2$: у $S_{MM}(n)$ и $S_{M'M'}(n)$ \emph{один и тот же}
+фазовый множитель $e^{i\mathbf q\cdot\mathbf r_n}$, так как это элементы одного
+оператора~\eqref{eq:kd_V}.
+\end{resbox}
+\begin{paperbox}{PRB, ур.~38--39}
+\[
+\gamma^{\rm ad}_{M,M'}=\frac{\pi(\rho J)^2}{8\hbar}\,k_BT\,\chi^{\rm ad}_{MM'},\qquad
+\chi^{\rm ad}_{MM'}=\sum_a\big|S^a_{MM}-S^a_{M'M'}\big|^2;
+\]
+\[
+\gamma^{\rm ad}_{M,M'}=\frac{\pi(\rho J)^2}{2\hbar}\,k_BT\,S^2\qquad (\text{состояния }\pm S).
+\]
+\end{paperbox}
+\begin{cmpbox}
+Ур.~38 --- это~\eqref{eq:kd_ad} для одного спина. Для состояний $\pm S$:
+$\Delta S^z=2S$, и $\tfrac{\pi(\rho J)^2}{8}k_BT\cdot4S^2=\tfrac{\pi(\rho J)^2}{2}k_BTS^2$ --- ур.~39. Совпадает.
+\end{cmpbox}
+
+\paragraph{Три проверки формулы~\eqref{eq:kd_ad}.}
+\begin{enumerate}
+\item \textbf{Не зависит от начала координат.} Сдвиг всех атомов на $\mathbf R$
+  умножает $\sum_ne^{i\mathbf q\cdot\mathbf r_n}\Delta S_n$ на общую фазу $e^{i\mathbf q\cdot\mathbf R}$, модуль не
+  меняется.
+\item \textbf{Один спин} даёт ур.~39 (выше).
+\item \textbf{Изинговская цепочка.} Два основных состояния с $S^z_n=\pm s_nS$,
+  $s_n=\pm1$: $\Delta S_n=2s_nS$, и
+  \[
+  \gamma^{\rm ad}=\tfrac{\pi(\rho J)^2}{8}k_BTS^2\cdot\Lambda,\qquad \Lambda=4\,s^TKs .
+  \]
+  Это и считает код.
+\end{enumerate}
+
+\paragraph{Что напечатано в ур.~16.}
+\begin{paperbox}{PRB, ур.~15--16}
+\[
+\gamma^{\rm ad}_{M,M'}=\frac{\pi J^2}{2\hbar}\sum_{\mathbf k\mathbf k'}f(\epsilon_{\mathbf k})\big[1-f(\epsilon_{\mathbf k'})\big]\,
+\chi^{\rm ad}_{M,M'}(\mathbf k-\mathbf k')\,\delta(\epsilon_{\mathbf k}-\epsilon_{\mathbf k'}),
+\]
+\[
+\chi^{\rm ad}_{M,M'}(\mathbf q)=\sum_a\Big|\sum_{n=1}^{N}e^{i\mathbf q\cdot\mathbf r_n}S^a_{MM}(n)-e^{-i\mathbf q\cdot\mathbf r_n}S^a_{M'M'}(n)\Big|^2 .
+\]
+\end{paperbox}
+Второе слагаемое под модулем записано с $e^{-i\mathbf q\cdot\mathbf r_n}$ вместо $e^{+i\mathbf q\cdot\mathbf r_n}$. К
+чему это приводит:
+\begin{itemize}
+\item Один спин в точке $\mathbf r$, состояния $\pm S$:
+  \[
+  |e^{i\mathbf q\cdot\mathbf r}S-e^{-i\mathbf q\cdot\mathbf r}(-S)|^2=4S^2\cos^2(\mathbf q\cdot\mathbf r)
+  \ \xrightarrow{\text{среднее}}\ 2S^2\big[1+K_d(2k_Fr)\big]
+  \]
+  (через $\cos^2y=\tfrac12(1+\cos2y)$). Дефазировка одиночного спина зависела бы от
+  его положения относительно произвольного начала координат и совпадала
+  бы с ур.~39 только при $r=0$.
+\item Цепочка: та же замена даёт слагаемое с суммой координат,
+  \[
+  \Lambda=2\sum_{ll'}s_ls_{l'}\big[K(k_F|r_l-r_{l'}|)+K(k_F|r_l+r_{l'}|)\big].
+  \]
+\end{itemize}
+\begin{paperbox}{PRB, приложение C: ур.~C1, C3, C4}
+\[
+\chi^{\rm ad}_{MM'}(\mathbf q)=4S^2\sum_{ll'}\cos(\mathbf q\cdot\mathbf r_l)\cos(\mathbf q\cdot\mathbf r_{l'}),
+\]
+\[
+\Lambda^{FM}_{1D}(\xi,N)=2\big[N^2+\csc^2\xi\,\sin^2(\xi N)\cos^2(\xi(N+1))\big],
+\]
+\[
+\Lambda^{FM}_{3D}(\xi,N)=2\sum_{ll'}\big[\mathrm{sinc}^2(\xi|l-l'|)+\mathrm{sinc}^2(\xi|l-l'|)\big],\qquad \xi=k_Fd .
+\]
+\end{paperbox}
+\begin{cmpbox}[Сравнение с приложением C и рис.~4]
+\begin{itemize}
+\item Ур.~C1 --- это ур.~16 с знаком $e^{-i\mathbf q\cdot\mathbf r}$ (произведение косинусов), то есть
+  форма, зависящая от начала координат.
+\item По этой форме построены ур.~C1, C3, C5, C6 и рис.~4. Оцифровка
+  рисунка: все девять кривых совпадают с ней (медиана отклонения
+  0.005--0.018 на шкале 0--4) и не совпадают с~\eqref{eq:kd_ad} (0.08--0.50).
+\item Ур.~C4 напечатано с $|l-l'|$ в обоих слагаемых, то есть совпадает
+  с~\eqref{eq:kd_ad}, а не с рисунком.
+\item Ур.~C6 (нечётное $N$) не совпадает даже с суммой ур.~C1. Сумма по C1:
+  \[
+  \tfrac12\Big[4+\Big(1+\frac{\cos((2N+1)\xi)}{\cos\xi}\Big)^2\Big].
+  \]
+\end{itemize}
+\end{cmpbox}
+
+\begin{cmpbox}[Вывод по рис.~4]
+Знак показателя во втором слагаемом ур.~16 противоречит приложению~B самой
+статьи (там фазы входят только через разности $\mathbf r_n-\mathbf r_{n'}$),
+независимости от начала координат и ур.~38--39. Рис.~4 и приложение~C
+построены по ур.~16 с этим знаком. Наш код использует~\eqref{eq:kd_ad}.
+\end{cmpbox}

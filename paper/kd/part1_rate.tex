@@ -1,0 +1,476 @@
+% Часть 1: картина, обозначения, скорость перехода, операторы Линдблада.
+
+\subsection*{Как читать этот раздел}
+
+Здесь с нуля выводится каждая формула, которую использует наш код, и каждый
+коэффициент, который встречается в двух статьях Delgado и
+Fern\'andez-Rossier. При сравнении со статьями мы нашли расхождения, и нужно
+понять, ошибаемся мы или статьи. Для этого показано, из чего получается
+каждое число.
+
+Оформление:
+\begin{paperbox}{Серая рамка --- формула статьи}
+Уравнение так, как оно напечатано в статье (номер --- номер в статье).
+Обозначения статьи сохранены; $\hbar$ мы дальше полагаем равным 1.
+\end{paperbox}
+\begin{resbox}[Синяя рамка --- наш результат]
+Итог выкладки: то, что получается из исходных выражений и что вычисляет код.
+\end{resbox}
+\begin{cmpbox}[Оранжевая рамка --- сравнение]
+Совпадает ли наш результат с напечатанным, и если нет --- в чём разница.
+\end{cmpbox}
+
+Порядок раздела.
+\begin{enumerate}
+\item Физическая картина и обозначения (\ref{sec:kd_picture}--\ref{sec:kd_notation}).
+\item Общая формула второго порядка для скоростей и сдвигов (\ref{sec:kd_sigma}).
+\item Скорость перехода по шагам (\ref{sec:kd_me}--\ref{sec:kd_rate}).
+\item Операторы уравнения Линдблада в коде (\ref{sec:kd_davies}).
+\item Сдвиг уровней, статья Surf.\ Sci.\ (\ref{sec:kd_shift}--\ref{sec:kd_examples}).
+\item Димер, рис.~2 PRB (\ref{sec:kd_dimer}).
+\item Чистая дефазировка, ур.~16 и рис.~4 PRB (\ref{sec:kd_deph}).
+\item Соглашения о нормировке и сверка всех коэффициентов (\ref{sec:kd_conv}).
+\item Сводка и итог (\ref{sec:kd_summary}).
+\end{enumerate}
+Все промежуточные тождества проверены численно (это отмечено в тексте).
+
+Статьи: \textbf{Surf.\ Sci.} --- F.~Delgado, C.~F.~Hirjibehedin,
+J.~Fern\'andez-Rossier, Surf.\ Sci.\ \textbf{630}, 337 (2014), один спин;
+\textbf{PRB} --- F.~Delgado, J.~Fern\'andez-Rossier, Phys.\ Rev.\ B \textbf{95},
+075413 (2017), несколько спинов.
+
+\subsection{Физическая картина}
+\label{sec:kd_picture}
+
+Магнитные атомы (спины) лежат на поверхности металла. Электроны проводимости
+непрерывно рассеиваются на этих атомах. При рассеянии электрон может
+перевернуть свой спин, а атом --- изменить своё спиновое состояние (полный
+спин сохраняется).
+\begin{itemize}
+\item \textbf{Релаксация} (время $T_1$): атом переходит из одного состояния в
+  другое.
+\item \textbf{Чистая дефазировка} (время $T_2$): состояние атома не меняется, но
+  электрон, рассеявшийся на атоме в состоянии $|M\rangle$, уходит с другой фазой,
+  чем от атома в состоянии $|M'\rangle$. Суперпозиция $|M\rangle$ и $|M'\rangle$
+  теряет когерентность.
+\item \textbf{Сдвиг уровней}: виртуальные процессы того же типа немного сдвигают
+  энергии атома.
+\end{itemize}
+Если атомов несколько, амплитуды рассеяния на разных атомах интерферируют.
+Набег фазы между атомами на расстоянии $d$ порядка $k_Fd$ ($k_F$ --- волновое
+число Ферми), поэтому скорости осциллируют по $k_Fd$ --- это «RKKY-осцилляции»
+из названия статьи PRB.
+
+Описание --- во втором порядке по константе обмена $J$, то есть при $\rho J\ll1$
+($\rho$ --- плотность состояний на уровне Ферми). Электроны --- ванна в тепловом
+равновесии при температуре $T$ с временем корреляции $\sim1/k_BT$, коротким
+по сравнению с временами релаксации атомов (марковское приближение).
+
+\subsection{Обозначения}
+\label{sec:kd_notation}
+
+\begin{center}\small
+\begin{tabular}{p{2.6cm}p{11.4cm}}
+\toprule
+Символ & Смысл \\
+\midrule
+$\hbar=1$, $k_BT$, $\beta=1/k_BT$ & единицы; температура ванны \\
+$\mathbf S_l$, $\mathbf r_l$ & оператор спина атома $l$ и его положение, $l=1,\dots,N$ \\
+$S^a_l$, $a\in\{x,y,z\}$ & компоненты спина; $[S^x,S^y]=iS^z$ и циклически \\
+$H$, $|M\rangle$, $E_M$ & гамильтониан спинов, его собственные состояния и энергии \\
+$S^a_{M'M}(l)$ & матричный элемент $\langle M'|S^a_l|M\rangle$ \\
+$\epsilon_{\mathbf k}$, $c_{\mathbf k\sigma}$ & энергия электрона с импульсом $\mathbf k$ и оператор его уничтожения, $\sigma=\uparrow,\downarrow$ \\
+$\boldsymbol\sigma$ & матрицы Паули электрона; спин электрона $\mathbf s=\boldsymbol\sigma/2$ \\
+$f(\epsilon)$ & функция Ферми $1/(e^{\beta\epsilon}+1)$, энергия от уровня Ферми \\
+$n_B(\Delta)$ & функция Бозе $1/(e^{\beta\Delta}-1)$ \\
+$\rho_\sigma$, $\rho=2\rho_\sigma$ & плотность состояний на одну проекцию спина и на обе \\
+$J$ & константа обмена атом--электрон \\
+$k_F$, $\hat{\mathbf k}$ & волновое число Ферми; направление импульса электрона \\
+$K_d(x)$ & ядро интерференции для газа размерности $d=1,2,3$ \\
+$G(\Delta)$ & энергетический множитель скорости (раздел~\ref{sec:kd_G}) \\
+$\Delta_{nm}=E_n-E_m$ & энергия перехода \\
+$\Gamma_{M\to M'}$ & скорость перехода (вероятность в единицу времени) \\
+$\gamma^{\rm ad}_{MM'}$ & скорость чистой дефазировки пары $|M\rangle$, $|M'\rangle$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Матрицы Паули и их свойства:
+\[
+\sigma^x=\begin{pmatrix}0&1\\1&0\end{pmatrix},\quad
+\sigma^y=\begin{pmatrix}0&-i\\i&0\end{pmatrix},\quad
+\sigma^z=\begin{pmatrix}1&0\\0&-1\end{pmatrix};
+\]
+\[
+(\sigma^a)^2=1,\quad \mathrm{Tr}\,\sigma^a=0,\quad
+\mathrm{Tr}(\sigma^a\sigma^b)=2\delta_{ab}.
+\]
+
+\paragraph{Гамильтониан обмена в статьях.}
+\begin{paperbox}{PRB, ур.~4--5}
+\[
+V_K=\sum_{l=1}^{N}J(l)\,\mathbf S(l)\cdot\mathbf s(\mathbf r_l),\qquad
+\mathbf s(\mathbf r_l)=\sum_{\mathbf k\mathbf k'\sigma\sigma'}
+e^{i(\mathbf k-\mathbf k')\cdot\mathbf r_l}\,
+\frac{\boldsymbol\sigma_{\sigma\sigma'}}{2}\,
+c^\dagger_{\mathbf k\sigma}c_{\mathbf k'\sigma'} .
+\]
+\end{paperbox}
+\begin{paperbox}{Surf.\ Sci., ур.~3}
+\[
+V_{\rm kondo}=\frac12\sum_{\mathbf k\mathbf k'\sigma\sigma'}J_{\mathbf k\mathbf k'}\,
+\mathbf S\cdot\boldsymbol\tau_{\sigma\sigma'}\,c^\dagger_{\mathbf k\sigma}c_{\mathbf k'\sigma'},
+\qquad J_{\mathbf k\mathbf k'}=J/L^d,\quad \boldsymbol\tau\text{ --- матрицы Паули}.
+\]
+\end{paperbox}
+Обе записи --- одна и та же связь $J\,\mathbf S\cdot\mathbf s$ со спином электрона
+$\mathbf s=\boldsymbol\sigma/2$ (множитель $\tfrac12$ в Surf.\ Sci.\ и есть $\tfrac12$ из $\mathbf s$).
+Мы пишем её так:
+\begin{resbox}[Гамильтониан обмена, которым пользуемся]
+\begin{equation}
+V=J\sum_l \mathbf S_l\cdot\mathbf s(\mathbf r_l),\qquad
+\mathbf s(\mathbf r)=\sum_{\mathbf k\mathbf k'}\sum_{\sigma\sigma'}
+e^{i(\mathbf k-\mathbf k')\cdot\mathbf r}\,
+\frac{\boldsymbol\sigma_{\sigma\sigma'}}{2}\,
+c^\dagger_{\mathbf k\sigma}c_{\mathbf k'\sigma'} .
+\label{eq:kd_V}
+\end{equation}
+\end{resbox}
+Читается так: $\mathbf s(\mathbf r)$ --- спиновая плотность электронов в точке
+$\mathbf r$. Слагаемое с $c^\dagger_{\mathbf k\sigma}c_{\mathbf k'\sigma'}$ уничтожает электрон в
+$\mathbf k'\sigma'$ и рождает в $\mathbf k\sigma$, а множитель
+$e^{i(\mathbf k-\mathbf k')\cdot\mathbf r}$ --- фаза, с которой это происходит в точке $\mathbf r$.
+
+\subsection{Одна формула для скорости и для сдвига}
+\label{sec:kd_sigma}
+
+\paragraph{Зачем.} Скорости переходов (PRB и наш код) и сдвиги уровней
+(Surf.\ Sci.) выглядят как разные формулы с разными коэффициентами. На самом
+деле это две части одной величины. Поэтому отношение их коэффициентов
+фиксировано, и его можно проверить в статье независимо от того, как она
+нормирует плотность состояний.
+
+\paragraph{Собственная энергия.} Во втором порядке по $V$ состояние спинов
+$|M\rangle$ (электроны в тепловом равновесии) приобретает собственную энергию
+\begin{equation}
+\Sigma_M=\sum_{f}\frac{|\langle f|V|M\rangle|^2}{E_M-E_f+i0}.
+\label{eq:kd_sigma}
+\end{equation}
+\begin{itemize}
+\item Промежуточные состояния $f$: спины в $|M'\rangle$, один электрон перешёл
+  из $\mathbf k'\sigma'$ в $\mathbf k\sigma$.
+\item Вес слагаемого $f(\epsilon_{\mathbf k'})[1-f(\epsilon_{\mathbf k})]$: начальное
+  состояние электрона занято, конечное свободно (принцип Паули).
+\item Энергия промежуточного состояния:
+  \[
+  E_f=E_{M'}+\epsilon_{\mathbf k}-\epsilon_{\mathbf k'} .
+  \]
+\end{itemize}
+
+\paragraph{Разбиение на две части.} Добавка $+i0$ задаёт обход нуля знаменателя:
+\[
+\frac{1}{x+i0}=\mathcal P\frac1x-i\pi\delta(x),
+\]
+$\mathcal P$ --- главное значение. Отсюда две величины.
+\begin{itemize}
+\item \textbf{Мнимая часть $\to$ скорость.} Амплитуда убывает как
+  $e^{\mathrm{Im}\,\Sigma_M\,t}$, вероятность --- как $e^{2\,\mathrm{Im}\,\Sigma_M\,t}$.
+\item \textbf{Вещественная часть $\to$ сдвиг уровня.}
+\end{itemize}
+\begin{resbox}[Скорость и сдвиг из одной собственной энергии]
+\[
+\Gamma_M=-2\,\mathrm{Im}\,\Sigma_M=2\pi\sum_f|\langle f|V|M\rangle|^2\,\delta(E_M-E_f)
+\quad\text{(золотое правило Ферми)},
+\]
+\[
+\delta E_M=\mathrm{Re}\,\Sigma_M=\mathcal P\sum_f\frac{|\langle f|V|M\rangle|^2}{E_M-E_f}.
+\]
+\end{resbox}
+Обе величины построены из одного и того же $|\langle f|V|M\rangle|^2$. Все
+множители (спиновый след, $J^2$, $\rho_\sigma^2$) у них общие; различаются только
+$2\pi\delta$ в скорости и главное значение в сдвиге.
+
+\begin{paperbox}{Surf.\ Sci., ур.~12--13 (общие формулы статьи)}
+\[
+\Gamma^S_{n\to m}=\frac1\hbar\sum_{a=x,y,z}|\langle n|S_a|m\rangle|^2\,\mathrm{Im}\big[I(\Delta_{nm})\big],
+\]
+\[
+I(\Delta)=2\int d\epsilon\,d\epsilon'\,\rho(\epsilon)\rho(\epsilon')\,
+\big|J^{SS}_{k(\epsilon)k(\epsilon')}\big|^2\,
+\frac{f(\epsilon)\big(1-f(\epsilon')\big)}{\epsilon-\epsilon'+\Delta+i0^+}.
+\]
+Сдвиг (ур.~17):
+\[
+\delta E_n=\sum_{a,n'}|\langle n|S_a|n'\rangle|^2\,\mathrm{Re}\big[I(\Delta_{nn'})\big].
+\]
+\end{paperbox}
+\begin{cmpbox}
+Структура та же: скорость из мнимой части, сдвиг из вещественной части
+одного интеграла $I$. Численные множители в ур.~12--13 записаны неаккуратно
+(раздел~\ref{sec:kd_conv}); сверяться нужно с явными формулами ур.~14 и~20--22.
+\end{cmpbox}
+
+\subsection{Матричный элемент и спиновый след}
+\label{sec:kd_me}
+
+\paragraph{Зачем.} Нужно получить $|\langle f|V|M\rangle|^2$, просуммированное по
+спинам электрона, и понять, откуда множитель $J^2/2$.
+
+\paragraph{Матричный элемент.} Подставим~\eqref{eq:kd_V}. Оператор
+$c^\dagger_{\mathbf k\sigma}c_{\mathbf k'\sigma'}$ переводит электрон из $\mathbf k'\sigma'$ в $\mathbf k\sigma$ с
+амплитудой 1; спиновая часть атома даёт $\langle M'|S^a_l|M\rangle$:
+\[
+\langle M',\mathbf k\sigma|V|M,\mathbf k'\sigma'\rangle
+=\frac J2\sum_a A_a\,\sigma^a_{\sigma\sigma'},\qquad
+A_a=\sum_le^{i\mathbf q\cdot\mathbf r_l}S^a_{M'M}(l),\qquad \mathbf q=\mathbf k-\mathbf k'.
+\]
+
+\paragraph{Сумма по спинам электрона.} Спин электрона не наблюдается,
+складываем по $\sigma,\sigma'$:
+\[
+\sum_{\sigma\sigma'}\Big|\sum_aA_a\sigma^a_{\sigma\sigma'}\Big|^2
+=\sum_{a,b}A_aA_b^*\sum_{\sigma\sigma'}\sigma^a_{\sigma\sigma'}\big(\sigma^b_{\sigma\sigma'}\big)^* .
+\]
+Матрицы Паули эрмитовы, $(\sigma^b_{\sigma\sigma'})^*=\sigma^b_{\sigma'\sigma}$, поэтому
+\[
+\sum_{\sigma\sigma'}\sigma^a_{\sigma\sigma'}\sigma^b_{\sigma'\sigma}=\mathrm{Tr}(\sigma^a\sigma^b)=2\delta_{ab}.
+\]
+Пример: для $a=b=x$ ненулевые элементы $\sigma^x_{\uparrow\downarrow}=\sigma^x_{\downarrow\uparrow}=1$, сумма
+$1+1=2$; для $a=x$, $b=z$ сумма 0.
+\begin{resbox}[Квадрат матричного элемента, сумма по спинам электрона]
+\begin{equation}
+\sum_{\sigma\sigma'}|\langle f|V|M\rangle|^2
+=\Big(\frac J2\Big)^2\cdot2\sum_a|A_a|^2
+=\frac{J^2}{2}\sum_a\sum_{ll'}e^{i\mathbf q\cdot(\mathbf r_l-\mathbf r_{l'})}
+S^a_{M'M}(l)\,S^a_{MM'}(l').
+\label{eq:kd_trace}
+\end{equation}
+Откуда $J^2/2$: $(J/2)^2=J^2/4$ от $\mathbf s=\boldsymbol\sigma/2$, и ещё $\times2$ от следа
+$\mathrm{Tr}(\sigma^a\sigma^b)=2\delta_{ab}$.
+\end{resbox}
+В последнем шаге раскрыт квадрат модуля и использовано
+$S^a_{M'M}(l')^*=S^a_{MM'}(l')$ (оператор $S^a$ эрмитов).
+
+\begin{paperbox}{PRB, ур.~12--13}
+\[
+\Gamma_{MM'}=\frac{\pi J^2}{2\hbar}\sum_{\mathbf k\mathbf k'}f(\epsilon_{\mathbf k})\big[1-f(\epsilon_{\mathbf k'})\big]\,
+\chi_{M,M'}(\mathbf k-\mathbf k')\,\delta(\epsilon_{\mathbf k}+E_M-\epsilon_{\mathbf k'}-E_{M'}),
+\]
+\[
+\chi_{M,M'}(\mathbf q)\equiv2\sum_{l,l'=1}^{N}e^{i\mathbf q\cdot(\mathbf r_l-\mathbf r_{l'})}
+\sum_aS^a_{MM'}(l)\,S^a_{M'M}(l').
+\]
+\end{paperbox}
+\begin{cmpbox}
+Множитель статьи $\tfrac{\pi J^2}{2}\cdot2=\pi J^2$ --- это наши $2\pi$ (золотое
+правило) $\times\,J^2/2$ (спиновый след). Совпадает с~\eqref{eq:kd_trace}.
+\end{cmpbox}
+
+\subsection{Интеграл по энергиям: функция $G$}
+\label{sec:kd_G}
+
+\paragraph{Зачем.} В сумме по $\mathbf k,\mathbf k'$ надо учесть, сколько электронов
+могут участвовать в переходе при температуре $T$. Это даёт множитель
+$G(\Delta)$, который содержит закон Корринги и детальный баланс.
+
+\paragraph{От суммы к интегралу.} Существенны электроны в полосе $\sim k_BT$ у
+поверхности Ферми. Сумма по $|\mathbf k|$ заменяется на $\rho_\sigma\int d\epsilon$, по
+направлению $\hat{\mathbf k}$ --- на среднее по поверхности Ферми
+(раздел~\ref{sec:kd_angles}); так же для $\mathbf k'$. Плотность берётся на одну
+проекцию спина: сумма по спинам уже сделана в~\eqref{eq:kd_trace}.
+
+\paragraph{Снятие $\delta$-функции.} В скорость входит
+\[
+\delta(E_M-E_f)=\delta(E_M-E_{M'}-\epsilon_{\mathbf k}+\epsilon_{\mathbf k'}) .
+\]
+Это сохранение энергии: энергия $\Delta=E_M-E_{M'}$, отданная спинами, уходит
+электрону, $\epsilon_{\mathbf k}=\epsilon_{\mathbf k'}+\Delta$. Интеграл по $\epsilon_{\mathbf k}$ снимается:
+\[
+\rho_\sigma^2\int d\epsilon\,f(\epsilon)\big[1-f(\epsilon+\Delta)\big]\equiv\rho_\sigma^2\,G(\Delta),
+\qquad \epsilon\equiv\epsilon_{\mathbf k'} .
+\]
+
+\paragraph{Вычисление $G$.} Обозначим $x=e^{\beta\epsilon}$, $y=e^{\beta\Delta}$. Тогда
+$f(\epsilon)=\frac{1}{x+1}$, $1-f(\epsilon+\Delta)=\frac{xy}{xy+1}$ и
+\[
+\begin{aligned}
+f(\epsilon)\big[1-f(\epsilon+\Delta)\big]&=\frac{xy}{(x+1)(xy+1)},\\
+f(\epsilon)-f(\epsilon+\Delta)&=\frac{1}{x+1}-\frac{1}{xy+1}=\frac{x(y-1)}{(x+1)(xy+1)} .
+\end{aligned}
+\]
+Отношение этих выражений $\frac{y}{y-1}=1+\frac{1}{y-1}=1+n_B(\Delta)$, то есть
+\[
+f(\epsilon)\big[1-f(\epsilon+\Delta)\big]=\big[1+n_B(\Delta)\big]\big[f(\epsilon)-f(\epsilon+\Delta)\big].
+\]
+Интеграл разности по всей оси равен $\Delta$: $f$ --- ступенька от 1 до 0, а
+$f(\epsilon+\Delta)$ --- та же ступенька, сдвинутая на $\Delta$; площадь между ними
+равна сдвигу.
+\begin{resbox}[Энергетический множитель]
+\begin{equation}
+G(\Delta)=\int d\epsilon\,f(\epsilon)\big[1-f(\epsilon+\Delta)\big]
+=\Delta\big[1+n_B(\Delta)\big]=\frac{\Delta}{1-e^{-\beta\Delta}} .
+\label{eq:kd_G}
+\end{equation}
+Квадратура совпадает с формулой до $2.6\cdot10^{-13}$.
+\end{resbox}
+\begin{paperbox}{Surf.\ Sci., ур.~15; PRB, после ур.~20}
+\begin{gather*}
+G(\Delta)\equiv\int d\epsilon\,f(\epsilon)\big(1-f(\epsilon+\Delta)\big)=\frac{\Delta}{1-e^{-\beta\Delta}}
+\qquad\text{(Surf.\ Sci.)},\\
+G(\Delta)\equiv\Delta\,[1+n_B(\Delta)]\qquad\text{(PRB)}.
+\end{gather*}
+\end{paperbox}
+\begin{cmpbox}
+Совпадает с~\eqref{eq:kd_G} в обеих статьях.
+\end{cmpbox}
+
+\paragraph{Смысл пределов.}
+\begin{itemize}
+\item $\Delta\to0$: $G\to k_BT$ (так как $1-e^{-\beta\Delta}\approx\beta\Delta$). Скорость
+  пропорциональна температуре --- закон Корринги.
+\item $\Delta\gg k_BT$: $G\to\Delta$. Скорость пропорциональна отдаваемой энергии и
+  от температуры не зависит.
+\item $G(-\Delta)=e^{-\beta\Delta}G(\Delta)$: переход вверх подавлен больцмановским
+  множителем (детальный баланс), стационарное состояние --- распределение
+  Гиббса.
+\end{itemize}
+
+\subsection{Угловые интегралы: ядро $K_d$}
+\label{sec:kd_angles}
+
+\paragraph{Зачем.} После интеграла по энергиям в~\eqref{eq:kd_trace} остаются
+фазы $e^{i\mathbf q\cdot(\mathbf r_l-\mathbf r_{l'})}$ с $\mathbf q=k_F(\hat{\mathbf k}-\hat{\mathbf k}')$. Их среднее
+по направлениям --- ядро $K_d$, которое создаёт зависимость от $k_Fd$.
+
+\paragraph{Выкладка.} Направления $\hat{\mathbf k}$ и $\hat{\mathbf k}'$ независимы и равномерно
+распределены, поэтому среднее распадается на произведение ($\mathbf r=\mathbf r_l-\mathbf r_{l'}$):
+\[
+\big\langle e^{ik_F(\hat{\mathbf k}-\hat{\mathbf k}')\cdot\mathbf r}\big\rangle
+=\langle e^{ik_F\hat{\mathbf k}\cdot\mathbf r}\rangle\,\langle e^{-ik_F\hat{\mathbf k}'\cdot\mathbf r}\rangle
+=\big|\langle e^{ik_F\hat{\mathbf k}\cdot\mathbf r}\rangle\big|^2\equiv K_d(k_Fr).
+\]
+Остаётся среднее $\langle e^{ik_F\hat{\mathbf k}\cdot\mathbf r}\rangle$ по поверхности Ферми:
+\begin{itemize}
+\item \textbf{1D}, две точки $\hat k=\pm1$:
+  \[
+  \tfrac12(e^{ik_Fr}+e^{-ik_Fr})=\cos(k_Fr).
+  \]
+\item \textbf{2D}, окружность, $\theta$ --- угол между $\hat{\mathbf k}$ и $\mathbf r$:
+  \[
+  \frac{1}{2\pi}\int_0^{2\pi}e^{ix\cos\theta}d\theta=J_0(x)\quad\text{(функция Бесселя)}.
+  \]
+\item \textbf{3D}, сфера, $u=\cos\theta$ равномерно на $[-1,1]$:
+  \[
+  \frac12\int_{-1}^{1}e^{ixu}du=\frac{e^{ix}-e^{-ix}}{2ix}=\frac{\sin x}{x}.
+  \]
+\end{itemize}
+\begin{resbox}[Ядро интерференции]
+\[
+K_1(x)=\cos^2x,\qquad K_2(x)=J_0^2(x),\qquad K_3(x)=\Big(\frac{\sin x}{x}\Big)^2,
+\qquad K_d(0)=1 .
+\]
+\end{resbox}
+При $l=l'$ фаза равна 1, поэтому для одного атома ядро ничего не меняет; для
+нескольких оно описывает интерференцию. При $k_Fr\to\infty$ в 2D и 3D $K_d\to0$, а
+в 1D $K_1$ продолжает осциллировать.
+
+\subsection{Итоговая скорость перехода}
+\label{sec:kd_rate}
+
+\paragraph{Сборка.} Перемножаем: $2\pi$ (золотое правило) $\times\ J^2/2$ (спиновый
+след) $\times\ \rho_\sigma^2G$ (энергии) $\times\ K_d$ (направления).
+\begin{resbox}[Скорость перехода]
+\begin{equation}
+\Gamma_{M\to M'}=\underbrace{2\pi\cdot\frac{J^2}{2}\cdot\rho_\sigma^2}_{=\pi(\rho_\sigma J)^2=\frac\pi4(\rho J)^2}
+\,G(E_M-E_{M'})\sum_{ll'}K_d(k_F|\mathbf r_l-\mathbf r_{l'}|)\sum_a
+S^a_{M'M}(l)\,S^a_{MM'}(l') .
+\label{eq:kd_rate}
+\end{equation}
+Здесь $\rho=2\rho_\sigma$ --- плотность на обе проекции спина. Эта формула
+реализована в коде.
+\end{resbox}
+\begin{paperbox}{PRB, ур.~20 (один спин)}
+\[
+\Gamma_{MM'}=\frac{\pi(\rho J)^2}{4\hbar}\,G(\Delta_{MM'})\sum_a\big|S^a_{MM'}\big|^2 .
+\]
+\end{paperbox}
+\begin{paperbox}{Surf.\ Sci., ур.~14}
+\[
+\Gamma^S_{n\to m}=\frac{\pi}{2\hbar}(\rho J)^2\,G(\Delta_{nm})\sum_a|\langle n|S_a|m\rangle|^2 .
+\]
+\end{paperbox}
+\begin{cmpbox}
+PRB ур.~20 совпадает с~\eqref{eq:kd_rate} при одном атоме ($K=1$). В Surf.\ Sci.\
+префактор $\tfrac\pi2$ вместо $\tfrac\pi4$: это общий масштаб всех скоростей,
+определяемый соглашениями о $\rho$ и $J$ (раздел~\ref{sec:kd_conv}). Все наши
+сравнения со статьями --- отношения, от него не зависящие.
+\end{cmpbox}
+
+\paragraph{Пример: спин $1/2$ в поле.} $S^a=\sigma^a/2$, переход
+$|\!\uparrow\rangle\to|\!\downarrow\rangle$:
+\[
+\langle\downarrow|S^x|\uparrow\rangle=\tfrac12,\qquad
+\langle\downarrow|S^y|\uparrow\rangle=\tfrac i2,\qquad
+\langle\downarrow|S^z|\uparrow\rangle=0,\qquad
+\sum_a|S^a|^2=\tfrac14+\tfrac14=\tfrac12 .
+\]
+\begin{resbox}[Скорость одиночного спина $1/2$]
+\[
+\Gamma_0=\frac{\pi(\rho J)^2}{4}\cdot\frac12\cdot G=\frac{\pi(\rho J)^2}{8}\,G .
+\]
+\end{resbox}
+\begin{paperbox}{PRB, ур.~22}
+\[
+\Gamma_0(\Delta)=\frac{\pi(\rho J)^2}{8\hbar}\,G(\Delta).
+\]
+\end{paperbox}
+\begin{cmpbox}
+Совпадает. Через $\Gamma_0$ в PRB нормированы все скорости димеров.
+\end{cmpbox}
+
+\subsection{Что делает код: от скоростей к уравнению Линдблада}
+\label{sec:kd_davies}
+
+\paragraph{Зачем.} Формула~\eqref{eq:kd_rate} даёт скорости переходов между
+собственными состояниями. Для симуляции нужна динамика матрицы плотности ---
+уравнение Линдблада с операторами $L_j$:
+\[
+\dot\rho=-i[H,\rho]+\sum_j\Big(L_j\rho L_j^\dagger-\tfrac12\{L_j^\dagger L_j,\rho\}\Big).
+\]
+Покажем, как строятся $L_j$ и почему они воспроизводят~\eqref{eq:kd_rate}.
+
+\paragraph{Шаг 1: моды ядра.} Матрица $K_{ll'}=K_d(k_F|\mathbf r_l-\mathbf r_{l'}|)$
+вещественная, симметричная и неотрицательно определённая (это среднее
+квадрата модуля). Диагонализуем её и введём коллективные операторы:
+\[
+K_{ll'}=\sum_c\lambda_c\,u_c(l)\,u_c(l'),\quad \lambda_c\ge0;\qquad
+A_{c,a}=\sum_lu_c(l)S^a_l .
+\]
+Тогда сумма в~\eqref{eq:kd_rate} становится суммой квадратов, то есть суммой
+независимых каналов (проверено численно):
+\[
+\sum_{ll'}K_{ll'}S^a_{M'M}(l)S^a_{MM'}(l')
+=\sum_c\lambda_c\Big|\sum_lu_c(l)S^a_{M'M}(l)\Big|^2
+=\sum_c\lambda_c\,|\langle M'|A_{c,a}|M\rangle|^2 .
+\]
+
+\paragraph{Шаг 2: разбиение по частотам.} Каждый $A_{c,a}$ раскладывается на
+части, меняющие энергию на $\omega$:
+\[
+A_{c,a}(\omega)=\sum_{E_M-E_{M'}=\omega}|M'\rangle\langle M'|A_{c,a}|M\rangle\langle M| .
+\]
+\begin{resbox}[Операторы коллапса в коде]
+\[
+L_{c,a,\omega}=\sqrt{\tfrac{\pi(\rho J)^2}{4}\,\lambda_c\,G(\omega)}\;A_{c,a}(\omega).
+\]
+Слагаемое $L\rho L^\dagger$ переносит населённость из $|M\rangle$ в $|M'\rangle$ со скоростью
+\[
+|\langle M'|L|M\rangle|^2=\tfrac{\pi(\rho J)^2}{4}\lambda_cG(\omega)|\langle M'|A_{c,a}|M\rangle|^2;
+\]
+сумма по $c$ и $a$ по шагу~1 даёт ровно~\eqref{eq:kd_rate}.
+\end{resbox}
+Часть с $\omega=0$ диагональна в базисе $|M\rangle$ и даёт чистую дефазировку
+(раздел~\ref{sec:kd_deph}). Такая (секулярная) форма сохраняет положительность
+матрицы плотности. Тест кода: лиувиллиан этих операторов воспроизводит
+скорости~\eqref{eq:kd_rate} и скорости затухания когерентностей с точностью
+$10^{-14}$.

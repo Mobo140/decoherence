@@ -17,6 +17,8 @@
 \usetikzlibrary{arrows.meta,positioning,calc}
 \usepackage{caption}
 \usepackage{titlesec}
+\newcommand{\kddir}{}
+\input{\kddir kondo_boxes.tex}
 \usepackage[colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black,citecolor=blue!50!black]{hyperref}
 
 \titleformat{\chapter}[display]{\normalfont\LARGE\bfseries}{}{0pt}{}
@@ -275,11 +277,13 @@ $\langle\sigma_z\rangle$ или все три средних Паули для �
 Если система взаимодействует с окружением, о ней в общем случае известно
 лишь то, что она находится в состоянии $\ket{\psi_k}$ с вероятностью $p_k$.
 Такое смешанное состояние описывается \textbf{матрицей плотности}
+\begin{keybox}
 \begin{equation}
 \rho=\sum_kp_k\ket{\psi_k}\bra{\psi_k}
 =\begin{pmatrix}\rho_{00}&\rho_{01}\\ \rho_{10}&\rho_{11}\end{pmatrix},
 \label{eq:rho}
 \end{equation}
+\end{keybox}
 обладающей свойствами
 \begin{equation}
 \rho=\rho^\dagger,\qquad \rho\succeq0,\qquad \Tr\rho=1 .
@@ -303,11 +307,13 @@ $\Tr(\sigma_\alpha\sigma_\beta)=2\delta_{\alpha\beta}$ и
 $\Tr\sigma_\alpha=0$. Разложим $\rho=\frac12\bigl(a_0I+\sum_\alpha
 r_\alpha\sigma_\alpha\bigr)$. Условие $\Tr\rho=1$ даёт $a_0=1$, а умножение на
 $\sigma_\beta$ и взятие следа --- $r_\beta=\Tr(\rho\sigma_\beta)$. Итак,
+\begin{keybox}
 \begin{equation}
 \rho=\frac12\bigl(I+\mathbf r\cdot\boldsymbol\sigma\bigr),\qquad
 r_\alpha=\langle\sigma_\alpha\rangle,\qquad |\mathbf r|\le1 .
 \label{eq:bloch}
 \end{equation}
+\end{keybox}
 Вектор $\mathbf r$ называется \textbf{вектором Блоха}. Собственные значения
 $\rho$ равны $\frac12(1\pm|\mathbf r|)$, поэтому неотрицательность $\rho$
 эквивалентна $|\mathbf r|\le1$; чистым состояниям отвечает поверхность
@@ -325,10 +331,12 @@ $\langle\sigma_x\rangle,\langle\sigma_y\rangle,\langle\sigma_z\rangle$,
 
 Мерой когерентности служит \textbf{$\ell_1$-когерентность} --- сумма модулей
 внедиагональных элементов матрицы плотности:
+\begin{keybox}
 \begin{equation}
 C(\rho)=\sum_{i\neq j}|\rho_{ij}| .
 \label{eq:l1}
 \end{equation}
+\end{keybox}
 Для одного кубита из \eqref{eq:bloch} $\rho_{01}=\frac12(r_x-ir_y)$, поэтому
 \begin{equation}
 C=2|\rho_{01}|=\sqrt{r_x^2+r_y^2}
@@ -338,10 +346,12 @@ C=2|\rho_{01}|=\sqrt{r_x^2+r_y^2}
 
 \textbf{Чистота} $P=\Tr\rho^2$ характеризует смешанность состояния. Из
 \eqref{eq:bloch} и соотношений для следов
+\begin{keybox}
 \begin{equation}
 P=\frac14\Tr\bigl(I+2\mathbf r\cdot\boldsymbol\sigma+(\mathbf r\cdot\boldsymbol\sigma)^2\bigr)
 =\frac12\bigl(1+|\mathbf r|^2\bigr),
 \end{equation}
+\end{keybox}
 так что $P=1$ для чистых состояний и $P=1/2$ для полностью смешанного.
 Чистота и когерентность --- разные величины: состояние $\ket0$ чистое, но
 некогерентное.
@@ -360,19 +370,23 @@ $H\propto\sigma_z$ это несущественно, для двух кубит
 (марковское приближение). Тогда эволюция матрицы плотности системы
 описывается уравнением Горини--Коссаковского--Сударшана--Линдблада
 ($\hbar=1$):
+\begin{keybox}
 \begin{equation}
 \dot\rho=-i[H,\rho]+\gamma(t)\sum_k\mathcal D[L_k]\rho,\qquad
 \mathcal D[L]\rho=L\rho L^\dagger-\frac12\{L^\dagger L,\rho\}.
 \label{eq:lindblad}
 \end{equation}
+\end{keybox}
 Первое слагаемое описывает унитарную эволюцию с гамильтонианом $H$: оно
 вращает вектор Блоха, не меняя его длины. Второе --- \textbf{диссипатор}:
 операторы $L_k$ (операторы скачков) задают характер воздействия окружения, а
 $\gamma(t)\ge0$ --- его интенсивность.
 
 Уравнение сохраняет след: $\Tr[H,\rho]=0$, а
-$\Tr\mathcal D[L]\rho=\Tr(L\rho L^\dagger)-\Tr(L^\dagger L\rho)=0$ в силу
-цикличности следа. Член $L\rho L^\dagger$ описывает <<скачок>>, а
+\[
+\Tr\mathcal D[L]\rho=\Tr(L\rho L^\dagger)-\Tr(L^\dagger L\rho)=0
+\]
+в силу цикличности следа. Член $L\rho L^\dagger$ описывает <<скачок>>, а
 антикоммутатор --- соответствующую убыль вероятности. При $\gamma\ge0$
 эволюция переводит матрицы плотности в матрицы плотности (сохраняет
 положительность); при $\gamma<0$ это не так, поэтому ниже $\gamma(t)$
@@ -419,26 +433,34 @@ $\sigma_z^\dagger\sigma_z=I$, а $\sigma_z\rho\sigma_z$ меняет знак
 \label{sec:t2one}
 
 В обоих случаях уравнение для $\rho_{01}$ линейно и интегрируется явно:
+\begin{keybox}
 \begin{equation}
 \rho_{01}(t)=\rho_{01}(0)\,e^{-2i\omega t}\exp\bigl(-\kappa\,\Gamma(t)\bigr),
 \qquad \Gamma(t)=\int_0^t\gamma(s)\dd s,
 \qquad\kappa=\begin{cases}1/2,&L=\sigma_-,\\ 2,&L=\sigma_z.\end{cases}
 \end{equation}
+\end{keybox}
 Фазовый множитель на модуль не влияет, поэтому
+\begin{keybox}
 \begin{equation}
 \frac{C(t)}{C(0)}=\exp\bigl(-\kappa\,\Gamma(t)\bigr).
 \label{eq:C1q}
 \end{equation}
+\end{keybox}
 Время $T_2$, в которое когерентность падает в $e$ раз, определяется условием
+\begin{keybox}
 \begin{equation}
 \Gamma(T_2)=\int_0^{T_2}\gamma(s)\dd s=\frac1\kappa .
 \label{eq:T2cond}
 \end{equation}
+\end{keybox}
 При постоянной скорости
+\begin{keybox}
 \begin{equation}
 T_2=\frac2\gamma\quad(\sigma_-),\qquad T_2=\frac1{2\gamma}\quad(\sigma_z).
 \label{eq:T2const}
 \end{equation}
+\end{keybox}
 В принятых обозначениях теории ЯМР для амплитудного затухания $T_1=1/\gamma$ и
 $T_2=2T_1$; в настоящей работе $T_2$ --- просто время спада когерентности в $e$
 раз.
@@ -498,11 +520,13 @@ $\gamma(t)$, усвоенное из обучающих данных.
 
 Скорость диссипации задаётся полиномом Бернштейна степени $4$ по
 безразмерному времени $s=t/t_{\max}\in[0,1]$:
+\begin{keybox}
 \begin{equation}
 \gamma(t)=\sum_{k=0}^{4}c_k\,b_{k,4}(s),\qquad
 b_{k,n}(s)=\binom nk s^k(1-s)^{n-k}.
 \label{eq:bernstein}
 \end{equation}
+\end{keybox}
 Базисные полиномы обладают двумя свойствами. Во-первых, $b_{k,n}(s)\ge0$ при
 $s\in[0,1]$. Во-вторых, по формуле бинома
 \[
@@ -630,7 +654,10 @@ $\rho=\tfrac12(I+\langle\sigma_x\rangle\sigma_x+\langle\sigma_y\rangle\sigma_y
 одночастичными и девятью корреляторами
 $\langle\sigma_\alpha\otimes\sigma_\beta\rangle$; для них нужны девять
 настроек (каждый кубит в своём базисе), а $\hat\rho$ получается линейной
-инверсией $\hat\rho=\tfrac14\sum_{\mu\nu}\hat m_{\mu\nu}\,\sigma_\mu\otimes\sigma_\nu$.
+инверсией
+\[
+\hat\rho=\tfrac14\sum_{\mu\nu}\hat m_{\mu\nu}\,\sigma_\mu\otimes\sigma_\nu .
+\]
 Пример, почему локальных средних мало: у синглета и у полностью смешанного
 состояния все шесть одночастичных средних равны нулю, а чистота равна 1 и
 $1/4$. При конечном числе повторов линейная инверсия может дать $\hat\rho$ с
@@ -651,10 +678,12 @@ $L_1=\sigma_-\otimes I$, $L_2=I\otimes\sigma_-$, с общей скорость�
 
 Гамильтониан изотропной модели Гейзенберга (в статьях --- модель XXZ при
 $\Delta=1$)
+\begin{keybox}
 \begin{equation}
 H_{\rm XXZ}=J\bigl(\sigma_x\otimes\sigma_x+\sigma_y\otimes\sigma_y+\sigma_z\otimes\sigma_z\bigr),
 \qquad J\sim U(0.2,\,1.0).
 \end{equation}
+\end{keybox}
 Воспользуемся тождеством $\boldsymbol\sigma\cdot\boldsymbol\sigma\equiv
 \sum_\alpha\sigma_\alpha\otimes\sigma_\alpha=2\,\mathrm{SWAP}-I$, где SWAP
 переставляет состояния кубитов. Его проверка на базисе: на $\ket{00}$ и
@@ -673,10 +702,12 @@ $\ket{01}$ и $\ket{10}$, причём \emph{максимально и при л
 \section{Модель Изинга в поперечном поле}
 
 Гамильтониан
+\begin{keybox}
 \begin{equation}
 H_{\rm TFIM}=J\,\sigma_x\otimes\sigma_x+h\bigl(\sigma_z\otimes I+I\otimes\sigma_z\bigr),
 \qquad h=1 .
 \end{equation}
+\end{keybox}
 Оператор $\sigma_x\otimes\sigma_x$ переворачивает оба спина, поле $h$
 диагонально. Поэтому $H$ коммутирует с \textbf{чётностью}
 $P=\sigma_z\otimes\sigma_z$ и распадается на два блока. Действуя на базисные
@@ -720,10 +751,12 @@ $\ell_1$-когерентность --- не монотонная экспоне
 |\tilde\rho_{ij}(t)|=|\tilde\rho_{ij}(0)| .
 \end{equation}
 Следовательно, $\ell_1$-когерентность в собственном базисе
+\begin{keybox}
 \begin{equation}
 C_E(t)=\sum_{i\neq j}|\tilde\rho_{ij}(t)|
 \label{eq:CE}
 \end{equation}
+\end{keybox}
 унитарной эволюцией не меняется и убывает только за счёт диссипации. Обычная
 $C(t)$ в вычислительном базисе, напротив, промодулирована с глубиной, которая
 определяется углом смешивания: у модели Изинга --- углом \eqref{eq:theta},
@@ -743,8 +776,10 @@ $C(t)$ в вычислительном базисе, напротив, пром�
 Чётность $P$ коммутирует с $H_{\rm TFIM}$, но не коммутирует с
 $L_1=\sigma_-\otimes I$. Тем не менее симметрия сохраняется и в присутствии
 диссипатора. Действительно,
-$PL_1P=(\sigma_z\sigma_-\sigma_z)\otimes(\sigma_z\sigma_z)=-L_1$, и аналогично
-для $L_2$. Оператор скачка входит в $\mathcal D[L]$ квадратично, поэтому знак
+\[
+PL_1P=(\sigma_z\sigma_-\sigma_z)\otimes(\sigma_z\sigma_z)=-L_1,
+\]
+и аналогично для $L_2$. Оператор скачка входит в $\mathcal D[L]$ квадратично, поэтому знак
 сокращается: $\mathcal D[PLP]=\mathcal D[L]$, и супероператор Линдблада
 коммутирует с преобразованием $\rho\mapsto P\rho P$. Это проверено и
 численно: коммутатор равен нулю с машинной точностью при всех $J$.
@@ -766,12 +801,17 @@ $PL_1P=(\sigma_z\sigma_-\sigma_z)\otimes(\sigma_z\sigma_z)=-L_1$, и анало�
 Состояние двух кубитов \textbf{запутано}, если оно не представимо как смесь
 произведений $\sum_kp_k\rho_A^{(k)}\otimes\rho_B^{(k)}$. Для двух кубитов мерой
 запутанности служит конкурентность (Wootters, 1998)
+\begin{keybox}
 \begin{equation}
 \mathcal C(\rho)=\max\bigl(0,\lambda_1-\lambda_2-\lambda_3-\lambda_4\bigr),
 \end{equation}
+\end{keybox}
 где $\lambda_i$ --- упорядоченные по убыванию квадратные корни собственных
 значений матрицы $\rho\tilde\rho$,
-$\tilde\rho=(\sigma_y\otimes\sigma_y)\rho^*(\sigma_y\otimes\sigma_y)$. Под
+\[
+\tilde\rho=(\sigma_y\otimes\sigma_y)\rho^*(\sigma_y\otimes\sigma_y).
+\]
+Под
 локальным амплитудным затуханием запутанность может исчезать за
 \emph{конечное} время (<<внезапная смерть запутанности>>, Yu \& Eberly,
 Science \textbf{323}, 598, 2009), тогда как когерентность убывает
@@ -792,9 +832,11 @@ D=\{(\mathbf x_i,y_i)\}_{i=1}^n,
 отклик (здесь --- оставшееся время или метка тревоги). Модель --- это
 параметрическое семейство функций $f_\theta$; параметры $\theta$ подбираются
 минимизацией \emph{эмпирического риска}
+\begin{keybox}
 \begin{equation}
 \mathcal L(\theta)=\frac1n\sum_{i=1}^n\ell\bigl(f_\theta(\mathbf x_i),y_i\bigr),
 \end{equation}
+\end{keybox}
 где $\ell$ --- функция потерь. Цель, однако, --- не малая ошибка на обучающих
 примерах, а малая ошибка на новых данных (\emph{обобщающая способность}).
 Модель, которая запоминает обучающую выборку, но плохо предсказывает новые
@@ -834,9 +876,11 @@ $T_2$ --- первый момент, когда $C(t)<C(0)/e$. Порог $1/e$ 
 сетка дискретна, момент пересечения находится линейной интерполяцией между
 соседними узлами $t_{i-1}$ и $t_i$, где $C(t_{i-1})\ge C_*>C(t_i)$,
 $C_*=C(0)/e$:
+\begin{keybox}
 \begin{equation}
 T_2=t_{i-1}+\frac{C(t_{i-1})-C_*}{C(t_{i-1})-C(t_i)}\,(t_i-t_{i-1}).
 \end{equation}
+\end{keybox}
 Без интерполяции $T_2$ был бы округлён до шага сетки. Если порог за время
 $t_{\max}=20$ не пересечён, траектория \textbf{цензурирована справа}: известно
 лишь, что $T_2>t_{\max}$. Такие траектории исключаются; в основных сценариях
@@ -852,10 +896,12 @@ $T_2<L\,\Delta t$, отбрасываются.
 
 \paragraph{5. Цели.} Для каждого окна вычисляются цель регрессии ---
 оставшееся время $T_2-t_{\rm obs}$ --- и метка тревоги
+\begin{keybox}
 \begin{equation}
 y^{\rm alarm}=\begin{cases}1,&T_2-t_{\rm obs}\le\Delta,\\ 0,&\text{иначе},\end{cases}
 \qquad\Delta=1 .
 \end{equation}
+\end{keybox}
 
 \begin{figure}[h]
 \centering
@@ -987,11 +1033,13 @@ S(a,s)=\sum_{i=1}^L\bigl(y_i-a-st_i\bigr)^2 .
 \end{equation}
 Приравнивая нулю производные по $a$ и $s$, получаем систему нормальных
 уравнений, из которой
+\begin{keybox}
 \begin{equation}
 \hat s=\frac{\sum_i(t_i-\bar t)(y_i-\bar y)}{\sum_i(t_i-\bar t)^2},\qquad
 \hat a=\bar y-\hat s\,\bar t .
 \label{eq:slope}
 \end{equation}
+\end{keybox}
 Качество линейной аппроксимации характеризует коэффициент детерминации фита
 \begin{equation}
 R^2_{\rm OLS}=1-\frac{\sum_i(y_i-\hat a-\hat st_i)^2}{\sum_i(y_i-\bar y)^2},
@@ -1000,10 +1048,12 @@ R^2_{\rm OLS}=1-\frac{\sum_i(y_i-\hat a-\hat st_i)^2}{\sum_i(y_i-\bar y)^2},
 
 Из условия $C_0e^{sT_2}=C_0/e$ следует $T_2=-1/s$, поэтому оценка оставшегося
 времени
+\begin{keybox}
 \begin{equation}
 T_{\rm phys}=-\frac1{\hat s}-t_{\rm obs}.
 \label{eq:tphys}
 \end{equation}
+\end{keybox}
 Формула не требует знать канал диссипации: для $\sigma_-$ наклон равен
 $-\gamma/2$, для $\sigma_z$ --- $-2\gamma$, и в обоих случаях $-1/s$ совпадает с
 \eqref{eq:T2const}. При постоянной $\gamma$ оценка точна; при переменной она
@@ -1055,9 +1105,11 @@ $0.0004$).
 \section{Растянутая экспонента}
 
 Двухпараметрическая аппроксимация Кольрауша
+\begin{keybox}
 \begin{equation}
 C(t)=C_0\exp\bigl(-(t/\tau)^\beta\bigr)
 \end{equation}
+\end{keybox}
 строится по точкам окна методом наименьших квадратов. При $\beta<1$ она
 описывает замедляющееся, при $\beta>1$ --- ускоряющееся убывание. Из условия
 $(T_2/\tau)^\beta=1$ сразу следует $T_2=\tau$. Это классический метод без
@@ -1082,11 +1134,13 @@ $(T_2/\tau)^\beta=1$ сразу следует $T_2=\tau$. Это классич
 
 \paragraph{Функции потерь.} Для регрессии используется функция Хьюбера с
 параметром $\delta=1$ (в нормированных единицах):
+\begin{keybox}
 \begin{equation}
 \ell_\delta(r)=\begin{cases}\dfrac12r^2,&|r|\le\delta,\\[4pt]
 \delta\Bigl(|r|-\dfrac\delta2\Bigr),&|r|>\delta,\end{cases}
 \qquad r=\hat y-y .
 \end{equation}
+\end{keybox}
 Она квадратична на малых ошибках и линейна на больших, поэтому менее
 чувствительна к выбросам, чем квадратичная.
 
@@ -1094,9 +1148,11 @@ $(T_2/\tau)^\beta=1$ сразу следует $T_2=\tau$. Это классич
 $p=\sigma(z)=1/(1+e^{-z})$. Если считать метку $y\in\{0,1\}$ случайной
 величиной Бернулли с параметром $p$, то минус логарифм правдоподобия равен
 бинарной перекрёстной энтропии
+\begin{keybox}
 \begin{equation}
 \ell_{\rm BCE}(p,y)=-\bigl[w_+\,y\log p+(1-y)\log(1-p)\bigr],
 \end{equation}
+\end{keybox}
 где вес $w_+\ge1$ при необходимости усиливает вклад редкого положительного
 класса (в основных экспериментах $w_+=1$). Общая
 функция потерь --- сумма потерь регрессии и классификации.
@@ -1105,10 +1161,12 @@ $p=\sigma(z)=1/(1+e^{-z})$. Если считать метку $y\in\{0,1\}$ с�
 используется только при обучении, как вспомогательный член функции потерь.
 При предсказании балл тревоги у всех моделей вычисляется из предсказанного
 остатка $\hat r$:
+\begin{keybox}
 \begin{equation}
 p=\frac1{1+e^{5(\hat r-\Delta)}} ,
 \label{eq:alarm}
 \end{equation}
+\end{keybox}
 то есть чем меньше предсказанный остаток, тем выше балл. Поскольку
 $p$ --- монотонная функция $\hat r$, AUROC измеряет, насколько хорошо
 предсказанный остаток упорядочивает окна по отношению к событию
@@ -1150,6 +1208,7 @@ $5\cdot10^{-4}$) уменьшается вдвое, если потеря на �
 и быстро затухают или растут. Сеть LSTM (long short-term memory) решает эту
 проблему, разделяя состояние на <<память>> $c_t$ и выход $h_t$ и управляя
 потоком информации тремя \emph{вентилями} со значениями в $(0,1)$:
+\begin{keybox}
 \begin{align}
 f_t&=\sigma\bigl(W_f[x_t,h_{t-1}]+b_f\bigr),\quad
 i_t=\sigma\bigl(W_i[x_t,h_{t-1}]+b_i\bigr),\quad
@@ -1157,6 +1216,7 @@ o_t=\sigma\bigl(W_o[x_t,h_{t-1}]+b_o\bigr),\\
 c_t&=f_t\odot c_{t-1}+i_t\odot\tanh\bigl(W_c[x_t,h_{t-1}]+b_c\bigr),\qquad
 h_t=o_t\odot\tanh c_t .
 \end{align}
+\end{keybox}
 Вентиль $f_t$ определяет, что забыть, $i_t$ --- что записать в память,
 $o_t$ --- что выдать; $\odot$ --- покомпонентное умножение. Поскольку память
 обновляется аддитивно, градиент по ней не затухает экспоненциально.
@@ -1176,9 +1236,11 @@ $o_t$ --- что выдать; $\odot$ --- покомпонентное умно
 \mathrm{PE}_{t,2k+1}=\cos\frac{t}{10000^{2k/d}},
 \end{equation}
 кодирующий номер шага. Основная операция --- \textbf{внимание}:
+\begin{keybox}
 \begin{equation}
 \mathrm{Attn}(Q,K,V)=\mathrm{softmax}\Bigl(\frac{QK^\top}{\sqrt{d_k}}\Bigr)V,
 \end{equation}
+\end{keybox}
 где строки матриц $Q=XW_Q$, $K=XW_K$, $V=XW_V$ --- линейные проекции векторов
 шагов. Строка матрицы $\mathrm{softmax}(\cdot)$ --- веса, с которыми данный
 шаг учитывает все остальные. Несколько таких операций с разными проекциями
@@ -1199,10 +1261,12 @@ $o_t$ --- что выдать; $\odot$ --- покомпонентное умно
 
 Гибридная модель раскладывает предсказание на физическую оценку и
 выученную поправку:
+\begin{keybox}
 \begin{equation}
 \widehat{T_2-t_{\rm obs}}=T_{\rm phys}(\mathbf w)+\delta T_\theta(\mathbf w).
 \label{eq:residual}
 \end{equation}
+\end{keybox}
 BiLSTM кодирует окно $\mathbf w$; к усреднённому выходу присоединяются семь
 величин, вычисленных по тому же окну: $t_{\rm obs}$, наклон $\hat s$,
 $\log C$ в последней точке окна, $T_{\rm phys}$, $R^2_{\rm OLS}$ и два кода, указывающих
@@ -1257,17 +1321,22 @@ BiLSTM с оценкой на входе & physics\_feature & $T_{\rm phys}$ п�
 
 Модель предсказывает оставшееся время, но метрики регрессии вычисляются по
 \emph{времени декогеренции}: для $n$-го тестового окна предсказание
-$\hat y_n=t_{\rm obs}+\widehat{T_2-t_{\rm obs}}$ сравнивается с истинным
+\[
+\hat y_n=t_{\rm obs}+\widehat{T_2-t_{\rm obs}}
+\]
+сравнивается с истинным
 $y_n=T_2$ траектории, из которой взято окно. Ошибки при этом те же, что у
 остатка; от выбора зависит только знаменатель коэффициента детерминации.
 Далее $N$ --- число тестовых окон, $\bar y$ --- среднее $y_n$ по тесту.
 
 \section{Средняя абсолютная и среднеквадратичная ошибки}
 
+\begin{keybox}
 \begin{equation}
 \mathrm{MAE}=\frac1N\sum_{n=1}^N|y_n-\hat y_n|,\qquad
 \mathrm{RMSE}=\Bigl(\frac1N\sum_{n=1}^N(y_n-\hat y_n)^2\Bigr)^{1/2}.
 \end{equation}
+\end{keybox}
 Обе величины измеряются в единицах времени. MAE --- типичная ошибка; RMSE
 сильнее учитывает редкие большие промахи. Для масштаба: типичное значение
 $T_2$ около $4$, длина окна $2$.
@@ -1275,11 +1344,13 @@ $T_2$ около $4$, длина окна $2$.
 \section{Коэффициент детерминации}
 \label{sec:r2}
 
+\begin{keybox}
 \begin{equation}
 R^2=1-\frac{\sum_n(y_n-\hat y_n)^2}{\sum_n(y_n-\bar y)^2}
 =1-\frac{\mathrm{MSE}}{\mathrm{Var}(y)} .
 \label{eq:R2}
 \end{equation}
+\end{keybox}
 Знаменатель --- средний квадрат ошибки предсказателя, который всегда отвечает
 средним значением по тесту. Поэтому $R^2$ --- доля дисперсии цели, объяснённая
 моделью:
@@ -1319,20 +1390,24 @@ $y$ и $\hat y$; для произвольной модели это не так
 Классификатор выдаёт для каждого окна число $p\in[0,1]$. Выбрав порог $c$,
 объявим тревогу при $p>c$ и вычислим долю обнаруженных событий и долю ложных
 тревог:
+\begin{keybox}
 \begin{equation}
 \mathrm{TPR}(c)=\frac{\#\{p>c,\ y=1\}}{\#\{y=1\}},\qquad
 \mathrm{FPR}(c)=\frac{\#\{p>c,\ y=0\}}{\#\{y=0\}} .
 \end{equation}
+\end{keybox}
 Кривая $\bigl(\mathrm{FPR}(c),\mathrm{TPR}(c)\bigr)$ при изменении $c$ от $1$ до
 $0$ называется \textbf{ROC-кривой}, площадь под ней --- \textbf{AUROC}.
 
 AUROC допускает эквивалентное определение: это вероятность того, что
 случайно выбранное положительное окно получит больший балл, чем случайно
 выбранное отрицательное,
+\begin{keybox}
 \begin{equation}
 \mathrm{AUROC}=\Pr\bigl(p_+>p_-\bigr)+\tfrac12\Pr\bigl(p_+=p_-\bigr)
 =\frac1{N_+N_-}\sum_{i\in+}\sum_{j\in-}\Bigl[\mathbb 1(p_i>p_j)+\tfrac12\mathbb 1(p_i=p_j)\Bigr].
 \end{equation}
+\end{keybox}
 Действительно, при сдвиге порога через значение $p_j$ отрицательного окна
 FPR уменьшается на $1/N_-$, а площадь полосы под кривой равна доле
 положительных окон с $p_i>p_j$. Значение $0.5$ соответствует случайному
@@ -1572,8 +1647,12 @@ int}$ --- интегральное время автокорреляции, то
 отделить устойчивые результаты от случайных.
 
 Корреляция важна и внутри окна, если коррелирован шум измерений. Оценка
-наклона по МНК линейна по данным, $\hat s=\sum_t w_t y_t$ с весами
-$w_t=(t-\bar t)/\sum_{t'}(t'-\bar t)^2$, поэтому её дисперсия при шуме с
+наклона по МНК линейна по данным,
+\[
+\hat s=\sum_t w_t y_t\quad\text{с весами}\quad
+w_t=\frac{t-\bar t}{\sum_{t'}(t'-\bar t)^2},
+\]
+поэтому её дисперсия при шуме с
 ковариационной матрицей $\Sigma$ равна $w^{\top}\Sigma w$. Для шума
 \eqref{eq:ar1} $\Sigma_{tt'}=\sigma^2\varphi^{|t-t'|}$, и при $n\to\infty$
 дисперсия возрастает в $(1+\varphi)/(1-\varphi)=2\tau_{\rm int}$ раз по
@@ -1815,7 +1894,10 @@ $0.45$, чтобы были видны различия между метода�
 
 \paragraph{Цель.} Определить, как точность зависит от длины окна. Длина
 задаётся долей $f$ от медианного времени декогеренции,
-$L=\max\bigl(5,\ \mathrm{round}(f\cdot\mathrm{med}(T_2)/\Delta t)\bigr)$; конец окна
+\[
+L=\max\bigl(5,\ \mathrm{round}(f\cdot\mathrm{med}(T_2)/\Delta t)\bigr);
+\]
+конец окна
 по-прежнему выбирается равномерно на $[L\,\Delta t,T_2)$. Гибридная модель,
 обучение на смеси сценариев B и C по 120 траекторий, три повтора
 (табл.~\ref{tab:e2}). Из-за нижней границы в 5 шагов при $f=0.05$ и $0.10$
@@ -2215,11 +2297,13 @@ $\sigma$ все линии сходятся к $0.6$--$0.7$. Слева видн
 \item \emph{Коррелированный шум измерений.} Дрейф калибровки считывания
       делает ошибки соседних измерений зависимыми. Независимый шум
       заменяется стационарным процессом авторегрессии первого порядка
+      \begin{keybox}
       \begin{equation}
       \varepsilon_t=\varphi\,\varepsilon_{t-1}+\sigma\sqrt{1-\varphi^2}\,\eta_t,
       \qquad \eta_t\sim\mathcal N(0,1),
       \label{eq:ar1}
       \end{equation}
+      \end{keybox}
       с тем же стандартным отклонением $\sigma$ и коэффициентом корреляции
       соседних значений $\varphi\in\{0,\,0.5,\,0.9\}$. Для каждого повтора
       берётся одна реализация $\eta_t$, которая пропускается через
@@ -2229,10 +2313,12 @@ $\sigma$ все линии сходятся к $0.6$--$0.7$. Слева видн
 \item \emph{Случайная скорость диссипации.} Реальное окружение
       флуктуирует. Скорость, заданная полиномом Бернштейна, умножается на
       случайный множитель:
+      \begin{keybox}
       \begin{equation}
       \gamma(t)=\gamma_B(t)\,e^{s\,x(t)-s^2/2},
       \label{eq:ou}
       \end{equation}
+      \end{keybox}
       где $x(t)$ --- стационарный процесс Орнштейна --- Уленбека с единичной
       дисперсией и временем корреляции $\tau$:
       $\langle x(t)x(t')\rangle=e^{-|t-t'|/\tau}$. Среднее множителя равно
@@ -3059,6 +3145,7 @@ E & $0.703\pm0.034$ & $0.886\pm0.011$ & $0.76$ & $0.42$ \\
 $\langle ZZ\rangle$, $\langle XX\rangle-\langle YY\rangle$ и
 $\langle XY\rangle+\langle YX\rangle$. Вместе с одночастичными средними девять
 корреляторов дают полную томографию $\rho(t)$:
+\begin{keybox}
 \begin{equation}
 \rho=\frac14\sum_{\alpha,\beta\in\{0,x,y,z\}}
 \langle\sigma_\alpha\otimes\sigma_\beta\rangle\,\sigma_\alpha\otimes\sigma_\beta ,
@@ -3066,6 +3153,7 @@ $\langle XY\rangle+\langle YX\rangle$. Вместе с одночастичны�
 \Tr\rho^2=\frac14\sum_{\alpha,\beta}\langle\sigma_\alpha\otimes\sigma_\beta\rangle^2,
 \label{eq:tomo}
 \end{equation}
+\end{keybox}
 где $\sigma_0=I$. Если потолок на модели Изинга вызван тем, что во входах
 нет информации о фазе модуляции, корреляторы должны его поднять.
 
@@ -3229,15 +3317,19 @@ $T_2$; красная --- с прежними входами, фиолетова
 запутанность. Её мера --- конкурентность Вуттерса
 (раздел~\ref{sec:entangle}, там она обозначена $\mathcal C$; здесь $C_W$).
 Напомним определение. Пусть
-$\tilde\rho=(\sigma_y\otimes\sigma_y)\,\rho^*\,(\sigma_y\otimes\sigma_y)$, где
-$\rho^*$ --- комплексное сопряжение в вычислительном базисе, и
+\[
+\tilde\rho=(\sigma_y\otimes\sigma_y)\,\rho^*\,(\sigma_y\otimes\sigma_y),
+\]
+где $\rho^*$ --- комплексное сопряжение в вычислительном базисе, и
 $\lambda_1\ge\lambda_2\ge\lambda_3\ge\lambda_4$ --- квадратные корни из
 собственных значений $\rho\tilde\rho$. Тогда
+\begin{keybox}
 \begin{equation}
 C_W=\max\bigl(0,\;\Lambda\bigr),\qquad
 \Lambda=\lambda_1-\lambda_2-\lambda_3-\lambda_4 .
 \label{eq:wootters}
 \end{equation}
+\end{keybox}
 $C_W=1$ для состояний Белла, $C_W=0$ для сепарабельных; для чистого
 состояния $a|00\rangle+b|11\rangle$ $C_W=2|ab|$. Конкурентность не меняется
 при локальных унитарных преобразованиях, то есть не зависит от выбора
