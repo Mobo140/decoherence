@@ -1,0 +1,56 @@
+{
+  "csv": "r29_finite_shots_1q.csv",
+  "created_utc": "2026-11-18T07:15:57+00:00",
+  "command": [
+    "r29_finite_shots_1q.py",
+    "--seeds",
+    "42",
+    "43",
+    "44",
+    "45",
+    "46"
+  ],
+  "seeds": [
+    42,
+    43,
+    44,
+    45,
+    46
+  ],
+  "config": {
+    "n_per_scenario": 100,
+    "epochs": 100,
+    "models": [
+      "physics_only",
+      "physics_lstm",
+      "lstm_only",
+      "transformer"
+    ],
+    "n_shots": [
+      100,
+      300,
+      1000,
+      3000,
+      10000
+    ],
+    "window_length": 50,
+    "horizon": 1.0,
+    "samples_per_trajectory": 5,
+    "batch_size": 32,
+    "learning_rate": 0.001,
+    "split": [
+      0.8,
+      0.1,
+      0.1
+    ]
+  },
+  "environment": {
+    "python": "3.12.1",
+    "numpy": "2.4.4",
+    "scipy": "1.17.1",
+    "qutip": "5.2.3",
+    "torch": "2.11.0",
+    "git_commit": "9eeb5a1acb80f79978a8d6494eacdf879d92e4ed",
+    "torch_threads": 4
+  }
+}

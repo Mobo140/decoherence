@@ -264,6 +264,22 @@ CATALOG: list[ExperimentEntry] = [
         "-", "-", "D/E",
         ("r28/r28_dimer.csv", "r28/r28_demo_t2.csv"),
         status="replication"),
+    ExperimentEntry(
+        "R29",
+        "One qubit with inputs from a finite number of shots (N = 100 to "
+        "10000); trained on exact or on N-shot inputs",
+        "experiments.new.r29_finite_shots_1q",
+        "-", "-", "B/C",
+        ("r29_finite_shots_1q.csv", "shot_cost_table.csv"),
+        status="replication"),
+    ExperimentEntry(
+        "R30",
+        "Two qubits: exact inputs, local means, and tomography from finite "
+        "shots; T2 and T2^E",
+        "experiments.new.r30_finite_shots_2q",
+        "-", "-", "D/E",
+        ("r30_finite_shots_2q.csv", "shot_cost_table.csv"),
+        status="replication"),
 ]
 
 

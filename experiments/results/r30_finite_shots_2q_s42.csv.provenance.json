@@ -1,0 +1,84 @@
+{
+  "csv": "r30_finite_shots_2q_s42.csv",
+  "created_utc": "2026-11-18T07:21:24+00:00",
+  "command": [
+    "r30_finite_shots_2q.py",
+    "--seeds",
+    "42",
+    "--with-n-grid",
+    "--tag",
+    "s42"
+  ],
+  "seeds": [
+    42
+  ],
+  "config": {
+    "n_per_scenario": 500,
+    "epochs": 100,
+    "models": [
+      "physics_only",
+      "physics_lstm",
+      "lstm_only",
+      "transformer"
+    ],
+    "targets": [
+      "t2e",
+      "t2"
+    ],
+    "scenarios": [
+      "D",
+      "E"
+    ],
+    "input_sets": [
+      [
+        "i",
+        "exact",
+        null
+      ],
+      [
+        "ii",
+        "exact_local",
+        null
+      ],
+      [
+        "iii",
+        "local",
+        1000
+      ],
+      [
+        "iv",
+        "tomography",
+        1000
+      ],
+      [
+        "v",
+        "tomography",
+        100
+      ],
+      [
+        "v",
+        "tomography",
+        10000
+      ]
+    ],
+    "window_length": 20,
+    "horizon": 1.0,
+    "samples_per_trajectory": 5,
+    "batch_size": 64,
+    "learning_rate": 0.0005,
+    "split": [
+      0.7,
+      0.1,
+      0.20000000000000004
+    ]
+  },
+  "environment": {
+    "python": "3.12.1",
+    "numpy": "2.4.4",
+    "scipy": "1.17.1",
+    "qutip": "5.2.3",
+    "torch": "2.11.0",
+    "git_commit": "9eeb5a1acb80f79978a8d6494eacdf879d92e4ed",
+    "torch_threads": 2
+  }
+}

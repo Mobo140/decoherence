@@ -1,0 +1,493 @@
+{
+  "csv": "r15_noise_variants_rerun.csv",
+  "created_utc": "2026-11-18T07:18:50+00:00",
+  "command": [
+    "r15_noise_variants.py",
+    "--seeds",
+    "42",
+    "43",
+    "44",
+    "--tag",
+    "rerun"
+  ],
+  "seeds": [
+    42,
+    43,
+    44
+  ],
+  "config": [
+    {
+      "data": {
+        "name": "r15",
+        "scenarios": [
+          "B",
+          "C"
+        ],
+        "coupling": null,
+        "coupling_sweep": [],
+        "interaction": null,
+        "n_per_scenario": 100,
+        "n_trajectories": null,
+        "criterion": null,
+        "simulator": {
+          "alias": "plain",
+          "params": [],
+          "seed_offset": null
+        },
+        "cache": "disk",
+        "window_length": 50,
+        "horizon": 1.0,
+        "samples_per_trajectory": 5,
+        "min_window_gap": 0,
+        "train_ratio": 0.8,
+        "val_ratio": 0.1,
+        "config_seed_offset": 0,
+        "data_seed_offset": 0
+      },
+      "model": "physics_only",
+      "model_overrides": [],
+      "loss": "huber",
+      "epochs": 100,
+      "batch_size": 32,
+      "learning_rate": 0.001,
+      "features": null,
+      "train_data": null,
+      "augmentation": null,
+      "metrics": [
+        "r2",
+        "mae",
+        "auroc"
+      ],
+      "tests": [
+        {
+          "observation": "gaussian",
+          "sigma": 0.0,
+          "phi": 0.0,
+          "data": null,
+          "bootstrap": null,
+          "tags": [
+            [
+              "sigma",
+              0.0
+            ]
+          ]
+        },
+        {
+          "observation": "gaussian",
+          "sigma": 0.01,
+          "phi": 0.0,
+          "data": null,
+          "bootstrap": null,
+          "tags": [
+            [
+              "sigma",
+              0.01
+            ]
+          ]
+        },
+        {
+          "observation": "gaussian",
+          "sigma": 0.02,
+          "phi": 0.0,
+          "data": null,
+          "bootstrap": null,
+          "tags": [
+            [
+              "sigma",
+              0.02
+            ]
+          ]
+        },
+        {
+          "observation": "gaussian",
+          "sigma": 0.05,
+          "phi": 0.0,
+          "data": null,
+          "bootstrap": null,
+          "tags": [
+            [
+              "sigma",
+              0.05
+            ]
+          ]
+        },
+        {
+          "observation": "gaussian",
+          "sigma": 0.1,
+          "phi": 0.0,
+          "data": null,
+          "bootstrap": null,
+          "tags": [
+            [
+              "sigma",
+              0.1
+            ]
+          ]
+        }
+      ],
+      "tags": [
+        [
+          "variant",
+          "physics_only"
+        ]
+      ]
+    },
+    {
+      "data": {
+        "name": "r15",
+        "scenarios": [
+          "B",
+          "C"
+        ],
+        "coupling": null,
+        "coupling_sweep": [],
+        "interaction": null,
+        "n_per_scenario": 100,
+        "n_trajectories": null,
+        "criterion": null,
+        "simulator": {
+          "alias": "plain",
+          "params": [],
+          "seed_offset": null
+        },
+        "cache": "disk",
+        "window_length": 50,
+        "horizon": 1.0,
+        "samples_per_trajectory": 5,
+        "min_window_gap": 0,
+        "train_ratio": 0.8,
+        "val_ratio": 0.1,
+        "config_seed_offset": 0,
+        "data_seed_offset": 0
+      },
+      "model": "lstm_only",
+      "model_overrides": [],
+      "loss": "huber",
+      "epochs": 100,
+      "batch_size": 32,
+      "learning_rate": 0.001,
+      "features": null,
+      "train_data": null,
+      "augmentation": null,
+      "metrics": [
+        "r2",
+        "mae",
+        "auroc"
+      ],
+      "tests": [
+        {
+          "observation": "gaussian",
+          "sigma": 0.0,
+          "phi": 0.0,
+          "data": null,
+          "bootstrap": null,
+          "tags": [
+            [
+              "sigma",
+              0.0
+            ]
+          ]
+        },
+        {
+          "observation": "gaussian",
+          "sigma": 0.01,
+          "phi": 0.0,
+          "data": null,
+          "bootstrap": null,
+          "tags": [
+            [
+              "sigma",
+              0.01
+            ]
+          ]
+        },
+        {
+          "observation": "gaussian",
+          "sigma": 0.02,
+          "phi": 0.0,
+          "data": null,
+          "bootstrap": null,
+          "tags": [
+            [
+              "sigma",
+              0.02
+            ]
+          ]
+        },
+        {
+          "observation": "gaussian",
+          "sigma": 0.05,
+          "phi": 0.0,
+          "data": null,
+          "bootstrap": null,
+          "tags": [
+            [
+              "sigma",
+              0.05
+            ]
+          ]
+        },
+        {
+          "observation": "gaussian",
+          "sigma": 0.1,
+          "phi": 0.0,
+          "data": null,
+          "bootstrap": null,
+          "tags": [
+            [
+              "sigma",
+              0.1
+            ]
+          ]
+        }
+      ],
+      "tags": [
+        [
+          "variant",
+          "lstm_only"
+        ]
+      ]
+    },
+    {
+      "data": {
+        "name": "r15",
+        "scenarios": [
+          "B",
+          "C"
+        ],
+        "coupling": null,
+        "coupling_sweep": [],
+        "interaction": null,
+        "n_per_scenario": 100,
+        "n_trajectories": null,
+        "criterion": null,
+        "simulator": {
+          "alias": "plain",
+          "params": [],
+          "seed_offset": null
+        },
+        "cache": "disk",
+        "window_length": 50,
+        "horizon": 1.0,
+        "samples_per_trajectory": 5,
+        "min_window_gap": 0,
+        "train_ratio": 0.8,
+        "val_ratio": 0.1,
+        "config_seed_offset": 0,
+        "data_seed_offset": 0
+      },
+      "model": "physics_lstm",
+      "model_overrides": [],
+      "loss": "huber",
+      "epochs": 100,
+      "batch_size": 32,
+      "learning_rate": 0.001,
+      "features": null,
+      "train_data": null,
+      "augmentation": null,
+      "metrics": [
+        "r2",
+        "mae",
+        "auroc"
+      ],
+      "tests": [
+        {
+          "observation": "gaussian",
+          "sigma": 0.0,
+          "phi": 0.0,
+          "data": null,
+          "bootstrap": null,
+          "tags": [
+            [
+              "sigma",
+              0.0
+            ]
+          ]
+        },
+        {
+          "observation": "gaussian",
+          "sigma": 0.01,
+          "phi": 0.0,
+          "data": null,
+          "bootstrap": null,
+          "tags": [
+            [
+              "sigma",
+              0.01
+            ]
+          ]
+        },
+        {
+          "observation": "gaussian",
+          "sigma": 0.02,
+          "phi": 0.0,
+          "data": null,
+          "bootstrap": null,
+          "tags": [
+            [
+              "sigma",
+              0.02
+            ]
+          ]
+        },
+        {
+          "observation": "gaussian",
+          "sigma": 0.05,
+          "phi": 0.0,
+          "data": null,
+          "bootstrap": null,
+          "tags": [
+            [
+              "sigma",
+              0.05
+            ]
+          ]
+        },
+        {
+          "observation": "gaussian",
+          "sigma": 0.1,
+          "phi": 0.0,
+          "data": null,
+          "bootstrap": null,
+          "tags": [
+            [
+              "sigma",
+              0.1
+            ]
+          ]
+        }
+      ],
+      "tags": [
+        [
+          "variant",
+          "physics_lstm"
+        ]
+      ]
+    },
+    {
+      "data": {
+        "name": "r15",
+        "scenarios": [
+          "B",
+          "C"
+        ],
+        "coupling": null,
+        "coupling_sweep": [],
+        "interaction": null,
+        "n_per_scenario": 100,
+        "n_trajectories": null,
+        "criterion": null,
+        "simulator": {
+          "alias": "plain",
+          "params": [],
+          "seed_offset": null
+        },
+        "cache": "disk",
+        "window_length": 50,
+        "horizon": 1.0,
+        "samples_per_trajectory": 5,
+        "min_window_gap": 0,
+        "train_ratio": 0.8,
+        "val_ratio": 0.1,
+        "config_seed_offset": 0,
+        "data_seed_offset": 0
+      },
+      "model": "transformer",
+      "model_overrides": [],
+      "loss": "huber",
+      "epochs": 100,
+      "batch_size": 32,
+      "learning_rate": 0.001,
+      "features": null,
+      "train_data": null,
+      "augmentation": null,
+      "metrics": [
+        "r2",
+        "mae",
+        "auroc"
+      ],
+      "tests": [
+        {
+          "observation": "gaussian",
+          "sigma": 0.0,
+          "phi": 0.0,
+          "data": null,
+          "bootstrap": null,
+          "tags": [
+            [
+              "sigma",
+              0.0
+            ]
+          ]
+        },
+        {
+          "observation": "gaussian",
+          "sigma": 0.01,
+          "phi": 0.0,
+          "data": null,
+          "bootstrap": null,
+          "tags": [
+            [
+              "sigma",
+              0.01
+            ]
+          ]
+        },
+        {
+          "observation": "gaussian",
+          "sigma": 0.02,
+          "phi": 0.0,
+          "data": null,
+          "bootstrap": null,
+          "tags": [
+            [
+              "sigma",
+              0.02
+            ]
+          ]
+        },
+        {
+          "observation": "gaussian",
+          "sigma": 0.05,
+          "phi": 0.0,
+          "data": null,
+          "bootstrap": null,
+          "tags": [
+            [
+              "sigma",
+              0.05
+            ]
+          ]
+        },
+        {
+          "observation": "gaussian",
+          "sigma": 0.1,
+          "phi": 0.0,
+          "data": null,
+          "bootstrap": null,
+          "tags": [
+            [
+              "sigma",
+              0.1
+            ]
+          ]
+        }
+      ],
+      "tags": [
+        [
+          "variant",
+          "transformer"
+        ]
+      ]
+    }
+  ],
+  "environment": {
+    "python": "3.12.1",
+    "numpy": "2.4.4",
+    "scipy": "1.17.1",
+    "qutip": "5.2.3",
+    "torch": "2.11.0",
+    "git_commit": "9eeb5a1acb80f79978a8d6494eacdf879d92e4ed",
+    "torch_threads": 4
+  }
+}
