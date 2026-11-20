@@ -476,6 +476,12 @@ def level_shifts(
     where the level-independent constant Re I(0) is dropped because it is
     not observable. It is meaningful for W >> kT.
 
+    ``rho_J`` here is in the normalization of Surf. Sci. Eqs. 14, 20-22,
+    not in the one of the rates in this module (PRB 95, 075413, density of
+    states over both spin projections): in the latter the same shift has
+    the coefficient 1/8 instead of 1/4. The shift is not part of the
+    dynamics; see paper/kondo_derivations.tex, section on conventions.
+
     Args:
         hamiltonian: Hamiltonian of the spin, Hermitian.
         spin_ops: One site, the operators (S^x, S^y, S^z).
