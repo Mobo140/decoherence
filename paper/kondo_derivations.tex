@@ -1,0 +1,280 @@
+% Вывод формул ванны Кондо и разбор расхождений с напечатанным.
+% Подключается в отчёт (report_2026-11/report.tex) и в описание
+% (kondo_simulations.tex). Не использует макросов документов.
+
+\section{Вывод формул ванны Кондо и разбор расхождений}
+\label{sec:kd}
+
+Ниже все формулы выводятся с нуля, чтобы было видно, какие из них
+воспроизводит наш код и в каких местах напечатанное в статьях расходится с
+их собственными исходными выражениями. Обозначения: $\hbar=1$, спин
+электрона $\mathbf s=\boldsymbol\sigma/2$, $\rho_\sigma$ --- плотность
+состояний на уровне Ферми для одной проекции спина, $\rho=2\rho_\sigma$ ---
+для обеих, $\beta=1/k_BT$.
+
+\subsection{Скорость перехода}
+
+Взаимодействие спинов $\mathbf S_l$ в точках $\mathbf r_l$ с электронами:
+\begin{equation}
+V=J\sum_l \mathbf S_l\cdot\mathbf s(\mathbf r_l),\qquad
+\mathbf s(\mathbf r)=\sum_{\mathbf k\mathbf k'\sigma\sigma'}
+e^{i(\mathbf k-\mathbf k')\cdot\mathbf r}\,
+\frac{\boldsymbol\sigma_{\sigma\sigma'}}{2}\,
+c^\dagger_{\mathbf k\sigma}c_{\mathbf k'\sigma'} .
+\label{eq:kd_V}
+\end{equation}
+Электрон рассеивается из $\mathbf k'\sigma'$ в $\mathbf k\sigma$, спины ---
+из $|M\rangle$ в $|M'\rangle$. Матричный элемент
+\[
+\langle M',\mathbf k\sigma|V|M,\mathbf k'\sigma'\rangle
+=J\sum_l e^{i\mathbf q\cdot\mathbf r_l}\sum_a
+\langle M'|S^a_l|M\rangle\,\frac{\sigma^a_{\sigma\sigma'}}{2},
+\qquad \mathbf q=\mathbf k-\mathbf k'.
+\]
+Золотое правило с заполнением начального и пустотой конечного электронного
+состояния:
+\[
+\Gamma_{M\to M'}=2\pi\sum_{\mathbf k\mathbf k'\sigma\sigma'}
+f(\epsilon_{\mathbf k'})\big[1-f(\epsilon_{\mathbf k})\big]
+\Big|\langle M',\mathbf k\sigma|V|M,\mathbf k'\sigma'\rangle\Big|^2
+\delta(\epsilon_{\mathbf k'}+E_M-\epsilon_{\mathbf k}-E_{M'}).
+\]
+Три шага.
+
+\paragraph{Спиновый след.} $\sum_{\sigma\sigma'}\sigma^a_{\sigma\sigma'}
+(\sigma^b_{\sigma\sigma'})^*=\mathrm{Tr}\,\sigma^a\sigma^b=2\delta_{ab}$,
+поэтому $\sum_{\sigma\sigma'}|\dots|^2$ даёт множитель
+$J^2\cdot\tfrac14\cdot2=J^2/2$ и
+$\sum_a\sum_{ll'}e^{i\mathbf q\cdot(\mathbf r_l-\mathbf r_{l'})}
+\langle M'|S^a_l|M\rangle\langle M|S^a_{l'}|M'\rangle$.
+
+\paragraph{Энергетический интеграл.} Сумма по модулям $|\mathbf k|,|\mathbf k'|$
+вблизи поверхности Ферми заменяется на $\rho_\sigma^2\int d\epsilon\,d\epsilon'$:
+\[
+\int d\epsilon\, f(\epsilon)\big[1-f(\epsilon+\Delta)\big]
+=\frac{\Delta}{1-e^{-\beta\Delta}}\equiv G(\Delta),\qquad
+\Delta=E_M-E_{M'} .
+\]
+(Подынтегральное выражение равно
+$\frac{1}{e^{\beta\Delta}-1}\,[f(\epsilon)-f(\epsilon+\Delta)]$, а
+$\int[f(\epsilon)-f(\epsilon+\Delta)]d\epsilon=\Delta$.) Свойства:
+$G(0)=k_BT$ (закон Корринги), $G(\Delta)\approx\Delta$ при $\Delta\gg k_BT$,
+$G(-\Delta)=e^{-\beta\Delta}G(\Delta)$ (детальный баланс).
+
+\paragraph{Угловое усреднение.} Направления $\hat{\mathbf k},\hat{\mathbf k}'$
+независимы и усредняются по поверхности Ферми, $|\mathbf k|=|\mathbf k'|=k_F$:
+\[
+\big\langle e^{ik_F(\hat{\mathbf k}-\hat{\mathbf k}')\cdot\mathbf r}\big\rangle
+=\big|\langle e^{ik_F\hat{\mathbf k}\cdot\mathbf r}\rangle\big|^2
+\equiv K_d(k_Fr),\qquad
+K_1=\cos^2x,\quad K_2=J_0^2(x),\quad K_3=\Big(\frac{\sin x}{x}\Big)^2,
+\]
+где в 1D $\hat{\mathbf k}=\pm1$, в 2D среднее по окружности даёт $J_0$, в 3D
+по сфере --- $\sin x/x$.
+
+\paragraph{Итог.}
+\begin{equation}
+\begin{aligned}
+\Gamma_{M\to M'}&=\pi(\rho_\sigma J)^2\,G(E_M-E_{M'})\sum_{ll'}
+K_d(k_F|\mathbf r_l-\mathbf r_{l'}|)\sum_a
+\langle M'|S^a_l|M\rangle\langle M|S^a_{l'}|M'\rangle\\
+&=\frac{\pi(\rho J)^2}{4}\,G(E_M-E_{M'})\sum_{ll'}K_d\sum_a(\dots).
+\end{aligned}
+\label{eq:kd_rate}
+\end{equation}
+Это ур.~12, 20 и 26 PRB с $\rho=2\rho_\sigma$; именно эта формула
+реализована в коде. Для одного спина $1/2$ в поле
+$\sum_a|\langle\downarrow|S^a|\uparrow\rangle|^2=\tfrac14+\tfrac14=\tfrac12$, и
+$\Gamma_0=\pi(\rho J)^2G/8$ --- ур.~22 PRB.
+
+\paragraph{Префактор Surf.\ Sci.} Ур.~14 статьи Surf.\ Sci.\ содержит
+$\pi(\rho J)^2/2$ при той же форме связи ($V=\tfrac12\sum J\,\mathbf S\cdot
+\boldsymbol\tau$, $\boldsymbol\tau$ --- матрицы Паули, то есть $J\,\mathbf S\cdot
+\mathbf s$). Вывод выше даёт $\pi(\rho_\sigma J)^2$ при плотности на одну
+проекцию и $\pi(\rho J)^2/4$ при плотности на обе; $\pi/2$ не совпадает ни с
+одним из этих соглашений. Это меняет только общий масштаб скоростей, все
+отношения ниже от него не зависят. Мы используем нормировку PRB.
+
+\subsection{Сдвиг уровней (Surf.\ Sci., ур.~17--24)}
+
+По ур.~17 и~20 статьи сдвиг уровня $n$ равен
+\[
+\delta E_n=\sum_{a,n'}|\langle n|S_a|n'\rangle|^2\,\mathrm{Re}\,I(\Delta_{nn'}),
+\qquad
+\mathrm{Re}\,I(\Delta)\approx\mathrm{Re}\,I(0)-\frac{\Delta}{4}(\rho J)^2 L,
+\quad L=\ln\frac{2W}{\pi k_BT}.
+\]
+Первое слагаемое даёт $\mathrm{Re}\,I(0)\sum_{a,n'}|\langle n|S_a|n'\rangle|^2=
+\mathrm{Re}\,I(0)\,\langle n|\mathbf S^2|n\rangle=\mathrm{Re}\,I(0)S(S+1)$ ---
+одинаково для всех уровней и в энергиях переходов сокращается. Остаётся
+\begin{equation}
+\tilde\Delta_{nm}=\Delta_{nm}-\frac{(\rho J)^2L}{4}\,(B_n-B_m),\qquad
+B_n=\sum_{a,n'}|\langle n|S_a|n'\rangle|^2(E_n-E_{n'}),
+\label{eq:kd_shift}
+\end{equation}
+--- это ур.~21 статьи. Наш код вычисляет именно эту сумму.
+
+\paragraph{Вычисление $B_n$ в общем виде.} Так как
+$(E_n-H)S_a|n\rangle=(S_aH-HS_a)|n\rangle=-[H,S_a]|n\rangle$,
+\[
+B_n=-\sum_a\langle n|S_a[H,S_a]|n\rangle .
+\]
+$B_n$ вещественно, а $[H,S_a]^\dagger=-[H,S_a]$; взяв полусумму с комплексно
+сопряжённым, получаем
+\begin{equation}
+B_n=\frac12\sum_a\langle n|\big[S_a,[S_a,H]\big]|n\rangle .
+\label{eq:kd_Bn}
+\end{equation}
+Оператор $\mathcal C(X)=\sum_a[S_a,[S_a,X]]$ --- оператор Казимира
+присоединённого действия спина, и для неприводимого тензорного оператора
+ранга $k$ он равен $\mathcal C(T^{(k)})=k(k+1)\,T^{(k)}$. Отсюда:
+\begin{itemize}
+\item Зееман, $H=b\,S_z$ (ранг 1): $B_n=E_n$, $B_n-B_m=\Delta_{nm}$,
+\[
+\tilde\Delta=\Delta\Big[1-\tfrac14(\rho J)^2L\Big];
+\]
+для спина $1/2$ это в точности ур.~22 статьи (по словам авторов, совпадающее
+с результатом Langreth и Wilkins).
+\item Анизотропия $H=DS_z^2+E(S_x^2-S_y^2)$: это тензор ранга 2 плюс константа
+$DS(S+1)/3$, поэтому $B_n=3(E_n-\mathrm{const})$, $B_n-B_m=3\Delta_{nm}$ и
+\begin{equation}
+\tilde\Delta=\Delta\Big[1-\tfrac34(\rho J)^2L\Big]
+\label{eq:kd_shift34}
+\end{equation}
+при \emph{любых} $S$, $D$, $E$.
+\end{itemize}
+Численно для $S=\tfrac12,\dots,\tfrac52$ отношение $(B_n-B_m)/\Delta_{nm}$ равно
+1 для зеемановского и 3 для анизотропного гамильтониана, а тождество
+\eqref{eq:kd_Bn} выполнено с точностью $10^{-14}$.
+
+\paragraph{Явная проверка, $S=3/2$, $E=0$.} Уровни $\pm\tfrac32$ и $\pm\tfrac12$,
+$\Delta_0=E_{3/2}-E_{1/2}$. Ненулевые элементы:
+$|\langle\tfrac12|S_x|\tfrac32\rangle|^2=|\langle\tfrac12|S_y|\tfrac32\rangle|^2=\tfrac34$
+и внутри дублета $\pm\tfrac12$ ($\Delta=0$). Тогда
+$B_{3/2}=\tfrac32\Delta_0$, $B_{1/2}=-\tfrac32\Delta_0+0$ и
+$B_{3/2}-B_{1/2}=3\Delta_0$: коэффициент $\tfrac34$. Напечатанное ур.~23 даёт
+$(\rho J)^2\Lambda/8$ с $\Lambda=\sum_a|\langle\tfrac12|S_a|\tfrac32\rangle|^2=\tfrac32$,
+то есть $\tfrac{3}{16}$ --- вчетверо меньше: в нём учтён вклад только одного из
+двух уровней, причём с лишним множителем $\tfrac12$.
+
+\paragraph{Явная проверка, $S=1$.} Уровни $E_0=0$, $E_{\alpha,\beta}=-D\mp E$,
+$\Delta_{\beta\alpha}=2E$. Внутри дублета $|\langle\alpha|S_z|\beta\rangle|^2=1$:
+вклад в $B_\beta-B_\alpha$ равен $2E-(-2E)=2\Delta$. Связь с уровнем $|0\rangle$
+($S_x$ для одного из состояний дублета, $S_y$ для другого, элементы 1): вклад
+$(E_\beta-E_0)-(E_\alpha-E_0)=\Delta$. Итого $3\Delta$, коэффициент $\tfrac34$;
+отношение вкладов 2:1 --- ровно то, что сказано в тексте статьи («вклад
+внутри дублета вдвое больше вклада от уровня 0»). Напечатанное ур.~24 даёт
+$\tfrac32$ --- вдвое больше; такой коэффициент получился бы с префактором
+$(\rho J)^2/2$ из ур.~18 вместо $(\rho J)^2/4$ из ур.~20.
+
+\paragraph{Вывод.} Ур.~21, ур.~22 и словесный подсчёт для $S=1$ согласуются
+между собой и дают $\tfrac14$ для зеемановского и $\tfrac34$ для любого
+анизотропного случая. Ур.~23 и~24 противоречат им. Расхождение --- внутри
+самой статьи, а не между статьёй и нашим кодом: код считает общую сумму ур.~21.
+
+\subsection{Димер (PRB, ур.~24--34, рис.~2)}
+
+Два спина $1/2$ на расстоянии $d$, $K\equiv K_d(k_Fd)$.
+
+\paragraph{Триплет $|1,0\rangle\to$ синглет $|0,0\rangle$.} Ненулевые элементы
+только у $S_z$: $\langle0,0|S_z(1)|1,0\rangle=\tfrac12$,
+$\langle0,0|S_z(2)|1,0\rangle=-\tfrac12$. Сумма в~\eqref{eq:kd_rate}:
+$\sum_{ll'}K_{ll'}s_ls_{l'}=\tfrac14+\tfrac14-2\cdot\tfrac14K=\tfrac12(1-K)$.
+Деля на значение $\tfrac12$ для одиночного спина:
+$\Gamma=\Gamma_0(1-K)$ --- ур.~28, 31--32.
+
+\paragraph{$|1,0\rangle\to|1,-1\rangle$ в сильном поле.} Ненулевые $S_x,S_y$:
+$|\langle1,-1|S_{x,y}(l)|1,0\rangle|=\tfrac{1}{2\sqrt2}$ с одинаковым знаком для
+$l=1,2$. Для каждой из двух компонент $\sum_{ll'}K_{ll'}e_le_{l'}=\tfrac18(2+2K)$,
+всего $\tfrac12(1+K)$: $\Gamma=\Gamma_0(1+K)$ --- ур.~30, 33--34.
+
+\paragraph{Предел далёких спинов.} В 2D и 3D $K\to0$ при $k_Fd\to\infty$,
+и обе скорости стремятся к $\Gamma_0$. Это физически обязательный предел: при
+большом расстоянии спины рассеивают электроны независимо, и скорость равна
+некогерентной сумме $\sum_l\sum_a|\langle f|S^a_l|i\rangle|^2=\tfrac12$ --- ровно
+значению для одиночного спина (проверено численно для обоих переходов). На
+напечатанном рис.~2(c) кривые 2D и 3D действительно стремятся к~1, а на
+рис.~2(b) --- к~0.5, хотя нормировка на $\Gamma_0$ та же. Оцифровка
+показывает, что кривые 2D и 3D на рис.~2(b) совпадают с $(1-K)/2$ с точностью
+0.001--0.003. В 1D $K=\cos^2(k_Fd)$ осциллирует со средним $\tfrac12$, так что
+среднее значение 1D-кривой равно $\tfrac12$ --- вероятно, отсюда и фраза
+текста о «половине скорости одиночного спина».
+
+\paragraph{Вывод.} Ур.~31--32, наш расчёт, панель (c) и предел независимых
+спинов согласованы; кривые 2D и 3D на панели (b) отличаются от них
+множителем $\tfrac12$. Расхождение --- в рисунке статьи.
+
+\subsection{Дефазировка (PRB, ур.~15--16, рис.~4, приложение C)}
+
+\paragraph{Вывод.} Чистая дефазировка между $|M\rangle$ и $|M'\rangle$ возникает
+от упругого рассеяния ($\epsilon_{\mathbf k}=\epsilon_{\mathbf k'}$), при котором
+спиновое состояние не меняется, а электрон получает разную амплитуду
+рассеяния в зависимости от того, в каком из двух состояний находятся спины.
+Скорость пропорциональна квадрату разности этих амплитуд. Амплитуда для
+состояния $|M\rangle$ --- диагональный элемент того же оператора~\eqref{eq:kd_V}:
+$\langle M|V_{\mathbf k\mathbf k'}|M\rangle\propto\sum_ne^{i\mathbf q\cdot\mathbf r_n}
+\langle M|S^a_n|M\rangle$, и фазовый множитель $e^{i\mathbf q\cdot\mathbf r_n}$
+одинаков для $M$ и $M'$. Поэтому
+\begin{equation}
+\begin{aligned}
+\chi^{\rm ad}_{MM'}(\mathbf q)&=\sum_a\Big|\sum_ne^{i\mathbf q\cdot\mathbf r_n}
+\big(S^a_{MM}(n)-S^a_{M'M'}(n)\big)\Big|^2,\\
+\overline{\chi^{\rm ad}}&=\sum_a\sum_{nn'}K_d(k_F|\mathbf r_n-\mathbf r_{n'}|)
+\,\Delta S^a_n\,\Delta S^a_{n'} .
+\end{aligned}
+\label{eq:kd_ad}
+\end{equation}
+При сдвиге всех спинов $\mathbf r_n\to\mathbf r_n+\mathbf R$ сумма умножается
+на общую фазу $e^{i\mathbf q\cdot\mathbf R}$, модуль не меняется: скорость не
+зависит от начала координат, как и должно быть. Приложение~B статьи (ур.~B2,
+B3, B6) содержит фазы только в виде $\mathbf r_n-\mathbf r_{n'}$. Для одного
+спина в состояниях $\pm S$: $\Delta S^z=2S$, $\overline{\chi}=4S^2$ и
+$\gamma^{\rm ad}=\tfrac{\pi(\rho J)^2}{8}k_BT\cdot4S^2=\tfrac{\pi(\rho J)^2}{2}k_BTS^2$ ---
+ур.~39 статьи. Для изинговских цепочек отсюда $\Lambda=4s^TKs$, $s_l=\pm1$;
+это реализовано в коде.
+
+\paragraph{Напечатанное ур.~16.} В статье второе слагаемое записано с
+$e^{-i\mathbf q\cdot\mathbf r_n}$. Тогда для одного спина
+$|e^{i\mathbf q\cdot\mathbf r}S+e^{-i\mathbf q\cdot\mathbf r}S|^2=4S^2\cos^2(\mathbf q\cdot\mathbf r)$
+и после усреднения $2S^2[1+K_d(2k_Fr)]$: дефазировка одиночного спина
+зависела бы от того, где выбрано начало координат, что противоречит
+ур.~38--39 самой статьи. Для цепочки получается
+$\Lambda=2\sum_{ll'}s_ls_{l'}[K(k_F|r_l-r_{l'}|)+K(k_F|r_l+r_{l'}|)]$. Именно эта
+форма стоит за ур.~C1, C3, C5, C6 и рисунком~4: оцифрованные кривые
+совпадают с ней (медиана 0.005--0.018 на шкале 0--4), а не с~\eqref{eq:kd_ad}
+(0.08--0.50). Дополнительно: ур.~C4 напечатано с $|l-l'|$ в обоих слагаемых,
+то есть совпадает с инвариантной формой и не совпадает с рисунком; ур.~C6
+не совпадает и с суммой ур.~C1.
+
+\paragraph{Вывод.} Знак показателя в ур.~16 противоречит приложению~B,
+трансляционной инвариантности и ур.~38--39 статьи. Рисунок~4 и приложение~C
+построены по этой форме. Наш код использует форму~\eqref{eq:kd_ad}.
+
+\subsection{Сводка}
+
+\begin{center}\small
+\begin{tabular}{p{3.6cm}p{5.4cm}p{4.6cm}}
+\toprule
+Место & На чём основан вывод & Где расхождение \\
+\midrule
+Префактор $\pi/2$ (Surf.\ Sci.)\ против $\pi/4$ (PRB) &
+золотое правило даёт $\pi(\rho_\sigma J)^2=\pi(\rho J)^2/4$ &
+соглашение о нормировке; на отношения не влияет \\
+Ур.~23, 24 Surf.\ Sci. &
+тождество~\eqref{eq:kd_Bn}; согласие с ур.~21, 22 и текстом статьи &
+в частных формулах статьи \\
+Рис.~2(b) PRB, 2D и 3D &
+предел независимых спинов; согласие с ур.~31--32 и панелью (c) &
+в рисунке статьи (множитель $\tfrac12$) \\
+Ур.~16, рис.~4, приложение C PRB &
+вывод из~\eqref{eq:kd_V}; приложение B; ур.~38--39 &
+в знаке показателя ур.~16 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Во всех случаях, кроме префактора, наш код совпадает с формулами, которые
+следуют из исходных выражений статей, а расходятся частные формулы или
+рисунки самих статей. Код авторов недоступен, поэтому причину каждого
+расхождения внутри статьи (опечатка, ошибка построения) установить нельзя;
+можно лишь указать, какая из версий согласована с остальной статьёй.
